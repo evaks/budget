@@ -1,0 +1,9 @@
+[submodule "plugins/recoil/recoil"]
+	path = plugins/recoil/recoil
+	url = git@github.com:evaks/recoil.git
+[submodule "plugins/closure-library/closure-library"]
+	path = plugins/closure-library/closure-library
+	url = git@github.com:evaks/closure-library.git
+[submodule "aurora"]
+	path = aurora
+	url = ssh://git@nz-gitlab:2222/gui/aurora.git

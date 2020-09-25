@@ -1,0 +1,73 @@
+{
+    "namespace": "base",
+    "tables" : [{
+	"name": "user",
+	"indexes": [{"unique": true, "columns": ["username"]}],
+	"access": "aurora.db.access.basic([{'user-management':'crud'},{'': 'r'}])",
+	"accessFilter": [
+	    {"user-management" : "all"},
+	    {"": "aurora.db.access.filter.equal('user,$userid)"}],
+	"initial": [
+	    {"active": true, "username": "admin", "password":"admin", "email":"", "groups" : [
+		{"!select": {"cols":
+			     [{"to": "order", "exp" : 1},{"to": "groupid", "from": "id"}],
+			     "query": " FROM `group` WHERE name = 'admin' "}}]}
+	],
+	"columns": [
+	    { "name": "id", "type": "id", "start":1},
+	    { "name": "active", "type": "boolean"},
+	    { "name": "username", "type": "string(100)"},
+	    { "name": "lockcount", "type": "int", "default": 0},
+	    { "name": "lastinvalidtime", "type": "datetime", "nullable": true},
+	    { "name": "password", "type": "password"},
+	    { "name": "email", "type": "string(128)"},
+	    { "name": "groups", "type": "leaf-list(userid)",
+	      "table": {
+		  "name": "user_group",
+		  "columns": [
+		      {"name" : "id", "type": "id"},
+		      {"name" : "order", "type": "order"},		      
+		      {"name" : "groupid", "type": "ref(group)"}
+		  ]
+	      },
+	      "validation": "aurora.db.validators.unique"
+	      
+	    }
+	    
+	]
+    },{
+	"name": "group",
+	"initial": [{
+	    "name": "admin",
+	    "permission": [{"!select": {"cols": [{"to": "permissionid", "from": "id"}], "query": " FROM permission"}}]
+	}],
+	"access": "aurora.db.access.basic([{'user-management': 'crud'},{'':'r'}])",
+	"accessFilter": "all",
+	"columns": [
+	    { "name": "id", "type": "id", "start": 1},		
+	    { "name": "name", "type": "string(30)"},		
+	    { "name": "permission", "type": "owned-list(groupid)",
+	      "table": {
+		  "name": "group_permission",
+		  "columns": [
+		      {"name" : "id", "type": "id"},
+		      {"name" : "permissionid", "type": "ref(permission)"}
+		  ]
+	      }
+	    }
+	]
+    }, {
+	"name": "permission",
+	"initial": [
+	    {"name": "user-management", "description": "Manage Users on the system"},
+	    {"name": "site-management", "description": "Manage System, E.g add pages etc"}
+	],
+	"access": "aurora.db.access.basic([{'': 'r'}])",
+	"accessFilter": "all",
+	"columns": [
+	    { "name": "id", "type": "id"},		
+	    { "name": "name", "type": "string(100)"},		
+	    { "name": "description", "type": "string(128)"}
+	]
+    }]	
+}

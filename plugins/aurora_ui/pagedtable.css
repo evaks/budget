@@ -1,0 +1,35 @@
+.recoil-table-pager-top {
+    display: flex;
+    flex-direction: row;
+}
+
+.recoil-table-pager-top-scroller {
+    display: flex;
+    flex-grow: 1;
+}
+
+.recoil-table-pager-top-scroller .recoil-table-pager-scroller {
+    display: flex;
+    flex-grow: 1;
+}
+
+.recoil-table-pager-actions {
+    display: flex;
+    margin-top: 3px;
+    justify-content: flex-end;
+}
+.recoil-table-pager-actions button {
+        background-image: linear-gradient(30deg, #039BE5, #5bcaff,#039BE5);
+    height: 35px;
+    text-align: center;
+    line-height: 10px;
+    font-size: 12pt;
+    border: whitesmoke groove;
+    padding: 1px 15px 2px 15px;
+    border-radius: 1px;
+    border-style: inherit;
+    margin: 0;
+    color: white;
+    font-weight: bold;
+    margin-left: 5px;
+}

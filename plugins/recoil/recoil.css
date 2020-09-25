@@ -1,0 +1,62 @@
+.recoil_table_selected{
+	background-color: #009de0;
+}
+
+.recoil-addTable{
+	position: relative;
+	width: 100%;
+	height: 100%;
+	padding-left: 120px;
+}
+
+.recoil-addTable-addButton{
+	display: block;
+}
+.recoil-addTable-removeButton{
+	display: block;
+}
+
+.recoil-addTable-addButton button{
+	padding: 12px;
+	font-size: 1em;
+	font-weight: bold;
+	margin-bottom: 15px;
+}
+.recoil-addTable-removeButton button{
+	padding: 12px;
+	font-size: 1em;
+	font-weight: bold;
+}
+.goog-button {
+    color: #036;
+    border-color: #AAAAAA;
+	border-radius: 10px;
+	text-align: center;
+	font-family: arial;	
+    background-color: white;
+	cursor: pointer;
+}
+
+.goog-button:hover {
+	background-color: #e5e5e5;
+}
+
+.recoil-addTable-toolbar{
+	position: absolute;
+	top: 30px;
+	left: 10px;
+	width: 100px;
+}
+
+.recoil-popup{
+	visibility: hidden;
+}
+.goog-date-picker{
+	z-index: 9000;
+}
+.goog-menu-button-outer-box {
+	white-space:nowrap;
+}
+.goog-menu-button-caption{
+	white-space:nowrap;
+}

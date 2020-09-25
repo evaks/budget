@@ -1,0 +1,44 @@
+{
+    "namespace": "base",
+    "depends": ["aurora_sql"],
+    "require": ["budget.filter"],
+    "tables": [
+	{
+	    "name" : "user",
+	    "indexes": [{"columns": ["mentorid"]}],
+	    "accessFilter": [
+		{"user-management" : "all"},
+		{"mentor": "budget.filter.userMentor"},
+		{"": "aurora.db.access.filter.equal('id','@userid')"}],
+	    "columns": [
+		{ "name": "mentorid", "type": "ref(user)", "nullable": true}		
+	    ]
+
+	},
+	{
+	    "name" : "permission",
+	    "initial": [
+		{
+		    "name": "client", "description" : "What a client can do"
+		},
+		{
+		    "name": "mentor", "description" : "What a mentor can do."
+		}
+	    ]
+	},
+	{
+	    "name": "group",
+	    "initial":  [
+		{
+		    "name": "client",
+		    "permission":[{"!select": {"cols": [{"to": "permissionid", "from": "id"}], "query": " FROM permission WHERE name = 'client'"}}]
+		},{
+		    "name": "mentor",
+		    "permission":[{"!select": {"cols": [{"to": "permissionid", "from": "id"}], "query": " FROM permission WHERE name = 'mentor'"}}]
+		}
+		
+	    ]
+		
+	}
+    ]
+}

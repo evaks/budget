@@ -1,0 +1,4 @@
+[
+    "closure-library/closure/**.js",
+    "!closure-library/closure/**test.js"
+]

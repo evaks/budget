@@ -1,0 +1,44 @@
+{
+    "authentication": {
+	"sessionTable" : "aurora.auth.DbSessionTable.factory",
+	"persistantTimeoutMins" : 525600
+	
+    },
+    "database": {
+	"databases" : [{
+	    "driver": "aurora.db.mysql.Pool",
+	    "auth": true,
+	    "settings" :{
+		"host":"localhost", "user": "budget-app", "password": "zUjA15U9ZrnI6cSkEp0P",
+		"database": "budget"
+	    },
+	
+	    "create-settings" :
+	    {
+		"host":"localhost", "user": "root", "password": "password", "database": "budget"
+	    }
+	    
+	}]
+    },
+    "http": {
+	"servers":[
+		{
+			"port": 8080,
+			"protocol": "http",
+			"websocket":true,
+			"httpsRedirect1":8443,
+			"strictTransportSecurity":31536000
+		},
+		{
+			"port": 8443,
+			"protocol": "https",
+			"websocket":true
+		}
+	],
+	"directoryBrowsing": false,
+	"defaultPage": "home",
+	"serverDescription": "AuroraHTTP",
+	"theme":"budget",
+	"sourceDirectory":".."
+    }
+}

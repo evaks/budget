@@ -1,0 +1,259 @@
+.main-header {
+    background-image: url(/images/Lower_Hutt_Panorama_at_night.jpg);
+    background-repeat: no-repeat;
+    background-size: 100vw 300px;
+    display: flex;
+   
+}
+
+.menu-container {
+    margin-right: 10px;
+    float: right;
+    display: inline;
+    position: relative;
+}
+.content {
+    height: auto;
+    overflow: auto;
+    scrollbar-width: thin;
+    display: flex;
+    flex: 1;
+}
+
+.flex-display > .goog-control {
+    display: flex;
+    flex: 1;
+}
+.content-body {
+    overflow: auto;
+    height: calc(100vh - 360px);
+}
+
+.budget-video {
+    table-layout: fixed;
+}
+.budget-video tr td {
+    width: 300px;
+    margin-left: auto;
+    margin-right: auto;
+    color: #277488;
+    vertical-align: top;
+}
+
+.budget-video tr td h3 {
+    text-align: center;
+    font-variant-caps: small-caps;
+    color: #636363;
+}
+.intro-message {
+    color: white;
+    font-size: 32px;
+    line-height: 1.6em;
+    text-align: center;
+    padding: 10px 100px 10px 100px;
+}
+	       
+img.budget-logo {
+    height: 300px;
+    /*position: fixed;*/
+    background: #0404008a;
+    width: 280px;
+}
+
+.page-menu {
+    line-height: 50px;
+    color: white;
+    background: black;
+}
+
+.page-menu-hutt-city {
+    font-family: Arial;
+    font-weight: bold;
+    font-size: 20pt;
+    color: #878787
+}
+
+.page-menu-fin-mentor {
+    font-family: Arial;
+    font-variant-caps: petite-caps;
+    font-size: 18pt;
+    padding-left: 10px;
+}
+
+.goog-menubar {
+  cursor: default;
+  outline: none;
+  position: relative;
+  white-space: nowrap;
+}
+
+.menu-container .goog-menubar .goog-menu-button {
+    padding: 1px 1px;
+    margin: 0px 0px;
+    outline: none;
+    border: none;
+    background: black;
+    color: white;
+}
+
+.menu-container .goog-menu-button-caption {
+    white-space: nowrap;
+    font-size: 16pt;
+    font-variant-caps: petite-caps;
+}
+
+.menu-container .goog-menubar .goog-menu-button.goog-menu-button-hover {
+    background: grey;
+}
+
+.page-menu .goog-menuitem-content {
+    font-size: 16pt;
+    color: cadetblue;
+}
+
+.page-menu .goog-menuitem{
+    padding: 4px 2em 4px 20px;
+
+}
+
+
+h2.page-heading {
+    font-weight: 700;
+    color: #636363;
+    font-size: 24.0px;
+    text-align: center;
+}
+
+h3.page-heading {
+    color: #277488;
+    font-size: 16.0px;
+    text-align: center;
+}
+
+h4.page-heading {
+    color: #636363;
+    font-size: 16.0pt;
+    font-weight: normal;
+    font-variant-caps: all-petite-caps;
+}
+
+ul.feature-list li {
+}
+
+.content-inner {
+    margin: 15px auto 15px auto;
+}
+
+div .recoil-table-pager.pagination {
+    margin: 0;
+}
+
+div table.recoil-table-pager .page {
+    width: calc(100% - 9px);
+}
+.recoil-table-pager-container {
+    max-width: 100%;
+    scrollbar-width: thin;
+
+}
+
+.flex-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.flex-col {
+  display: flex;
+  flex-direction: column;
+  flex-basis: 100%;
+  flex: 1;
+}
+
+
+.cannot-do-list li {
+    color: crimson;
+}
+
+.can-do-list li {
+    color: #008000;
+}
+
+
+.budget-login-message {
+    color: crimson;
+    font-style: italic;
+    text-align: center;
+    font-weight: bold;
+}
+
+table.budget-login {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+td.login-button {
+    text-align: right;
+}
+
+.login-forgot {
+    text-align: right;
+}
+
+.center {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.contact-table tr td, .contact-table tr th {
+    vertical-align: top;
+    padding: 5px;
+}
+
+.goog-checkbox {
+    margin-bottom: 1px;
+}
+
+.search-row {
+    background-image: linear-gradient(0deg, #c6e7f6, #dcf2fc,#dcf2fc);
+}
+
+tr.search-row > td{
+    padding-bottom: 3px;
+    border-bottom: 3px ridge #71c6ef;
+    /* border-top: 2px ridge #dcf2fc5c; */
+    padding-top: 3px;
+
+}
+.recoil-table-pager-content table {
+    border-spacing: 0;
+    
+}
+
+.recoil-table-pager-content table th {
+    color:#6b778c;
+}
+
+table {
+    border-spacing: 0;
+}
+
+button.goog-button {
+    background-image: linear-gradient(30deg, #039BE5, #5bcaff,#039BE5);
+    height: 25px;
+    text-align: center;
+    line-height: 10px;
+    font-size: 10pt;
+    border: whitesmoke groove;
+    padding: 1px 15px 2px 15px;
+    border-radius: 1px;
+    border-style: inherit;
+    margin: 0;
+    color: white;
+    margin-left: 5px
+}
+
+.recoil-table-widget tr {
+    vertical-align: top;
+}

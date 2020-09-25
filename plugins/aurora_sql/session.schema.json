@@ -1,0 +1,27 @@
+{
+    "namespace": "base",
+    "tables" : [
+	{"name": "session_sequence",
+	"access": "aurora.db.access.none",
+	"accessFilter": "aurora.db.access.filter.allFilter",
+	"columns": [
+	    { "name": "id", "type": "id"}
+	]},
+	{"name": "session",
+	"indexes": [
+	    {"unique": true, "columns": ["token", "seriesId"]},
+	    {"columns": ["seriesId"]},
+	    {"columns": ["userId"]}
+	],
+	"access": "aurora.db.access.none",
+	"accessFilter": "aurora.db.access.filter.allFilter",
+	"columns": [
+	    { "name": "id", "type": "id", "auto": false},
+	    { "name": "token", "type": "string(36)"},
+	    { "name": "seriesId", "type": "string(20)"},
+	    { "name": "userId", "type": "ref(user)"},
+	    { "name": "expiry", "type": "datetime"},
+	    { "name": "data", "type": "json", "nullable": true}
+	]
+    }]
+}
