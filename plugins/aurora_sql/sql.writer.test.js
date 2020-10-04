@@ -155,7 +155,7 @@ test('add with invalid child', done => {
 test('check-password', done => {
     let mockReader = makeReader(schema);
     let cw = new ChangeWriter(schema, mockReader);
-    mockReader.addObject('t1', {id: 1, name: 'fred','t1-list': [{id: 7, name: 'l1'}]});
+    mockReader.addObject('t1', {id: 1, name: 'fred','t1-list': [{id: BigInt(7), name: 'l1'}]});
 
     cw.applyChanges([
         new ChangeSet.Set(makePath('t1', 1, 'password'), null, 'apple'),
@@ -287,7 +287,25 @@ test('test-delete-reference', done => {
         done();
     });
 });
+test('add-child', done => {
+    let mockReader = makeReader(schema);
+    let cw = new ChangeWriter(schema, mockReader);
+    mockReader.addObject('t1', {id: 1, name: 'a-ref', 't1-list': []});
 
+    cw.applyChanges([
+        new ChangeSet.Add(makePath('t1', 1, 't1-list', {mem: 1}), [
+            new ChangeSet.Set(makePath('t1', 1, 't1-list', {mem: 1}, 'name'), null, 'bob')
+        ])
+    ], {userid: 1, permissions: {'admin': true}}, function (result) {
+        let trans = mockReader.writes[0].transaction;
+        expect(result.length).toBe(1);
+        expect(result[0].error).toBeFalsy();
+        expect(trans.length).toBe(1);
+        expect(trans[0]).toStrictEqual({type: 'insert', table: 't1-list', obj: {parent: BigInt(1), name: 'bob'}});
+        done();
+
+    });
+});
 test('test-delete-objects', done => {
     let mockReader = makeReader(schema);
     let cw = new ChangeWriter(schema, mockReader);

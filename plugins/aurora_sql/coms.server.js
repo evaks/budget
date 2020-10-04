@@ -1,7 +1,7 @@
 goog.provide('aurora.db.Coms');
 
 goog.require('aurora.db.Authenticator');
-goog.require('aurora.db.colDeserializer');
+goog.require('aurora.db.Serializer');
 goog.require('aurora.db.shared');
 goog.require('aurora.db.sql.ChangeWriter');
 goog.require('aurora.log');
@@ -22,7 +22,7 @@ aurora.db.Coms = function(authenticator) {
      */
     let reader = null;
     let secName = aurora.db.schema.tables.sec.permissions.info.name;
-    let colDeserializer = aurora.db.colDeserializer;
+    let serializer = new aurora.db.Serializer();
 
     aurora.startup.doOnceStarted(function() {
         reader = new aurora.db.sql.Reader(aurora.db.Pool.getDefault());
@@ -121,7 +121,7 @@ aurora.db.Coms.prototype.doGet_ = function(reader, e, secContext) {
     let queryIn = e.data['query'];
     let optionsIn = e.data['options'];
     let response = {'command': 'full', 'name': name, 'query': queryIn, 'options': optionsIn, 'value': null};
-    let colDeserializer = aurora.db.colDeserializer;
+    let serializer = new aurora.db.Serializer;
     let context = {'@userid': secContext.userid};
 
     if (name === secName) {
@@ -134,7 +134,7 @@ aurora.db.Coms.prototype.doGet_ = function(reader, e, secContext) {
     }
     let secInfo = me.doSecurityCheck_(e, secContext, 'r', response);
     if (secInfo) {
-        let query = recoil.db.Query.deserialize(queryIn, colDeserializer);
+        let query = recoil.db.Query.deserialize(queryIn, serializer);
         let options = recoil.db.QueryOptions.deserialize(optionsIn);
         reader.readObjects(
             context, secInfo.table, query,
@@ -142,7 +142,7 @@ aurora.db.Coms.prototype.doGet_ = function(reader, e, secContext) {
             function(err, data) {
                 if (err) {
                     me.log_.debug('error reading data', queryIn, optionsIn, err);
-                    response['error-value'] = err;
+                    response['value-error'] = err;
                 }
                 else {
                     if (options && !options.isCount()) {

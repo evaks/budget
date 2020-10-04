@@ -15,12 +15,12 @@
 	],
 	"columns": [
 	    { "name": "id", "type": "id", "start":1},
-	    { "name": "active", "type": "boolean"},
+	    { "name": "active", "type": "boolean", "default":true},
 	    { "name": "username", "type": "string(100)"},
 	    { "name": "lockcount", "type": "int", "default": 0},
 	    { "name": "lastinvalidtime", "type": "datetime", "nullable": true},
 	    { "name": "password", "type": "password"},
-	    { "name": "email", "type": "string(128)"},
+	    { "name": "email", "type": "string(128)", "default": ""},
 	    { "name": "groups", "type": "leaf-list(userid)",
 	      "table": {
 		  "name": "user_group",

@@ -230,6 +230,18 @@ aurora.db.schema.actionMap = {};
  */
 aurora.db.Schema = function() {};
 
+/**
+ * makes a scope from the path so queries can execute on the object
+ * @param {!recoil.db.ChangeSet.Path} path
+ * @param {?} object
+ * @return {!recoil.db.QueryScope}
+ */
+
+aurora.db.Schema.prototype.makeQueryScope = function(path, object) {
+    var def = /** @type {aurora.db.schema.TableType} */ (this.getContainerDef(path));
+    return new aurora.db.schema.TableQueryScope(object, def, aurora.db.schema);
+
+};
 
 /**
  * @param {recoil.db.ChangeSet.Path} path
@@ -578,10 +590,10 @@ aurora.db.schema.tables.sec.permissions.key = new recoil.db.BasicType([], aurora
  * @param {Object} map
  * @param {!aurora.db.schema.TableType} table
  * @param {!aurora.db.SchemaType} schema
- * @param {!recoil.db.QueryHelper} helper
+ * @param {!recoil.db.QueryHelper=} opt_helper
  */
-aurora.db.schema.TableQueryScope = function(map, table, schema, helper) {
-    recoil.db.QueryScope.call(this, map, helper);
+aurora.db.schema.TableQueryScope = function(map, table, schema, opt_helper) {
+    recoil.db.QueryScope.call(this, map, opt_helper);
     this.basePath_ = table.info.path.split('/');
     this.schema_ = schema;
     this.obj_ = map;

@@ -1,16 +1,16 @@
 goog.provide('aurora.widgets.UserManagement');
 
-
 goog.require('aurora.db.schema.tables.base.user');
 goog.require('aurora.messages');
+goog.require('aurora.widgets.PagedTable');
 goog.require('aurora.widgets.Selectize');
 goog.require('aurora.widgets.TableDialog');
 goog.require('budget.WidgetScope');
 goog.require('goog.structs.AvlTree');
 goog.require('recoil.ui.widgets.InputWidget');
 goog.require('recoil.ui.widgets.table.ButtonColumn');
-goog.require('recoil.ui.widgets.table.PagedTableWidget');
 goog.require('recoil.ui.widgets.table.TableWidget');
+
 /**
  * @constructor
  * @export
@@ -38,13 +38,21 @@ aurora.widgets.UserManagement = function(scope, options) {
 
     var makeNewRow = function(sample, tblKeys) {
         var newRow = new recoil.structs.table.MutableTableRow();
+        for (var col in userT.meta) {
+            let meta = userT.meta[col];
+            if (meta.key === userT.info.pk) {
+                continue;
+            }
+            newRow.set(meta.key, meta.defaultVal == undefined ? null : meta.defaultVal);
+        }
         newRow.set(tblKeys.username, sample ? sample.get(tblKeys.username) : '');
         newRow.set(tblKeys.password, '');
         newRow.set(tblKeys.active, true);
         newRow.set(tblKeys.lockcount, 0);
         newRow.set(tblKeys.lastinvalidtime, null);
-        newRow.set(tblKeys.email, '');
         newRow.set(tblKeys.groups, []);
+
+
         newRow.set(tblKeys.mentorid, null); // todo remove this from here
         newRow.set(confirmPasswordCK, '');
 
@@ -57,7 +65,7 @@ aurora.widgets.UserManagement = function(scope, options) {
         return newRow;
     };
 
-    let createDialogTable = function(sample, userB) {
+    let createDialogTable = function(sample, userB, groupCol) {
         return recoil.frp.util.memoryOnlyB(frp.liftB(function(user) {
             var mTable = user.createEmpty([], [confirmPasswordCK]);
             var columns = new recoil.ui.widgets.TableMetaData();
@@ -69,6 +77,9 @@ aurora.widgets.UserManagement = function(scope, options) {
             columns.add(userT.cols.username, 'User Name');
             columns.addColumn(changePasswordCol);
             columns.addColumn(confirmPasswordCol);
+            if (!sample) {
+                columns.addColumn(groupCol);
+            }
             let row = makeNewRow(sample, userT.cols);
 
             mTable.addRow(row);
@@ -80,9 +91,16 @@ aurora.widgets.UserManagement = function(scope, options) {
         }, userB));
 
     };
+    let userEqual = recoil.util.object.uniq();
+    let filterGroups = function(col, val) {
+        if (val == undefined || val.length === 0) {
+            return null;
+        }
+        let query = new recoil.db.Query();
+        return query.containsAll(query.field(col), val);
+    };
 
-
-    let tableWidget = aurora.widgets.UserManagement.createPagedTable(scope, userT, PAGE_SIZE, function(scope, sourceB) {
+    let tableWidget = new aurora.widgets.PagedTable(scope, userT, PAGE_SIZE, function(scope, sourceB) {
         return frp.liftBI(function(tbl, groupCol) {
             let res = tbl.unfreeze();
             let columns = new recoil.ui.widgets.TableMetaData();
@@ -96,15 +114,59 @@ aurora.widgets.UserManagement = function(scope, options) {
         }, function(tbl) {
             if (tbl.getMeta().doAdd) {
                 let res = sourceB.get().unfreeze();
-                var tableB = createDialogTable(null, sourceB);
-                var td = new aurora.widgets.TableDialog(scope, tableB, frp.createCallback(function(e) {
-                    let addTable = tableB.get();
+                var userTableB = createDialogTable(null, sourceB, groupsB.get());
+                let rapidNameB = frp.liftB(function(tbl) {
+                    let uname = null;
+                    tbl.forEach(function(r) {
+                        uname = r.get(userT.cols.username);
+                    });
+                    return uname === '' ? null : uname;
+                }, userTableB);
+
+                let userNameB = recoil.frp.util.calm(rapidNameB, 2000);
+
+                let matchUsersB = frp.switchB(frp.liftB(function(user) {
+                    let query = new recoil.db.Query();
+                    return scope.getDb().get(userT.key, query.eq(userT.cols.username, query.val(user)));
+                }, userNameB));
+
+                let userValidatorB = frp.metaLiftB(function(users, rapid, slow) {
+
+                    let ready = users.good() && rapid.good() && slow.good() && rapid.get() === slow.get();
+                    let hasUsers = users.good() && users.get().size() !== 0;
+                    return new recoil.frp.BStatus(recoil.util.func.makeEqualFunc(function(row) {
+                        if (!ready) {
+                            return aurora.messages.CHECKING_USER;
+                        }
+                        else if (hasUsers) {
+                            return aurora.messages.DUPLICATE_USER_NAME;
+                        }
+                        let uname = row.get(userT.cols.username);
+                        let p1 = row.get(userT.cols.password);
+                        let p2 = row.get(confirmPasswordCK);
+
+                        if (uname == undefined || uname.trim().length === 0) {
+                            return aurora.messages.USERNAME_MUST_NOT_BE_BLANK;
+                        }
+                        if (p1 == undefined || p1 === '') {
+                            return aurora.messages.PASSWORD_MUST_NOT_BE_BLANK;
+                        }
+
+                        if (p1 !== p2) {
+                            return aurora.messages.PASSWORDS_DO_NOT_MATCH;
+                        }
+
+                        return null;
+                    }, userEqual, {ready, hasUsers}));
+                }, matchUsersB, rapidNameB, userNameB);
+                var td = new aurora.widgets.TableDialog(scope, userTableB, frp.createCallback(function(e) {
+                    let addTable = userTableB.get();
                     let res = sourceB.get().unfreeze();
                     addTable.forEach(function(row) {
                         res.addRow(row);
                     });
                     sourceB.set(res.freeze());
-                }, sourceB, tableB), 'Add', function() {return null;}, 'Add New User');
+                }, sourceB, userTableB), 'Add', userValidatorB, 'Add New User');
                 td.show(true);
             }
             else {
@@ -113,12 +175,12 @@ aurora.widgets.UserManagement = function(scope, options) {
                     resetPasswordRow = resetPasswordRow || (row.get(userT.cols.password) ? row : false);
                 });
                 if (resetPasswordRow) {
-                    var tableB = createDialogTable(resetPasswordRow, sourceB);
-                    var td = new aurora.widgets.TableDialog(scope, tableB, frp.createCallback(function(e) {
+                    let tableB = createDialogTable(resetPasswordRow, sourceB, groupsB.get());
+                    let td = new aurora.widgets.TableDialog(scope, tableB, frp.createCallback(function(e) {
                         let addTable = tableB.get();
 
                     }, sourceB, tableB), 'Reset', function() {return null;}, 'Reset Password');
-                td.show(true);
+                    td.show(true);
                 }
                 else {
                     sourceB.set(tbl);
@@ -130,6 +192,9 @@ aurora.widgets.UserManagement = function(scope, options) {
             let res = header.createEmpty();
             header.forEach(function(row) {
                 let mrow = row.unfreeze();
+                // where exists (select 1 from user_group where parentid = t0.id and groupid in (1,2))
+                mrow.set(userT.cols.groups, row.get(userT.cols.groups) || []);
+                mrow.addCellMeta(userT.cols.groups, {queryFactory: filterGroups});
                 mrow.addCellMeta(userT.cols.password, {cellWidgetFactory: null});
                 res.addRow(mrow);
             });
@@ -142,235 +207,6 @@ aurora.widgets.UserManagement = function(scope, options) {
     });
 
     tableWidget.getComponent().render(container);
-};
-
-/**
- * the factory will recieve the scope passed in and the table page that was recieve from the server
- * the header factory recieves scope and a sample table for the search filters, you may modify it in order to make it better
- *
- * @param {!aurora.WidgetScope} scope
- * @param {!aurora.db.schema.TableType} tableT
- * @param {number|!recoil.frp.Behaviour<number>} pageSize
- * @param {function(!aurora.WidgetScope,!recoil.frp.Behaviour<!recoil.structs.table.Table>):!recoil.frp.Behaviour<!recoil.structs.table.Table>} factory
- * @param {function(!aurora.WidgetScope,!recoil.frp.Behaviour<!recoil.structs.table.Table>):!recoil.frp.Behaviour<!recoil.structs.table.Table>} headerFactory
- * @return {!recoil.ui.widgets.table.PagedTableWidget}
- */
-aurora.widgets.UserManagement.createPagedTable = function(scope, tableT, pageSize, factory, headerFactory) {
-    let frp = scope.getFrp();
-    let lastGoodDataTableB = frp.createNotReadyB();
-    let sortOrderB = frp.createB([{id: true}]);
-    let pageKeyB = frp.createB(/** @type {?Object} */ (null));
-    let util = new recoil.frp.Util(frp);
-    let pageSizeB = util.toBehaviour(pageSize);
-    let ns = aurora.widgets.UserManagement;
-    var rowToSortOrder = function(row, order) {
-        var res = [];
-        order.forEach(function(val) {
-            res.push({key: val, val: row.get(tableT.meta[val].key)});
-        });
-        res.push({key: 'id', val: row.get(tableT.cols.id)});
-        return res;
-    };
-
-    var pageKeyToServer = function(key, order) {
-        if (key) {
-            if (key.next) {
-                return {next: rowToSortOrder(key.next, order), page: key.page};
-            }
-            else if (key.prev) {
-                return {prev: rowToSortOrder(key.prev, order), page: key.page};
-            }
-        }
-        return key;
-    };
-    let headerRowB = frp.createB(null);
-
-    let filtersB = frp.liftB(
-        function(userFilter) {
-            let query = new recoil.db.Query();
-            return query.True();
-        },
-        headerRowB
-    );
-
-    let serverDataTableB = ns.createKeyedValue(
-        scope, tableT.key, filtersB,
-        frp.liftB(function(sortOrder, pageKey, pageSize) {
-            return new recoil.db.QueryOptions({
-                sortOrder: sortOrder,
-                start: pageKeyToServer(pageKey, []),
-                size: pageSize
-            });
-        }, sortOrderB, pageKeyB, pageSizeB));
-
-    let nullFunc = function() {return null;};
-    let dataTableB = frp.metaLiftBI(function() {
-        if (serverDataTableB.good()) {
-            lastGoodDataTableB.set(serverDataTableB.get());
-            return serverDataTableB.metaGet();
-        }
-        return lastGoodDataTableB.metaGet();
-    }, function(val) {
-        if (serverDataTableB.good()) {
-            serverDataTableB.metaSet(val);
-        }
-    }, serverDataTableB, lastGoodDataTableB);
-
-    let tableSizeB = ns.createKeyedValue(scope, tableT.key, filtersB, new recoil.db.QueryOptions({count: true}));
-    let tableB = factory(scope, dataTableB);
-
-    let addCallbackB = frp.createCallback(function() {
-        let res = tableB.get().unfreeze();
-        res.addMeta({doAdd: true});
-        tableB.set(res.freeze());
-    }, tableB);
-
-
-    let addText = goog.dom.createDom('span', {}, 'Add User');
-    let removeText = goog.dom.createDom('span', {}, 'Remove User');
-
-    let addB = recoil.frp.struct.extend(
-        frp, {text: addText},
-        frp.liftB(function(tbl) {
-            return tbl.getMeta().add || {};
-        }), {action: addCallbackB}
-    );
-
-
-
-
-    let tableWidget = new recoil.ui.widgets.table.PagedTableWidget(scope, true);
-    let selectedB = tableWidget.createSelected();
-    let removeCallbackB = frp.createCallback(function() {
-        let res = tableB.get().createEmpty();
-        let selected = selectedB.get();
-        let toRemove = goog.structs.AvlTree.fromList(selected, recoil.util.object.compare);
-        tableB.get().forEach(function(row) {
-            if (!toRemove.findFirst(res.getRowKey(row))) {
-                res.addRow(row);
-            }
-        });
-        tableB.set(res.freeze());
-    }, tableB, selectedB);
-
-    let removeB = recoil.frp.struct.extend(
-        frp, {text: removeText},
-        frp.liftB(function(tbl) {
-            return tbl.getMeta().remove || {};
-        }), {action: removeCallbackB}
-    );
-
-
-    let pager = recoil.ui.widgets.table.createNextTablePager(dataTableB, pageKeyB, pageSize, tableSizeB);
-    let searchRowDecorator = function() {
-        return new recoil.ui.RenderedDecorator(
-            searchRowDecorator,
-            goog.dom.createDom('tr', {class: 'search-row'}));
-        };
-
-    let tableDecorator = function() {
-        return new recoil.ui.RenderedDecorator(
-            searchRowDecorator,
-            goog.dom.createDom('table', {class: 'recoil-table-widget'}));
-        };
-
-
-
-    let headerTableB = headerFactory(scope, frp.liftBI(function(table, row) {
-        let outRow = new recoil.structs.table.MutableTableRow();
-        let used = [];
-        table.getOtherColumns().forEach(function(col) {
-            outRow.set(col, null);
-        });
-
-        table.forEachPlacedColumn(function(col) {
-            outRow.set(col, null);
-            if (row && row.hasColumn(col)) {
-                outRow.set(col, row.get(col));
-            }
-            used.push(col);
-        });
-
-        let res = table.createEmpty();
-        res.addRow(outRow);
-        return res.freeze();
-    }, function(val) {
-        val.forEach(function(row) {
-            headerRowB.set(row);
-        });
-    },tableB, headerRowB));
-
-    tableWidget.attach(null, frp.liftBI(function(table, header) {
-        let tbl = table.createEmpty();
-        tbl.addMeta({selectionMode: recoil.ui.widgets.table.TableWidget.SelectionMode.MULTI, tableDecorator: tableDecorator});
-        let pos = -header.size();
-        header.forEach(function(row) {
-            let mrow = row.unfreeze();
-            mrow.addRowMeta({rowDecorator: searchRowDecorator});
-            mrow.setPos(pos++);
-            mrow.addRowMeta({selectable: false});
-            tbl.addRow(mrow);
-        });
-        table.forEach(function(row) {
-            tbl.addRow(row);
-        });
-
-        return tbl.freeze();
-    }, function(val) {
-        let hSize = headerTableB.get().size();
-        let header = headerTableB.get().createEmpty();
-        let table = tableB.get().createEmpty();
-        let pos = 0;
-        val.forEach(function(row) {
-            if (pos < hSize) {
-                header.addRow(row);
-            }
-            else {
-                table.addRow(row);
-            }
-            pos++;
-        });
-
-        tableB.set(table.freeze());
-        headerTableB.set(header.freeze());
-    }, tableB, headerTableB), pager.page, pager.count);
-
-    tableWidget.attachAdd(addB, removeB);
-
-    return tableWidget;
-};
-/**
- * @param {!aurora.WidgetScope} scope
- * @param {!recoil.db.BasicType} id
- * @param {!recoil.frp.Behaviour<!recoil.db.Query>} query
- * @param {!recoil.db.QueryOptions|recoil.frp.Behaviour<!recoil.db.QueryOptions>} options
- * @return {!recoil.frp.Behaviour}
- */
-aurora.widgets.UserManagement.createKeyedValue = function(scope, id, query, options) {
-    var frp = scope.getFrp();
-    var database = scope.getDb();
-    var util = new recoil.frp.Util(frp);
-    var mapB = frp.createB(new goog.structs.AvlTree(recoil.util.object.compareKey));
-    let queryB = util.toBehaviour(query);
-    let optionsB = util.toBehaviour(options);
-
-    var dataTableBB = frp.liftB(
-        function(query, options, map) {
-            let key = {query: query, options: options};
-            var existing = map.findFirst({key: key});
-
-            if (existing) {
-                return existing.behaviour;
-            }
-            var resB = database.get(id, query, options);
-            map.add({key: key, behaviour: resB});
-            mapB.set(map);
-
-            return resB;
-
-        }, queryB, optionsB, mapB);
-
-    return frp.switchB(dataTableBB);
 };
 
 /**

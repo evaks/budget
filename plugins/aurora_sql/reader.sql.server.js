@@ -9,11 +9,12 @@ goog.require('recoil.db.expr.Equals');
 
 /**
  * @constructor
+ * @param {!recoil.db.DBQueryScope} scope
  * helper to map ids to function
  */
-aurora.db.sql.TableIdMap = function() {
+aurora.db.sql.TableIdMap = function(scope) {
     this.tableMap_ = {};
-    this.id_ = 0;
+    this.scope_ = scope;
 };
 
 /**
@@ -24,7 +25,7 @@ aurora.db.sql.TableIdMap.prototype.get = function(path) {
     let key = JSON.stringify(path); // make sure path is unique
     let val = this.tableMap_[key];
     if (val === undefined) {
-        val = 't' + this.id_++;
+        val = this.scope_.nextTable();
         this.tableMap_[key] = val;
     }
     return val;
@@ -33,6 +34,7 @@ aurora.db.sql.TableIdMap.prototype.get = function(path) {
 /**
  * @constructor
  * @implements {aurora.db.Reader}
+ * @implements {recoil.db.Escaper}
  * @param {!aurora.db.Pool} driver
  */
 
@@ -134,7 +136,7 @@ aurora.db.sql.Reader.fromDbType = function(driver, type, val) {
  * @param {!Object<string,string>} colMap
  * @param {!Object<string,!Object<?,{key:?, list:!Array, path:!Array<string>}>>} unread
  * @param {number=} opt_end
- * @return {?{next: number, object: Object, pk: ?}}
+ * @return {?{next: number, object: Object, pk: ?, parentId: ?}}
  */
 
 
@@ -163,6 +165,7 @@ aurora.db.sql.Reader.readObject_ = function(driver, path, start, data, table, co
     let subTables = [];
     // do the to level columns
 
+    let parentId = table.info.parentKey ? row[colMap[table.info.parentKey.getId()]] : null;
     for (let k in table.meta) {
         let meta = table.meta[k];
         let key = meta.key;
@@ -220,11 +223,11 @@ aurora.db.sql.Reader.readObject_ = function(driver, path, start, data, table, co
             }
             i = readInfo.next;
         }
-
     });
-    return {next: end, object: curObject, pk: curPk};
+    return {next: end, object: curObject, pk: curPk, parentId};
 
 };
+
 /**
  * @param {!aurora.db.schema.TableType} baseTable
  * @param {!Array<!recoil.structs.table.ColumnKey>} links
@@ -239,13 +242,11 @@ aurora.db.sql.Reader.prototype.selectReference = function(baseTable, links, filt
     let query = new recoil.db.Query();
     let basePath = baseTable.info.path;
     let driver = this.driver_;
-    let selectTables = [driver.escapeId(baseTable.info.table) + ' t0'];
     let me = this;
     let curTable = baseTable;
-    let scope = new recoil.db.DBQueryScope({}, new recoil.db.SQLQueryHelper(this.driver_));
-    let tid = 1;
-    scope.addPathTable([], 't0', me.getColumns_(baseTable));
-    let tName = 't0';
+    let scope = new recoil.db.DBQueryScope({}, new recoil.db.SQLQueryHelper(this), this.makeChildPathFunc(baseTable));
+    let tName = scope.addPathTable([], me.getColumns_(baseTable));
+    let selectTables = [driver.escapeId(baseTable.info.table) + ' ' + driver.escapeId(tName)];
 
     for (let i = 0; i < links.length; i++) {
         let linkTable = getParentTable(links[i]);
@@ -261,8 +262,7 @@ aurora.db.sql.Reader.prototype.selectReference = function(baseTable, links, filt
             if (meta.type === 'ref' || meta.list || meta.object) {
                 let subTable = meta.type === 'ref' ? aurora.db.schema.tableMap[meta.table] : /** @type {!aurora.db.schema.TableType} */ (aurora.db.schema.getTable(meta.key));
 
-                tName = 't' + (tid++);
-                scope.addPathTable([], tName, me.getColumns_(subTable));
+                tName = scope.addPathTable([], me.getColumns_(subTable));
                 if (meta.type === 'ref') {
                     filter = query.and(filter, query.eq(meta.key, subTable.info.pk));
                 }
@@ -302,6 +302,62 @@ aurora.db.sql.Reader.prototype.selectReference = function(baseTable, links, filt
 
     });
 
+};
+/**
+ * @param {!aurora.db.schema.TableType} base
+ * @return {function((!Array<string|!recoil.structs.table.ColumnKey>)):!Array<{id: string, parent: string, col: string, table:string}>}
+ */
+aurora.db.sql.Reader.prototype.makeChildPathFunc = function(base) {
+    console.log('todo put some checkes in here to stop execptions on invalid data');
+    return function(path) {
+        try {
+            let col = path[0];
+            // convert the path to a column we only have do do this once
+            if (!(col instanceof recoil.structs.table.ColumnKey)) {
+                // traverse path from base to get the col
+                let fullPathParts = base.info.path.split('/').concat(path);
+                let colName = fullPathParts.pop();
+                let tbl = aurora.db.schema.getTableByName(fullPathParts.join('/'));
+                col = tbl.meta[colName].key;
+            }
+
+            let meta = aurora.db.schema.getMeta(col);
+            if ((meta.list || meta.object)) {
+                if (meta.leaf) {
+                    let tbl = aurora.db.schema.getTable(col);
+                    for (let k in tbl.meta) {
+                        let e = tbl.meta[k];
+                    if (e.type !== 'id' && e.type !== 'order') {
+                        col = e.key;
+                        meta = tbl.meta[k];
+                        break;
+                    }
+                    }
+                }
+                else {
+                    throw new Error('Invalid column for contains ' + col);
+                }
+            }
+            let tbl = aurora.db.schema.getParentTable(col);
+            let parts = tbl.info.path.split('/');
+            let baseParts = base.info.path.split('/');
+            if (tbl.info.path.indexOf(base.info.path + '/') !== 0) {
+                throw new Error('Invalid column for contains ' + col);
+            }
+            let res = [{id: tbl.info.pk.getName(), parent: tbl.info.parentKey ? tbl.info.parentKey.getName() : null, col: col.getName(), table: tbl.info.table}];
+            parts.pop();
+            while (parts.length >= baseParts.length) {
+                let cur = aurora.db.schema.getTableByName(parts.join('/'));
+                res.unshift({id: cur.info.pk.getName(), parent: cur.info.parentKey ? cur.info.parentKey.getName() : null, table: cur.info.table});
+                parts.pop();
+            }
+            return res;
+        }
+        catch (e) {
+            aurora.db.sql.log.warn('invalid path', path, 'for', base.info.path);
+            return [];
+        }
+    };
 };
 /**
  * @param {!Object} context
@@ -367,8 +423,8 @@ aurora.db.sql.Reader.prototype.readObjectByKey = function(context, table, keys, 
  */
 aurora.db.sql.Reader.prototype.mkCountSql_ = function(scope, table, filter) {
     let driver = this.driver_;
-    scope.addPathTable([], 't0', []);
-    let sql = 'SELECT count(*) count FROM ' + driver.escapeId(table.info.table) + ' ' + driver.escapeId('t0');
+    let tname = scope.addPathTable([], []);
+    let sql = 'SELECT count(*) count FROM ' + driver.escapeId(table.info.table) + ' ' + driver.escapeId(tname);
     return {
         query: sql,
         filter: filter
@@ -381,12 +437,13 @@ aurora.db.sql.Reader.prototype.mkCountSql_ = function(scope, table, filter) {
  * @param {{data:Object<string,{key:?}>,sec:recoil.db.Query,filter:recoil.db.Query,
             table:aurora.db.schema.TableType,path:!Array<string>,parentField:(undefined|recoil.db.expr.Field)}} cur
  * @param {!Array<{tid:string,col:string, colName:string}>} columns
+ * @param {boolean} limited
  * @return {{query:string,filter:recoil.db.Query}}
  */
-aurora.db.sql.Reader.prototype.mkSelectSql_ = function(scope, colMap, cur, columns) {
+aurora.db.sql.Reader.prototype.mkSelectSql_ = function(scope, colMap, cur, columns, limited) {
     // where clauses will just filter out sub keys they will not stop the join
     let query = new recoil.db.Query();
-    let tableIdMap = new aurora.db.sql.TableIdMap();
+    let tableIdMap = new aurora.db.sql.TableIdMap(scope);
     let Field = recoil.db.expr.Field;
     let driver = this.driver_;
     let me = this;
@@ -409,9 +466,15 @@ aurora.db.sql.Reader.prototype.mkSelectSql_ = function(scope, colMap, cur, colum
             let addedLists = 0;
             let tId = tableIdMap.get(path);
             let joins = [];
-            scope.addPathTable(path, tId, me.getColumns_(table));
+            if (table.info.parentKey) {
+                scope.addPathNamedTable(path, me.getColumns_(table).concat(table.info.parentKey), tId);
 
-            if (listCount.val > 0 && isList) {
+            }
+            else {
+                scope.addPathNamedTable(path, me.getColumns_(table), tId);
+            }
+
+            if ((listCount.val > 0 || limited) && isList) {
                 todo.push({path: path, table: table});
                 return;
             }
@@ -422,6 +485,11 @@ aurora.db.sql.Reader.prototype.mkSelectSql_ = function(scope, colMap, cur, colum
             if (parentField && childField) {
                 // this will need to change to deal with todos
                 joins.push(new recoil.db.expr.Equals(parentField, childField));
+            }
+            if (table.info.parentKey) {
+                colMap[table.info.parentKey] = 'col' + colIdx;
+                columns.push({tid: tableIdMap.get(path), col: table.info.parentKey.getName(), colName: 'col' + colIdx++});
+
             }
             for (let k in table.cols) {
                 let col = table.cols[k];
@@ -493,11 +561,13 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
     let colMap = {};
     let me = this;
 
-    let scope = new recoil.db.DBQueryScope(context, new recoil.db.SQLQueryHelper(driver));
+    let scope = new recoil.db.DBQueryScope(context, new recoil.db.SQLQueryHelper(this), this.makeChildPathFunc(table));
 
     let topLevelList = [];
-    let unread = {};
-    unread[JSON.stringify([])] = {
+    // a map of path to table info of tables to read
+    let unreadTables = {};
+    // a map from path to table data
+    unreadTables[JSON.stringify([])] = {
         data: null,
         sec: securityFilter,
         filter: filter,
@@ -507,14 +577,16 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
     };
     let isCount = opt_options ? opt_options.isCount() : false;
 
+    console.log('should limit', opt_options ? opt_options : null);
     let readObject = aurora.db.sql.Reader.readObject_;
 
 
-    let processList = function(unread) {
+    let processList = function(unreadTables, opt_options) {
+        let limit = opt_options ? opt_options.size() != undefined : false;
         let cur = null;
-        for (let k in unread) {
-            cur = unread[k];
-            delete unread[k];
+        for (let k in unreadTables) {
+            cur = unreadTables[k];
+            delete unreadTables[k];
             break;
         }
         if (!cur) {
@@ -533,7 +605,7 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
         }
         let columns = [];
         try {
-            let sql = isCount ? me.mkCountSql_(scope, table, filter) : me.mkSelectSql_(scope, colMap, cur, columns);
+            let sql = isCount ? me.mkCountSql_(scope, table, filter) : me.mkSelectSql_(scope, colMap, cur, columns, limit);
 
             if (!cur.data) {
                 // this the toplevel
@@ -543,8 +615,8 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
             if (filter) {
                 sql.query += ' WHERE ' + sql.filter.query(scope);
             }
-            console.log('query', sql.query);
-            let unread = {};
+
+            console.log('query', driver.addOptions(sql.query, opt_options));
             driver.query(driver.addOptions(sql.query, opt_options), function(error, data, colInfo) {
                 try {
                     if (error) {
@@ -560,10 +632,10 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
                     } if (data && data.length > 0) {
                         let res = null;
                         do {
-                            res = readObject(me.driver_, cur.path, res ? res.next : 0, /** @type {!Array} */(data), cur.table, colMap, unread);
+                            res = readObject(me.driver_, cur.path, res ? res.next : 0, /** @type {!Array} */(data), cur.table, colMap, unreadTables);
                             if (res && res.object) {
                                 if (cur.data) {
-                                    cur.data[res.pk].list.push(res.object);
+                                    cur.data[res.parentId].list.push(res.object);
                                 }
                                 else {
                                     topLevelList.push(res.object);
@@ -574,7 +646,7 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
                         while (res);
 
                     }
-                    processList(unread);
+                    processList(unreadTables, null);
 
                 }
                 catch (e) {
@@ -588,7 +660,7 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
             callback(e, null);
         }
     };
-    processList(unread);
+    processList(unreadTables, opt_options);
 };
 
 
@@ -606,9 +678,9 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
 aurora.db.sql.Reader.prototype.updateOneLevel = function(context, table, object, query, callback) {
     // this could delete and add children but first update the base object since this should be ok to update
     let me = this;
-    let scope = new recoil.db.DBQueryScope(context, new recoil.db.SQLQueryHelper(me.driver_));
+    let scope = new recoil.db.DBQueryScope(context, new recoil.db.SQLQueryHelper(me), this.makeChildPathFunc(table));
     let cols = me.getColumns_(table);
-    scope.addPathTable([], '', cols);
+    scope.addPathNamedTable([], cols, '');
 
     // start transaction
     this.driver_.transaction(function(driver, doneFunc) {
@@ -736,7 +808,8 @@ aurora.db.sql.Reader.prototype.insert = function(context, table, object, callbac
     };
 
     this.transaction(function(reader, transCallback) {
-        doInsertObject(reader.driver_, table, null, object, function(err, insertInfo) {
+        let parentId = table.info.parentKey ? object[table.info.parentKey.getName()] : null;
+        doInsertObject(reader.driver_, table, parentId, object, function(err, insertInfo) {
             transCallback(err, insertInfo);
         });
     }, function(err, insertInfo) {
@@ -858,11 +931,11 @@ aurora.db.sql.Reader.prototype.makeWhere_ = function(scope, query, securityFilte
  * @param {function(?,Array<number>)} callback
  */
 aurora.db.sql.Reader.prototype.readIds_ = function(context, table, query, securityFilter, callback) {
-    let scope = new recoil.db.DBQueryScope(context, new recoil.db.SQLQueryHelper(this.driver_));
-    scope.addPathTable([], 't0', this.getColumns_(table));
+    let scope = new recoil.db.DBQueryScope(context, new recoil.db.SQLQueryHelper(this), this.makeChildPathFunc(table));
+    let tName = scope.addPathTable([], this.getColumns_(table));
 
     let sql = 'SELECT ' + this.driver_.escapeId(table.info.pk.getName()) + ' id FROM '
-        + this.driver_.escapeId(table.info.table) + ' ' + this.driver_.escapeId('t0') + ' '
+        + this.driver_.escapeId(table.info.table) + ' ' + this.driver_.escapeId(tName) + ' '
         + this.makeWhere_(scope, query, securityFilter);
     console.log(sql);
     this.driver_.query(sql, function(error, data) {
@@ -920,10 +993,10 @@ aurora.db.sql.Reader.prototype.deleteObjects = function(context, table, query, s
     let whereClause = null;
     let childTables = this.getChildTables_(table);
     let filter = this.addSecurityFilter_(query, securityFilter);
-    let scope = new recoil.db.DBQueryScope({}, new recoil.db.SQLQueryHelper(this.driver_));
+    let scope = new recoil.db.DBQueryScope({}, new recoil.db.SQLQueryHelper(this), this.makeChildPathFunc(table));
     let me = this;
     // naming the tables in delete doesn't work
-    scope.addPathTable([], '', me.getColumns_(table));
+    scope.addPathNamedTable([], me.getColumns_(table), '');
     if (filter) {
         whereClause = ' WHERE ' + filter.query(scope);
     }
@@ -980,10 +1053,10 @@ aurora.db.sql.Reader.prototype.deleteOneLevel = function(context, table, query, 
     // with a dependancy map
     let whereClause = null;
     let filter = this.addSecurityFilter_(query, securityFilter);
-    let scope = new recoil.db.DBQueryScope({}, new recoil.db.SQLQueryHelper(this.driver_));
+    let scope = new recoil.db.DBQueryScope({}, new recoil.db.SQLQueryHelper(this), this.makeChildPathFunc(table));
     let me = this;
     // naming the tables in delete doesn't work
-    scope.addPathTable([], '', me.getColumns_(table));
+    let tname = scope.addPathNamedTable([], me.getColumns_(table), '');
     if (filter) {
         whereClause = ' WHERE ' + filter.query(scope);
     }
@@ -995,4 +1068,25 @@ aurora.db.sql.Reader.prototype.deleteOneLevel = function(context, table, query, 
             transCallback(error);
         });
     }, callback);
+};
+
+
+/**
+ * @param {string} str
+ * @return {string}
+ */
+aurora.db.sql.Reader.prototype.escapeId = function(str) {
+    return this.driver_.escapeId(str);
+};
+
+/**
+ * @param {?} str
+ * @return {string}
+ */
+aurora.db.sql.Reader.prototype.escape = function(str) {
+    if (str instanceof aurora.db.PrimaryKey) {
+        console.log('escape *********', str.db, this.driver_.escape(str.db));
+        return this.driver_.escape(str.db);
+    }
+    return this.driver_.escape(str);
 };

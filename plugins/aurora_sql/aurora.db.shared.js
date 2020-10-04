@@ -1,6 +1,7 @@
 goog.provide('aurora.db');
 goog.provide('aurora.db.PrimaryKey');
 
+goog.require('aurora.string');
 goog.require('recoil.structs.table.ColumnKey');
 goog.require('recoil.util');
 goog.require('recoil.util.Sequence');
@@ -28,8 +29,16 @@ aurora.db.createId = function(name) {
  *                     then uses databases key
  */
 aurora.db.PrimaryKey = function(db, opt_mem) {
-    this.db = db;
-    this.mem = opt_mem === undefined ? db : opt_mem;
+    this.db = aurora.db.PrimaryKey.toBigInt(db);
+    this.mem = opt_mem === undefined ? this.db : aurora.db.PrimaryKey.toBigInt(opt_mem);
+};
+
+/**
+ * @param {?} v
+ * @return {?}
+ */
+aurora.db.PrimaryKey.toBigInt = function(v) {
+    return v == null || typeof(v) === 'big' + 'int' ? v : BigInt(v);
 };
 
 /**

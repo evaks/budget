@@ -382,10 +382,8 @@ aurora.db.sql.ChangeWriter.prototype.applyChanges_ = function(changes, context, 
                 // object we need to make sure that
                 let curBasePath = me.getBasePath_(change.path());
                 if (me.getPath_(bases[curBasePath], change.path().parent()) !== null) {
-                    console.log('todo adding sub item');
                     let id = refMap.safeFind({key: change.path(), delayed: new DelayedRef()}).delayed;
-                    id.value = change.path().lastKeys()[0];
-
+                    id.value = change.path().parent().lastKeys()[0].db;
                     me.addAdd_(objectPathMap, change, results[changeIdx], id, refMap);
                 }
                 else {
@@ -484,6 +482,7 @@ aurora.db.sql.ChangeWriter.prototype.applyTransactionChanges_ = function(changeL
                             eachCallback(error);
                         }
                         else {
+                            // todo we get no error without an insertid object
                             entry.id.value = BigInt(insertId.insertId);
                             entry.result.id = entry.id.value;
                             eachCallback(null);

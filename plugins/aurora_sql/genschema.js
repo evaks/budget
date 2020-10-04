@@ -454,6 +454,14 @@ let doGenerate = function(def, ns, client, custRequires, out) {
             if (isRef) {
                 fs.appendFileSync(out, ',\n       ref: ' + stringify(tablePathMap[info.table]));
             }
+
+            if (data.default !== undefined) {
+                fs.appendFileSync(out, ',\n       defaultVal: ' + stringify(data.default));
+            }
+            else if (data.nullable === true) {
+                fs.appendFileSync(out, ',\n       defaultVal: null');
+            }
+
             for (let k in info) {
                 if (isRef && client && k === 'table') {
                     continue;

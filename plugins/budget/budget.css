@@ -257,3 +257,20 @@ button.goog-button {
 .recoil-table-widget tr {
     vertical-align: top;
 }
+
+.modal-dialog-buttons {
+    display: flex;
+    flex-direction: row-reverse;
+}
+
+.modal-dialog .table-dialog-error {
+    min-height: 60px;
+    position: absolute;
+    right: 50px;
+    left: 2px;
+    pointer-events: none;
+}
+
+.modal-dialog-title {
+    background: LINEAR-GRADIENT(20deg, #0a8ed38f, #0a8ed345 50%, #eee calc(50% + 50px), #0a8ed38f 100%);
+}

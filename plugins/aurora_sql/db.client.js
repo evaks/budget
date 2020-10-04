@@ -1,7 +1,7 @@
 
 goog.provide('aurora.db.Comms');
 
-goog.require('aurora.db.colDeserializer');
+goog.require('aurora.db.Serializer');
 goog.require('aurora.db.shared');
 goog.require('aurora.websocket');
 goog.require('recoil.db.ChangeSet');
@@ -13,7 +13,10 @@ goog.require('recoil.util.Sequence');
  * primary keys are always {db: ?, memory: ?}
  */
 /**
- * @typedef {{key:{query:!recoil.db.Query,options:recoil.db.QueryOptions},value:(undefined|{failure:!Array<function(!recoil.frp.BStatus)>,success:!Array<function(?)>,value:?})}}
+ * matches is a map of keys that this query has returned or been inserted by this user
+ * added is a map of keys that the user has added to this query
+ *
+* @typedef {{key:{query:!recoil.db.Query,options:recoil.db.QueryOptions},matches:(!goog.structs.AvlTree|undefined),added:(!goog.structs.AvlTree|undefined), value:(undefined|{failure:!Array<function(!recoil.frp.BStatus)>,success:!Array<function(?)>,value:?})}}
  */
 aurora.db.QueryEntry;
 
@@ -39,6 +42,77 @@ aurora.db.Helper = function(comms, db, client, schema) {
     this.channel_ = this.comms_.createChannel_();
 };
 
+
+/**
+ * called when a new row may be added however, before the server reply
+ * @private
+ * @param {!Array<!recoil.db.ChangeSet.Change>} changes
+ * @param {aurora.db.schema.TableType} tbl
+ * @param {!recoil.db.Query} query
+ * @param {!recoil.db.QueryOptions} options
+ */
+aurora.db.Helper.prototype.updateAddedNew_ = function(changes, tbl, query, options) {
+    let queryInfo = this.findQuery_(tbl, query, options);
+    if (queryInfo) {
+        for (let i = 0; i < changes.length; i++) {
+            let change = changes[i];
+            if (change instanceof recoil.db.ChangeSet.Add) {
+                let path = change.path();
+                if (path.pathAsString() === tbl.info.path) {
+                    let pk = path.lastKeys()[0];
+                    if (!queryInfo.added.findFirst(pk)) {
+                        queryInfo.added.add(pk);
+                    }
+                }
+            }
+        }
+    }
+};
+
+/**
+ * @private
+ * @param {aurora.db.schema.TableType} tbl
+ * @param {!recoil.db.Query} query
+ * @param {!recoil.db.QueryOptions} options
+ * @param {!Object} list
+ * @return {?function(?):boolean}
+ */
+aurora.db.Helper.prototype.updateQueryInfo_ = function(tbl, query, options, list) {
+    let queryInfo = this.findQuery_(tbl, query, options);
+
+    if (queryInfo) {
+        let entry = this.tblMap_.findFirst({key: tbl.key.uniqueId()});
+
+        queryInfo.matches.clear();
+        if (list instanceof Array) {
+            list.forEach(function(obj) {
+                let key = obj[tbl.info.pk.getName()];
+                queryInfo.matches.add(key);
+            });
+        }
+        else {
+            let key = list[tbl.info.pk.getName()];
+            queryInfo.matches.add(key);
+        }
+
+        let needed = new goog.structs.AvlTree(recoil.util.compare);
+        let add = function(v) {
+            if (!needed.findFirst(v)) {
+                needed.add(v);
+            }
+        };
+        entry.queries.inOrderTraverse(function(e) {
+            e.matches.inOrderTraverse(add);
+            e.added.inOrderTraverse(add);
+        });
+        // the filter returns if it is removable
+        return function(v) {
+            let key = v[tbl.info.pk.getName()];
+            return !needed.findFirst(key);
+        };
+    }
+    return null;
+};
 /**
  * @private
  * @param {?} id
@@ -123,17 +197,19 @@ aurora.db.Helper.prototype.updateTableError = function(keyInfo, query, options, 
 /**
  * @private
  * @param {?} data
+ * @param {!aurora.db.schema.TableType} tbl
  * @param {!recoil.db.Query} query
- * @param {recoil.db.QueryOptions} options
+ * @param {!recoil.db.QueryOptions} options
  * @return {?}
  */
-aurora.db.Helper.prototype.filterQuery_ = function(data, query, options) {
+aurora.db.Helper.prototype.filterQuery_ = function(data, tbl, query, options) {
     // filtering count should be done outside this
+    var entry = this.findQuery_(tbl, query, options);
     if (data instanceof Array) {
         let res = [];
         for (let i = 0; i < data.length; i++) {
-            let scope = new recoil.db.QueryScope(data[i]);
-            if (query.eval(scope)) {
+            let pk = data[i][tbl.info.pk.getName()];
+            if (entry && (entry.matches.findFirst(pk) || entry.added.findFirst(pk))) {
                 res.push(data[i]);
             }
         }
@@ -172,7 +248,7 @@ aurora.db.Helper.prototype.updateTable = function(path, opt_currentErrors) {
         // TODO think about this I think we may make this the primary key
         // and stop using the primary key izer on a table, it will work for
         // individual tables but not for multiple
-        var value = me.filterQuery_(me.db_.get(path), lookupInfo.key.query, lookupInfo.key.options);
+        var value = me.filterQuery_(me.db_.get(path), keyInfo, lookupInfo.key.query, lookupInfo.key.options);
         // turn into array note the 2 ways this can be an object 1 it is an object
         // the other is it
         var kInfo = keyInfo.info;
@@ -477,7 +553,7 @@ aurora.db.Helper.prototype.stop = function(id, key, options) {
     if (!entry) {
         return;
     }
-    let colSerializer = aurora.db.Comms.colSerializer;
+    let colSerializer = new aurora.db.Serializer();
     let entryKey = {query: queryKey, options: options};
     let query = entry.queries.findFirst({key: entryKey});
     if (query) {
@@ -513,7 +589,7 @@ aurora.db.Helper.prototype.reregister = function()  {
     me.currentErrors_ = new recoil.db.PathMap(this.schema_);
     me.queuedChanges_ = [];
     me.erroredChanges_ = [];
-    let colSerializer = aurora.db.Comms.colSerializer;
+    let colSerializer = new aurora.db.Serializer();
     this.tblMap_.inOrderTraverse(function(entry) {
         entry.queries.inOrderTraverse(function(node) {
             console.log('re-registering', node);
@@ -550,8 +626,8 @@ aurora.db.Helper.prototype.keyToQuery_ = function(inKey) {
 aurora.db.Helper.prototype.get_ = function(success, failure, id, inKey, options) {
     let key = this.keyToQuery_(inKey);
 
-
-    let colSerializer = aurora.db.Comms.colSerializer;
+    options = options.cleanStart();
+    let colSerializer = new aurora.db.Serializer();
     var keyInfo = aurora.db.schema.keyMap[id.getData().name];
 
     var existingEntry = this.findQuery_(keyInfo, key, options);
@@ -576,7 +652,7 @@ aurora.db.Helper.prototype.get_ = function(success, failure, id, inKey, options)
         }
         existing = {id: id, keys: key, value: null, success: [success], failure: [failure]};
 
-        entry.queries.add({key: queryKey, value: existing});
+        entry.queries.add({key: queryKey, matches: new goog.structs.AvlTree(recoil.util.compare), added: new goog.structs.AvlTree(recoil.util.compare), value: existing});
     }
 };
 
@@ -589,18 +665,71 @@ aurora.db.Helper.prototype.get_ = function(success, failure, id, inKey, options)
  */
 aurora.db.Helper.makeLoadId = function(id, query, options) {
     var res = id.uniqueId() + ':' + id.getData().name;
-    res += '[' + (query ? JSON.stringify(query.serialize(aurora.db.Comms.colSerializer)) : '') + ']';
+    res += '[' + (query ? JSON.stringify(query.serialize(new aurora.db.Serializer())) : '') + ']';
     res += '[' + (options ? JSON.stringify(options.serialize()) : '') + ']';
     return res;
 };
 
 /**
+ * @private
+ * @param {!goog.structs.AvlTree<{key:!recoil.db.ChangeSet.Path, id: number}>} idMap
+ * @param {!Array<!recoil.db.ChangeSet.Change>} changes
+ * @param {(Array<{id:(undefined|?),children:(!Array|undefined)}>|undefined)} results
+ */
+aurora.db.Helper.prototype.addChangesToIdMap_ = function(idMap, changes, results) {
+    if (results) {
+        for (let i = 0; i < changes.length; i++) {
+            let change = changes[i];
+            if (results[i].error) {
+                continue;
+            }
+
+            if (change instanceof recoil.db.ChangeSet.Add && results[i].id != null) {
+                idMap.add({key: aurora.db.Comms.getErrorPath(change), id: results[i].id});
+                this.addChangesToIdMap_(idMap, change.dependants(), results[i].children);
+            }
+        }
+    }
+};
+/**
  * @param {!Array<!recoil.db.ChangeSet.Change>} changes
  * @param {!recoil.db.PathMap} currentErrors
+ * @param {undefined|Array} serverResults
  */
-aurora.db.Helper.prototype.updateEffectedTables = function(changes, currentErrors) {
+aurora.db.Helper.prototype.updateEffectedTables = function(changes, currentErrors, serverResults) {
     var effectedTables = [];
     var me = this;
+    // build a map of path memid ->
+    // make it that longer paths occur first in the list that way we do not screw up parent paths before
+    // we insert the child
+    console.log('update references to keys as well');
+
+    let idMap = new goog.structs.AvlTree(function(x, y) {
+        let res = y.key.size() - x.key.size();
+        if (res !== 0) {
+            return res;
+        }
+        return recoil.util.object.compareKey(x, y);
+    });
+    this.addChangesToIdMap_(idMap, changes, serverResults);
+    idMap.inOrderTraverse(function(entry) {
+        console.log('adding pk xxxx', entry.key);
+        let pk = entry.key.lastKeys()[0];
+        let newPk = new aurora.db.PrimaryKey(entry.id);
+        let tbl = aurora.db.schema.getTableByName(entry.key);
+        let tblInfo = me.tblMap_.findFirst({key: tbl.key.uniqueId()});
+        if (tblInfo) {
+            tblInfo.queries.inOrderTraverse(function(q) {
+                q.added.remove(pk);
+                if (!q.added.findFirst(newPk)) {
+                    q.added.add(newPk);
+                }
+            });
+        }
+
+        me.db_.updatePk(me.schema_, entry.key, [newPk]);
+    });
+    console.log('id map', idMap.toList());
     this.tblMap_.inOrderTraverse(function(qEntry) {
         qEntry.queries.inOrderTraverse(function(entry) {
             var tblInfo = entry.value;
@@ -758,23 +887,15 @@ aurora.db.Comms.deserialize = function(path, obj, schema) {
 
 /**
  * @param {!aurora.db.Comms} me
- * @return {function(recoil.db.ChangeSet.Path,!recoil.db.ChangeDb,?)}
+ * @return {function(recoil.db.ChangeSet.Path,!recoil.db.ChangeDb,?, ?)}
  */
 aurora.db.Comms.setChangesInDb = function(me) {
-    return function(path, db, value) {
-        var changedObjects = db.setRoot(path, value);
+    return function(path, db, value, query) {
+        var changedObjects = db.setRoot(path, value, query);
         changedObjects.forEach(function(path) {
             me.helper_.updateTable(path, undefined);
         });
     };
-};
-
-/**
- * @param {!recoil.structs.table.ColumnKey} col
- * @return {?}
- */
-aurora.db.Comms.colSerializer = function(col) {
-    return aurora.db.schema.getParentTable(col).info.path + '/' + col.getName();
 };
 
 /**
@@ -788,7 +909,7 @@ aurora.db.Comms.prototype.createChannel_ = function() {
     var me = this;
     var setChangesInDb = aurora.db.Comms.setChangesInDb(this);
     var pendingChanges = [];
-    let colDeserializer = aurora.db.colDeserializer;
+    let colDeserializer = new aurora.db.Serializer();
     if (!this.channel_) {
         this.channel_ = aurora.websocket.getObjectChannel(
             aurora.db.shared.PLUGIN_ID, aurora.db.shared.DATA,
@@ -828,7 +949,10 @@ aurora.db.Comms.prototype.createChannel_ = function() {
                     else {
                         obj.value = aurora.db.Comms.deserialize(path, obj.value, me.schema_);
                         try {
-                            setChangesInDb(path, me.db_, obj.value);
+                            let filter = me.helper_.updateQueryInfo_(info, query, options, obj.value);
+                            if (filter) {
+                                setChangesInDb(path, me.db_, obj.value, filter);
+                            }
                             me.client_.registerLoadDone(loadId);
                         }catch (e) {
                             console.error(e);
@@ -843,7 +967,7 @@ aurora.db.Comms.prototype.createChannel_ = function() {
                         console.log('got set result', obj);
                         me.currentErrors_ = new recoil.db.PathMap(schema);
                         var notApplied = aurora.db.Comms.generateErrors(obj.results, setChanges, me.currentErrors_);
-                        me.helper_.updateEffectedTables(setChanges, me.currentErrors_);
+                        me.helper_.updateEffectedTables(setChanges, me.currentErrors_, obj.results);
                         me.erroredChanges_ = notApplied.unapplied;
                         me.sentChanges_ = [];
                         if (notApplied.unapplied.length > 0) {
@@ -872,7 +996,7 @@ aurora.db.Comms.prototype.createChannel_ = function() {
                         }
                         else {
                             me.currentErrors_ = new recoil.db.PathMap(schema);
-                            me.helper_.updateEffectedTables(sendChanges, this.currentErrors_);
+                            me.helper_.updateEffectedTables(sendChanges, this.currentErrors_, undefined);
                         }
                     }
 
@@ -1261,7 +1385,7 @@ aurora.db.Comms.prototype.set = function(data, oldData, successFunc, failFunc, i
     var keyInfo = aurora.db.schema.keyMap[id.getData().name];
     let me = this;
     let path = recoil.db.ChangeSet.Path.fromString(keyInfo.info.name);
-    let oldObj = me.helper_.filterQuery_(me.db_.get(path), key, options);
+    let oldObj = me.helper_.filterQuery_(me.db_.get(path), keyInfo, key, options || new recoil.db.QueryOptions());
     let newObj = aurora.db.Comms.convertFromTable_(data, oldObj, keyInfo);
 
     // sub pks may have been lost put them back
@@ -1276,8 +1400,9 @@ aurora.db.Comms.prototype.set = function(data, oldData, successFunc, failFunc, i
     }
     let transId = this.transId_.next();
 
+    this.helper_.updateAddedNew_(changes.changes, keyInfo, key, options || new recoil.db.QueryOptions());
     this.db_.applyChanges(changes.changes);
-    this.helper_.updateEffectedTables(changes.changes, this.currentErrors_);
+    this.helper_.updateEffectedTables(changes.changes, this.currentErrors_, null);
 
     let sendChanges = [];
     this.erroredChanges_.forEach(function(change) {
@@ -1309,7 +1434,7 @@ aurora.db.Comms.prototype.set = function(data, oldData, successFunc, failFunc, i
         }
         else {
             this.currentErrors_ = new recoil.db.PathMap(schema);
-            this.helper_.updateEffectedTables(sendChanges, this.currentErrors_);
+            this.helper_.updateEffectedTables(sendChanges, this.currentErrors_, undefined);
         }
     }
 };

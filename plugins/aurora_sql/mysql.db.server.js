@@ -71,9 +71,11 @@ aurora.db.mysql.Pool.prototype.addOptions = function(select, options) {
             select += ' LIMIT ';
             if (options.start()) {
                 if (options.start().page) {
-                    console.log('start', options.start().page);
                     let offset = options.size() * (options.start().page - 1);
                     select += this.mysql_.escape(offset) + ',' + this.mysql_.escape(options.size());
+                }
+                else {
+                    select += this.mysql_.escape(options.size());
                 }
             }
             else {
@@ -430,21 +432,27 @@ aurora.db.mysql.Pool.prototype.sequence = function(actions, callback) {
  */
 aurora.db.mysql.Pool.prototype.transaction = function(callback, doneFunc) {
     let me = this;
+    let makeArguments = function(args) {
+        let res = [];
+        for (let i = 0; i < args.length; i++) {
+            res.push(args[i]);
+        }
+        return res;
+    };
     if (this.transactionCount_) {
         this.transactionCount_++;
         callback(this, function(err) {
+            let args = makeArguments(arguments);
             me.transactionCount_--;
-            doneFunc(err);
+            if (err) {
+                doneFunc(err);
+            }
+            else {
+                doneFunc.apply(null, args);
+            }
         });
     }
     else {
-        let makeArguments = function(args) {
-            let res = [];
-            for (let i = 0; i < args.length; i++) {
-                res.push(args[i]);
-            }
-            return res;
-        };
         if (this.connection_) {
             let connection = this.connection_;
             connection.beginTransaction(function(err) {

@@ -206,14 +206,20 @@ aurora.widgets.Selectize.prototype.updateOptions_ = function(helper) {
             self.dropdownContent_, this.curOptions_,
             options, renderOption);
 
-        self.curOptions_.forEach(function(obj) {
-            let isActive = recoil.util.isEqual(self.activeOptionB_.get(), obj.value);
-            if (isActive) {
-                self.activeOption_ = obj.node;
+        let found = false;
+        self.scope_.getFrp().accessTrans(function() {
+            self.curOptions_.forEach(function(obj) {
+                let isActive = recoil.util.isEqual(self.activeOptionB_.get(), obj.value);
+                if (isActive) {
+                    found = true;
+                    self.activeOption_ = obj.node;
+                }
+                cl.enable(obj.node, 'active', isActive);
+            });
+            if (!found && self.curOptions_.length > 0 && self.isOpen) {
+                self.activeOptionB_.set(self.curOptions_[0].value);
             }
-            cl.enable(obj.node, 'active', isActive);
-        });
-
+        }, self.activeOptionB_);
     }
 };
 /**
@@ -395,39 +401,41 @@ aurora.widgets.Selectize.prototype.updateSize_ = function(opt_e, opt_options) {
             );
 
             if (keyCode === KeyCodes.DELETE || keyCode === KeyCodes.BACKSPACE) {
-                    selection = {start: input.selectionStart, length: input.selectionEnd - input.selectionStart};
-                    if (selection.length) {
+                selection = {start: input.selectionStart, length: input.selectionEnd - input.selectionStart};
+                if (selection.length) {
                         value = value.substring(0, selection.start) + value.substring(selection.start + selection.length);
-                    } else if (keyCode === KeyCodes.BACKSPACE && selection.start) {
-                        value = value.substring(0, selection.start - 1) + value.substring(selection.start + 1);
-                    } else if (keyCode === KeyCodes.DELETE && typeof selection.start !== 'undefined') {
-                        value = value.substring(0, selection.start) + value.substring(selection.start + 1);
-                    }
-                } else if (printable) {
-                    shift = e.shiftKey;
-                    character = String.fromCharCode(e.keyCode);
-                    if (shift) character = character.toUpperCase();
-                    else character = character.toLowerCase();
-                    value += character;
+                } else if (keyCode === KeyCodes.BACKSPACE && selection.start) {
+                    value = value.substring(0, selection.start - 1) + value.substring(selection.start + 1);
+                } else if (keyCode === KeyCodes.DELETE && typeof selection.start !== 'undefined') {
+                    value = value.substring(0, selection.start) + value.substring(selection.start + 1);
                 }
+            } else if (printable) {
+                shift = e.shiftKey;
+                character = String.fromCharCode(e.keyCode);
+                if (shift) character = character.toUpperCase();
+                else character = character.toLowerCase();
+                value += character;
             }
-            placeholder = input.getAttribute('placeholder');
-            if (!value && placeholder) {
-                value = placeholder;
-            }
+        }
+        placeholder = input.getAttribute('placeholder');
+        if (!value && placeholder) {
+            value = placeholder;
+        }
 
 
+        // we need the width of the widest char because the input box must be at least that wide otherwise it
+        // shuffles the text to the left then resizes this causes it to jitter
 
-        width = aurora.widgets.Selectize.measureString(oldVal, input) + 4;
+        width = aurora.widgets.Selectize.measureString(oldVal + 'M', input);
 
         if (width === self.currentWidth_) {
             return;
         }
-        self.sizeUpdate_ = null;
+        self.oldVal_ = value;
         self.currentWidth_ = width;
+
         goog.style.setWidth(input, width);
         self.positionDropdown();
-
 
     });
 };
@@ -700,6 +708,7 @@ aurora.widgets.Selectize.prototype.onFocus = function(opt_e) {
             self.activeB_.set(new goog.structs.AvlTree(recoil.util.compare));
             let active = self.curOptions_.length ? self.curOptions_[0].value : null;
             if (self.activeOptionB_.get() === null) {
+                console.log('set active');
                 self.activeOptionB_.set(active);
             }
             if (self.settingsB_.get().openOnFocus) {
@@ -941,6 +950,8 @@ aurora.widgets.Selectize.prototype.setActiveOption = function(option, opt_scroll
     let self = this;
 
     self.helper_.accessTrans(function() {
+        console.log('set active option', option);
+
         self.activeOptionB_.set(option);
         let settings = self.settingsB_.get();
         if (opt_scroll) {
@@ -1167,12 +1178,8 @@ aurora.widgets.Selectize.prototype.getAdjacentOption = function(option, directio
     let index = -1;
     let options = [];
     let self = this;
-    self.helper_.accessTrans(function() {
-        options = self.optionsB_.get();
-        index = goog.array.findIndex(options, function(v) {return recoil.util.isEqual(v, option);}) + direction;
-    });
-
-    return index >= 0 && index < options.length ? options[index] : null;
+    index = goog.array.findIndex(self.curOptions_, function(v) {return recoil.util.isEqual(v.value, option);}) + direction;
+    return index >= 0 && index < self.curOptions_.length ? self.curOptions_[index].value : null;
 };
 /**
  * "Selects" multiple items at once. Adds them to the list
@@ -2407,6 +2414,10 @@ aurora.columns.Selectize.makeFromRefList = function(columnKey, name, refListB) {
         let meta = {
             options: options.map(function(v) {return v.id;}),
             optionRenderer: renderer,
+            searchFunc: function(v) {
+                let name = optMap[v];
+                return name || '';
+            },
             renderer: renderer
         };
 

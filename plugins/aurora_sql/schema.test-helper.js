@@ -4,6 +4,7 @@ const access = require('../../output/testable.js').aurora.db.access;
 const recoil = /**/ require('../../output/testable.js').recoil;
 const QueryScope = require('../../output/testable.js').aurora.db.schema.TableQueryScope;
 const db = require('../../output/testable.js').aurora.db;
+const dummy =  require('../../output/testable.js').aurora.string;
 
 const makeTable = function (keyMap, path, object, hasParent, colMap) {
 
@@ -218,6 +219,9 @@ let makeReader = function (schema) {
     let reader = {
         addObject: function (table, object) {
             let tbl = (db[table] = (db[table] || {}));
+            if (typeof(object.id) !== 'bigint') {
+                object.id = BigInt(object.id);
+            }
             tbl[object.id] = object;
         },
         updateOneLevel(context, table, obj, query, callback) {
@@ -274,9 +278,13 @@ let makeReader = function (schema) {
             }
             setTimeout(function () {
                 let res = [];
+
                 for (let key in objects) {
                     if (query.eval(new QueryScope(objects[key], table, schema))) {
                         res.push(objects[key]);
+                    }
+                    else {
+                        console.log("notfound", objects[key], "exp", query.expr_.x_);
                     }
                 }
                 callback(null, res);
