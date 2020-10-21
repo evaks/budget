@@ -9,6 +9,9 @@ build:
 drop-db:
 	echo 'drop database budget; create database budget' | mysql --user=root --password=password
 
+create-db:
+	echo 'create database budget' | mysql --user=root --password=password
+
 server:
 	node aurora/build build.json server
 resources:
@@ -43,3 +46,7 @@ ifndef UNIT_TEST
 else
 	jest --testPathIgnorePatterns plugins/closure-library -t '$(UNIT_TEST)'
 endif
+
+.PHONY: install-modules
+install-modules:
+	npm install node-forge mime modern-syslog websocket async mysql moment

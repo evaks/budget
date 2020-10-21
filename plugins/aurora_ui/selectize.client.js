@@ -230,18 +230,31 @@ aurora.widgets.Selectize.prototype.update_ = function(helper) {
     let cl = goog.dom.classlist;
     let createDom = goog.dom.createDom;
     let wrapperClasses = ['selectize-control'];
-    let controlClasses = ['selectize-input', 'items'];
+    let controlClasses = ['selectize-input', 'items', 'not-full', 'has-options', 'has-items'];
     let dropdownClasses = ['selectize-dropdown'];
     let me = this;
     let self = this;
     cl.set(me.control_, controlClasses.join(' '));
 
     if (helper.isGood()) {
+      
         let settings = this.settingsB_.get();
         let renderValue = function(v) {
-            let res = createDom('div', {class: 'item'}, settings.renderer(v.value));
+            let remove = createDom('a', {class: 'remove',
+                                         title: 'Remove',
+                                         tabindex: '-1',
+                                         href: 'javascript:void(0)'}, 'x');
+            
+            let res = createDom('div', {class: 'item', 'data-value': v.id}, settings.renderer(v.value), remove);
+
             goog.events.listen(res, 'mousedown', function(e) {
                 self.onItemSelect(e, v);
+            });
+
+            goog.events.listen(remove, 'mousedown', function(e) {
+                self.deleteItem(v);
+                e.preventDefault();
+                e.stopPropagation();
             });
 
             res['data-value'] = v;
@@ -249,6 +262,9 @@ aurora.widgets.Selectize.prototype.update_ = function(helper) {
         };
 
         let inputMode = me.mode_();
+        if(inputMode === 'multi') {
+            wrapperClasses.push('plugin-remove_button');
+        }
 
         me.curValues_ = aurora.widgets.Selectize.updateValueList(this.control_, this.curValues_, this.uniqValueB_.get(), renderValue, this.controlInput_);
         me.curValues_.forEach(function(el) {
@@ -298,6 +314,47 @@ aurora.widgets.Selectize.prototype.update_ = function(helper) {
     cl.set(this.control_, controlClasses.join(' '));
     this.updateSize_();
 };
+
+/**
+ * Removes the selected item.
+ *
+ * @param {Object} item
+ * @return {boolean}
+ */
+aurora.widgets.Selectize.prototype.deleteItem = function(item) {
+    var self = this;
+    self.helper_.accessTrans(function() {
+        let values = [];
+        let activeItems = self.activeB_.get().clone();
+        let caret = self.calcCaret_();
+
+        activeItems.remove(item);
+        
+        let oldVals = self.uniqValueB_.get();
+        let delIdx = null; 
+        values = oldVals.filter(function(v, idx) {
+            if (v.id === item.id) {
+                delIdx = idx;
+                return false;
+            }
+            return true;
+        });
+
+        let caretPos = (delIdx < caret) ? caret - 1 : caret;
+
+        self.setCaret(caretPos);
+        
+        self.uniqValueB_.set(values);
+        self.activeB_.set(activeItems);
+        
+    });
+
+    setTimeout(self.positionDropdown.bind(this), 1);
+    return true;
+
+};
+
+
 
 /**
  * @return {number}
@@ -1336,7 +1393,7 @@ aurora.widgets.Selectize.prototype.positionDropdown = function() {
 /**
  * Removes the current selected item(s).
  *
- * @param {Object} e (optional)
+ * @param {Object} e
  * @return {boolean}
  */
 aurora.widgets.Selectize.prototype.deleteSelection = function(e) {

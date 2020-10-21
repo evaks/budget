@@ -75,9 +75,11 @@ budget.widgets.Login = function(scope) {
                 let obj = xhr.getResponseJson();
                 if (xhr.isSuccess()) {
                     if (obj.status) {
+                        console.log('logged in', obj);
                         window.location.replace('/');
                     }
                     else {
+                        console.log('not logged in', obj);
                         goog.dom.setTextContent(message, obj.message);
                     }
                 }
@@ -90,7 +92,6 @@ budget.widgets.Login = function(scope) {
         text: mess.LOGIN,
         enabled: loginEnabledB
     });
-
 
     loginButton.getComponent().render(login);
     rememberCheck.getComponent().render(remember);
@@ -108,13 +109,19 @@ budget.widgets.Login = function(scope) {
                  cd('td', {class: 'login-forgot'}, cd('a', {href: '/account/forgot'}, mess.FORGOT_PASSWORD.toString())))
              ))
     );
+    goog.events.listen(container, goog.events.EventType.KEYDOWN, function (e) {
+
+        if(e.keyCode === goog.events.KeyCodes.ENTER) {
+            frp.accessTrans(function(){
+                loginActionB.set(e);
+            }, loginActionB);
+        }
+    });
+    
     let alreadyLoggedIn = cd('div', {}, 'You are already logged in');
 
     let loggedIn = goog.net.cookies.get('username');
 
-    container.addEventListener('keypress', function(e) {
-        console.log('press', e);
-    });
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(loggedIn ? alreadyLoggedIn : container);
 };
 
