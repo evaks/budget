@@ -93,3 +93,10 @@ aurora.db.Reader.prototype.sequence = function(name, callback) {};
  */
 aurora.db.Reader.prototype.transaction = function(callback, doneFunc) {};
 
+/**
+ * @param {string} exp
+ * @return {?}
+ */
+
+aurora.db.Reader.prototype.expression = function(exp) {};
+

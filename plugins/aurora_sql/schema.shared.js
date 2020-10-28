@@ -6,6 +6,8 @@ goog.provide('aurora.db.schema.ColsType');
 goog.provide('aurora.db.schema.InfoType');
 goog.provide('aurora.db.schema.TableQueryScope');
 goog.provide('aurora.db.schema.TableType');
+goog.provide('aurora.db.schema.actionMap');
+goog.provide('aurora.db.schema.actions');
 goog.provide('aurora.db.schema.keyMap');
 goog.provide('aurora.db.schema.modules');
 goog.provide('aurora.db.schema.pathMap');
@@ -40,11 +42,6 @@ aurora.db.SchemaType;
 aurora.db.schema.InfoType;
 
 /**
- * @typedef {{action:boolean,path:!Array<string|!Object>,input:!Array,output:!Array}}
- */
-aurora.db.schema.ActionType;
-
-/**
  * @typedef {Object}
  */
 aurora.db.schema.ColsType;
@@ -58,6 +55,12 @@ aurora.db.schema.ColumnMeta;
  * @typedef {{info:!aurora.db.schema.InfoType,key:!recoil.db.BasicType, cols:!aurora.db.schema.ColsType,meta:!Object}}
  */
 aurora.db.schema.TableType;
+
+/**
+ * @typedef {{key:!recoil.db.BasicType, func:(undefined|function(!aurora.db.access.SecurityContext,?,!Array,function(?,!Array))),inputs:!Array, outputs:!Array}}
+ */
+aurora.db.schema.ActionType;
+
 
 /**
  * @typedef {{enumDisplay:?}}
@@ -209,6 +212,12 @@ aurora.db.schema.pathMap = {};
 aurora.db.schema.prefixMap = {};
 
 /**
+ * @const
+ * @type {Object<string,aurora.db.schema.ActionType>}
+ */
+aurora.db.schema.actionMap = {};
+
+/**
  * @type {Object<!recoil.structs.table.ColumnKey,aurora.db.schema.TableType>}
  */
 aurora.db.schema.colMap = {};
@@ -217,12 +226,6 @@ aurora.db.schema.colMap = {};
  * @type {Object<string,aurora.db.schema.TableType>}
  */
 aurora.db.schema.tableMap = {};
-
-/**
- * @const
- * @type {Object<string,Object>}
- */
-aurora.db.schema.actionMap = {};
 
 /**
  * @constructor
@@ -545,6 +548,12 @@ aurora.db.schema.tables.sec.permissions.cols = {
 };
 
 /**
+ * @final
+ */
+aurora.db.schema.actions = {};
+
+
+/**
  * @type {!aurora.db.schema.InfoType}
  * @const
  */
@@ -636,3 +645,4 @@ aurora.db.schema.TableQueryScope.prototype.get = function(inParts) {
 
     return aurora.db.schema.TableQueryScope.superClass_.get.call(this, inParts);
 };
+

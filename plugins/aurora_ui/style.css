@@ -1,7 +1,165 @@
+/* Errored tag
+*/
+.errored_tag{
+	position: relative;
+	width: 0px;
+	height: 0px;
+}
+
+.errored_tag_container{
+	height: 40px;
+	position: absolute;
+	top: -37px;
+}
+
+.errored_tag_message{
+	min-width: 15px;
+	height: 15px;
+	line-height: 15px;
+	border: 1px solid #ff0000;
+	background-color: #ffeddf;
+	background-image: url('/images/exclamation.png');
+	background-repeat: no-repeat;
+	background-position: 5px 5px;
+	padding: 5px 5px 5px 25px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.errored_tag_message_text{
+	text-align: left;
+	font: normal 9pt Arial, sans-serif;
+	color: #000000;	
+	white-space: nowrap;
+}
+
+.errored_tag_tag{
+	background-image: url("/images/error_bottom.png");
+	background-repeat: no-repeat;
+	width: 17px;
+	height: 10px;
+	margin-top:-1px;
+	margin-left: 5px;
+	background-position: 0 -1px;
+}
+
+.dialog_errored_tag{
+	position: relative;
+	width: 0px;
+	height: 0px;
+}
+
+.dialog_errored_tag_container{
+	height: 40px;
+	position: absolute;
+	top: -13px;
+}
+
+.warning .dialog_errored_tag_message{
+    border: 1px solid #73b8ec;
+    background-color: #e5f5ff;
+    background-image: url('/images/info.png');
+}
+
+.warning .dialog_errored_tag_tag{
+    background-image: url("/images/warn_bottom.png");
+}
+.dialog_errored_tag_message{
+	min-width: 15px;
+	height: 15px;
+	line-height: 15px;
+	border: 1px solid #ff0000;
+	background-color: #ffeddf;
+	background-image: url('/images/exclamation.png');
+	background-repeat: no-repeat;
+	background-position: 5px 5px;
+	padding: 5px 5px 5px 25px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.dialog_errored_tag_message_text{
+	text-align: left;
+	font: normal 9pt Arial, sans-serif;
+	color: #000000;	
+	white-space: nowrap;
+}
+
+.dialog_errored_tag_tag{
+	background-image: url("/images/error_bottom.png");
+	background-repeat: no-repeat;
+	width: 17px;
+	height: 10px;
+	margin-top:-18px;
+	margin-left: -12px;
+	transform: translate(-0.5px, 0) rotate(90deg);
+}
+
+
 .modal-dialog-title-close {
     background-image: url(images/editortoolbar.png);
 }
 
 body {
     background-color: white;
+}
+.aurora-icon-button button.goog-button {
+    padding: 0;
+    font-size: 14pt;
+    color: steelblue;
+    background: none;
+    outline: none;
+}
+.aurora-icon-button  {
+}
+
+.aurora-drop-after > td  {
+    padding-bottom: 15px;
+}
+.aurora-drop-before > td{
+    padding-top: 15px;
+}
+
+
+.aurora-move-icon {
+    font-family: 'Font Awesome 5 Free';
+    font-weight: 900;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-font-smoothing: antialiased;
+    display: inline-block;
+    font-style: normal;
+    font-variant: normal;
+    text-rendering: auto;
+    line-height: 1;
+    font-size: 14pt;
+    color: steelblue;
+    cursor: move;
+    vertical-align: middle;
+    padding-left: 3px;
+    padding-right: 3px;
+}
+
+.aurora-move-icon:before {
+    content: "\f338";
+}
+
+.aurora-add-empty-table {
+    align-items: center;
+    font-style: italic;
+    color: steelblue;
+    width: 100%;
+    text-align: center;
+    cursor: pointer;
+}
+
+.aurora-add-empty-table:hover {
+    color: #8bbfeb;
+}
+
+.aurora-link-widget div {
+    width: 26px;
+    height: 26px;
+    background-image: url(images/link.png);
+    background-size:cover;
+    margin: 2px;
 }

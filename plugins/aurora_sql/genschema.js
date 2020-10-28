@@ -1,12 +1,30 @@
 const path = require('path');
 const fs = require('fs');
 
+let getStringInfo = function(info) {
+    let params = info.params;
+    if (params.length === 0) {
+        return {};
+    }
+    if (params.length === 1) {
+        return {maxLength: params[0]};
+    }
+    if (params.length === 2) {
+        return {
+            minLength: params[0],
+            maxLength: params[1]
+        };
+    }
+
+    throw 'Invalid params for string ' + params.join(',');
+};
 let typeFactories = {
     'id': {jsType: 'bigint', sqlType: 'bigint'},
     'order': {jsType: 'int', sqlType: 'int'},
     'json': {jsType: '?', sqlType: 'json'},
     'bigint': {jsType: 'bigint', sqlType: 'bigint'},
     'int': {jsType: 'int', sqlType: 'int'},
+    'enum': {jsType: 'enum', sqlType: 'int'},
     'datetime': {jsType: 'bigint', sqlType: 'bigint'},
     'parent': {jsType: 'bigint', sqlType: 'bigint'},
     'boolean': {jsType: 'boolean', sqlType: 'boolean'},
@@ -19,7 +37,7 @@ let typeFactories = {
 
     'owned-list': {jsType: 'list', getInfo: function(info) {
         return {
-            'list': true,
+            'isList': true,
             'owned': true,
             'childKey': info.params[0],
         };
@@ -27,7 +45,7 @@ let typeFactories = {
 
     'leaf-list': {jsType: 'list', getInfo: function(info) {
         return {
-            'list': true,
+            'isList': true,
             'owned': true,
             'leaf': true,
             'childKey': info.params[0],
@@ -43,28 +61,14 @@ let typeFactories = {
 
     'list': {jsType: 'object', getInfo: function(info) {
         return {
-            'list': true,
+            'isList': true,
             'childKey': info.params[0],
         };
     }, sqlType: null},
 
-    'string': {jsType: 'string', getInfo: function(info) {
-        let params = info.params;
-        if (params.length === 0) {
-            return {};
-        }
-        if (params.length === 1) {
-            return {maxLength: params[0]};
-        }
-        if (params.length === 2) {
-            return {
-                minLength: params[0],
-                maxLength: params[1]
-            };
-        }
+    'string': {jsType: 'string', getInfo: getStringInfo, sqlType: 'varchar'},
+    'text': {jsType: 'text', getInfo: getStringInfo, sqlType: 'varchar'},
 
-        throw 'Invalid params for string ' + params.join(',');
-    }, sqlType: 'varchar'},
     'password' : {jsType: 'password', sqlType: 'password'},
 
 };
@@ -121,15 +125,36 @@ let stringify = function(v) {
     }
 
 };
-function getColType(data) {
+function getColType(data, types) {
     let nullFunc = function() {return null;};
     let typeInfo = parseType(data.type);
     let factory = typeFactories[typeInfo.type];
-    if (!factory) {
-        throw 'Unknown type: ' + data.type;
+    let typeName = data.type;
+    let seen = {};
+    while (!factory) {
+        if (seen[typeName]) {
+            throw 'Unknown type: ' + typeName;
+        }
+        seen[typeName] = true;
+        let userDefType = types[typeName];
+        if (userDefType) {
+            // transfer the type data into the user data
+            for (let k in userDefType) {
+                if (data[k] === undefined) {
+                    data[k] = userDefType[k];
+                }
+            }
+            typeName = userDefType.type;
+            typeInfo = parseType(typeName);
+            factory = typeFactories[typeInfo.type];
+        }
+        else {
+            throw 'Unknown type: ' + typeName;
+        }
     }
+
     let info = (factory.getInfo || nullFunc)(typeInfo);
-    return Object.assign({}, typeInfo, {raw: data.type}, factory, info);
+    return Object.assign({}, typeInfo, {raw: data.type}, factory, info, {info: info});
 
 }
 
@@ -201,7 +226,7 @@ function parseType(type) {
 let serverOnlyTypes = ['order'];
 
 function jsEscape(name) {
-    return reserved[name] || name;
+    return (reserved[name] || name).replace(/[ ]/, '_');
 }
 
 function toStr(txt) {
@@ -246,17 +271,14 @@ let traverseTable = function(inDef, cb) {
 
 
 };
-let shouldSkip = function(client, type, parentCol) {
+let shouldSkip = function(client, type, parentCol, types) {
     if (client) {
         if (serverOnlyTypes.indexOf(type) !== -1) {
             return true;
         }
 
         if (parentCol && type.type === 'id') {
-            let pType = getColType(parentCol);
-            if (pType.leaf) {
-                console.log('xxxx', type, getColType(parentCol));
-            }
+            let pType = getColType(parentCol, types);
         }
     }
     return false;
@@ -267,11 +289,13 @@ let traverse = function(def, cb) {
     });
 };
 
-let doGenerate = function(def, ns, client, custRequires, out) {
+let doGenerate = function(def, ns, client, custRequires, types, actions, out) {
     let nullFunc = function() {return {};};
     fs.writeFileSync(out, '/**\n * GENERATED DO NOT CHANGE\n */\n\n');
     let provides = [];
     let prefix = 'aurora.db.schema.tables.' + ns;
+    let actionNames = {};
+
     traverse(def, {
         startTable: function(name, data, stack, fullName) {
             provides.push(prefix + '.' + fullName);
@@ -289,7 +313,12 @@ let doGenerate = function(def, ns, client, custRequires, out) {
     let prefixMap = {};
     let tableMap = {};
     let tablePathMap = {};
-    let requires = ['aurora.db.schema.TableType', 'recoil.db.BasicType', 'aurora.db.access', 'aurora.db.access.filter', 'recoil.structs.table.ColumnKey', 'aurora.db'].concat(Object.keys(custRequires));
+    let requires = ['aurora.db.schema.TableType', 'recoil.db.BasicType',
+                    'aurora.db.access', 'aurora.db.access.filter', 'recoil.structs.table.ColumnKey',
+                    'aurora.db'].concat(Object.keys(custRequires));
+    if (client) {
+        requires = requires.concat(['recoil.ui.messages', 'recoil.ui.renderers.MapRenderer']);
+    }
     requires.sort();
     requires.forEach(function(r) {
         fs.appendFileSync(out, 'goog.require(\'' + r + '\');\n');
@@ -348,7 +377,7 @@ let doGenerate = function(def, ns, client, custRequires, out) {
                 tableMap[data.tableName] = prefix + '.' + tName;
                 fs.appendFileSync(out, '    table: ' + stringify(data.tableName) + ',\n');
                 if (parentCol) {
-                    fs.appendFileSync(out, '    parentKey: new recoil.structs.table.ColumnKey(' + toStr(getColType(parentCol).childKey) + '),\n');
+                    fs.appendFileSync(out, '    parentKey: new recoil.structs.table.ColumnKey(' + toStr(getColType(parentCol, types).childKey) + '),\n');
                 }
             }
 
@@ -436,15 +465,8 @@ let doGenerate = function(def, ns, client, custRequires, out) {
             fs.appendFileSync(out, prefix + '.' + tName + '.meta = {\n');
         },
         startCol: function(name, data, fullTableName, tableName, parentCol) {
-            let typeInfo = parseType(data.type);
-            let factory = typeFactories[typeInfo.type];
-            if (!factory) {
-                throw 'Unknown type: ' + data.type;
-            }
+            let typeInfo = getColType(data, types);
             fs.appendFileSync(out, '   ' + toStr(name) + ': {\n');
-
-            let info = (factory.getInfo || nullFunc)(typeInfo);
-            let numInfo = Object.keys(info).length;
 
             fs.appendFileSync(out, '       key: ' + prefix + '.' + fullTableName + '.cols.' + jsEscape(name));
             fs.appendFileSync(out, ',\n       type: ' + toStr(typeInfo.type));
@@ -452,7 +474,45 @@ let doGenerate = function(def, ns, client, custRequires, out) {
             let isRef = typeInfo.type === 'ref';
 
             if (isRef) {
-                fs.appendFileSync(out, ',\n       ref: ' + stringify(tablePathMap[info.table]));
+                fs.appendFileSync(out, ',\n       ref: ' + stringify(tablePathMap[typeInfo.table]));
+            }
+
+            if (typeInfo.type === 'id') {
+                fs.appendFileSync(out, ',\n       primary: true');
+            }
+            if (typeInfo.type === 'enum') {
+                fs.appendFileSync(out, ',\n       list: [');
+                if (data.nullable === true) {
+                    fs.appendFileSync(out, 'null,');
+
+                }
+                fs.appendFileSync(out, data.enum.map(x => x.id).join(','));
+                fs.appendFileSync(out, ']');
+                fs.appendFileSync(out, ',\n       enum: {');
+                data.enum.forEach(function(e, idx) {
+                    if (idx !== 0) {
+                        fs.appendFileSync(out, ',');
+                    }
+
+                    fs.appendFileSync(out, '\n            ' + jsEscape(e.name.toLowerCase()) + ': ' + e.id);
+                });
+                fs.appendFileSync(out, '\n       }');
+                if (client) {
+                    fs.appendFileSync(out, ',\n       enumDisplay: new recoil.ui.message.BasicMessageEnum ({');
+                    data.enum.forEach(function(e, idx) {
+                        if (idx !== 0) {
+                            fs.appendFileSync(out, ',');
+                        }
+                        fs.appendFileSync(out, '\n            \'' + e.id + '\':recoil.ui.message.getParamMsg(' + stringify(e.display || e.name) + ')');
+                    });
+                    fs.appendFileSync(out, '}, {key: \'val\', msg: recoil.ui.messages.UNKNOWN_VAL})');
+                    fs.appendFileSync(out, ',\n       renderer: recoil.ui.renderers.MapRenderer ({' + data.enum.map(x => stringify(x.name) + ':' + x.id) + '}');
+                    if (data.nullable === true) {
+                        fs.appendFileSync(out, ', recoil.ui.messages.NOT_SPECIFIED');
+                    }
+                    fs.appendFileSync(out, ')');
+                }
+
             }
 
             if (data.default !== undefined) {
@@ -462,12 +522,12 @@ let doGenerate = function(def, ns, client, custRequires, out) {
                 fs.appendFileSync(out, ',\n       defaultVal: null');
             }
 
-            for (let k in info) {
+            for (let k in typeInfo.info) {
                 if (isRef && client && k === 'table') {
                     continue;
                 }
 
-                fs.appendFileSync(out, ',\n       ' + k + ': ' + JSON.stringify(info[k]));
+                fs.appendFileSync(out, ',\n       ' + k + ': ' + JSON.stringify(typeInfo.info[k]));
             }
             fs.appendFileSync(out, '\n');
 
@@ -486,6 +546,57 @@ let doGenerate = function(def, ns, client, custRequires, out) {
     });
 
 
+    function writeAction(a, parts) {
+        let prefix = 'aurora.db.schema.actions.' + ns;
+        if (a.func) {
+
+            fs.appendFileSync(out, '/**\n * @type {!aurora.db.schema.ActionType}\n*/\n');
+        }
+        let aname = prefix + '.' + parts.map(x => jsEscape(x)).join('.');
+        fs.appendFileSync(out, aname + ' = {');
+        if (a.func) {
+            actionNames[a.path] = aname;
+            fs.appendFileSync(out, '\n');
+            if (!client) {
+                fs.appendFileSync(out, '    func:' + a.func + ',\n');
+            }
+            fs.appendFileSync(out, '    access:' + a.access + ',\n');
+            fs.appendFileSync(out, '    key: new recoil.db.BasicType([],{action: true, path:' + stringify(a.path) + '}),\n');
+
+            let outputParam = function(input, idx) {
+                if (idx !== 0) {
+                    fs.appendFileSync(out, ',\n');
+                }
+                fs.appendFileSync(out, '        ' + stringify({'name': input.name, 'type': input.type}));
+            };
+            // do permissions
+
+            fs.appendFileSync(out, '    inputs: [\n');
+            a.inputs.forEach(outputParam);
+
+            fs.appendFileSync(out, '],\n    outputs:[\n');
+            a.outputs.forEach(outputParam);
+            fs.appendFileSync(out, '    ]};\n');
+
+
+        }
+        else {
+            fs.appendFileSync(out, '};\n');
+            for (let sub in a) {
+                let subParts = [...parts];
+                subParts.push(sub);
+                writeAction(a[sub], subParts);
+            }
+        }
+
+
+    };
+
+    fs.appendFileSync(out, 'aurora.db.schema.actions.' + ns + ' = {};\n');
+    for (let a in actions) {
+        writeAction(actions[a], [a]);
+    }
+
     fs.appendFileSync(out, '(function(map) {\n');
     for (let k in colMap) {
         fs.appendFileSync(out, '    map[' + k + '] = ' + colMap[k] + ';\n');
@@ -498,6 +609,13 @@ let doGenerate = function(def, ns, client, custRequires, out) {
         fs.appendFileSync(out, '    map[' + stringify(k) + '] = ' + keyMap[k] + ';\n');
     }
     fs.appendFileSync(out, '})(aurora.db.schema.keyMap);\n');
+
+    fs.appendFileSync(out, '(function(map) {\n');
+    // name path -> tableInfo
+    for (let k in actionNames) {
+        fs.appendFileSync(out, '    map[' + stringify(k) + '] = ' + actionNames[k] + ';\n');
+    }
+    fs.appendFileSync(out, '})(aurora.db.schema.actionMap);\n');
 
     fs.appendFileSync(out, '(function(map) {\n');
     // name path -> tableInfo
@@ -568,11 +686,11 @@ function safeRecGet(map, keys, opt_def) {
     return safeGet(curMap || {}, keys[i]);
 }
 
-function makePasswords(def) {
+function makePasswords(def, types) {
     let passwords = {};
     traverse(def, {
         startCol: function(name, data, fullTableName, tableName) {
-            let typeInfo = parseType(data.type);
+            let typeInfo = getColType(data, types);
             if (data.type === 'password') {
                 safeRecGet(passwords, [tableName, name], true);
             }
@@ -580,7 +698,7 @@ function makePasswords(def) {
     });
     return passwords;
 }
-function makeForeignKeys(def) {
+function makeForeignKeys(def, types) {
     let foreignKeys = {};
     let pTable = null;
     let tableDefs = makeTableDefMap(def);
@@ -589,11 +707,9 @@ function makeForeignKeys(def) {
             pTable = data;
         },
         startCol: function(name, data, fullTableName, tableName) {
-            let typeInfo = parseType(data.type);
-            let factory = typeFactories[typeInfo.type];
-            let info = (factory && factory.getInfo) ? factory.getInfo(typeInfo) : null;
-            if (factory) {
-                if (factory.jsType === 'list') {
+            let typeInfo = getColType(data, types);
+            if (typeInfo) {
+                if (typeInfo.jsType === 'list') {
                     let tableKeys = foreignKeys[data.table.name] = foreignKeys[data.table.name] || {};
 
                     let colKeys = tableKeys[typeInfo.params[0]] = tableKeys[typeInfo.params[0]] || {};
@@ -601,10 +717,10 @@ function makeForeignKeys(def) {
                     colKeys.col = getPkColumn(pTable);
 
                 }
-                else if (factory.jsType === 'reference') {
+                else if (typeInfo.jsType === 'reference') {
                     let tableKeys = foreignKeys[tableName] = foreignKeys[tableName] || {};
                     let colKeys = tableKeys[data.name] = tableKeys[data.name] || {};
-                    colKeys.table = info.table;
+                    colKeys.table = typeInfo.table;
                     colKeys.col = getPkColumn(tableDefs[colKeys.table]);
                 }
             }
@@ -613,12 +729,12 @@ function makeForeignKeys(def) {
 
     return foreignKeys;
 }
-function generateDbInit(def, ns, out) {
+function generateDbInit(def, ns, types, out) {
     fs.writeFileSync(out, '/**\n * GENERATED DO NOT CHANGE\n */\n\n');
     let prefix = 'aurora.db.schema.init.' + ns;
     let provides = [prefix + '.updateDb'];
     let inserts = {};
-    let passwords = makePasswords(def);
+    let passwords = makePasswords(def, types);
     let tableMap = {};
 
     provides.sort();
@@ -633,6 +749,22 @@ function generateDbInit(def, ns, out) {
     fs.appendFileSync(out, '/**\n * @param {!aurora.db.Pool} pool\n');
     fs.appendFileSync(out, ' * @param {function(?)} cb\n */\n');
     fs.appendFileSync(out, prefix + '.updateDb = function (pool, cb) {\n');
+    fs.appendFileSync(out, '    let log = aurora.log.createModule(' + stringify('DBINIT-' + ns.toUpperCase(ns)) + ');\n');
+    fs.appendFileSync(out, '    log.info(\'Backing up database\');\n');
+    fs.appendFileSync(out, '    pool.backup(function (err, fname) {\n');
+    fs.appendFileSync(out, '        if (err) {\n');
+    fs.appendFileSync(out, '            log.error(\'Backing failed\', err);\n');
+    fs.appendFileSync(out, '            cb(err);\n');
+    fs.appendFileSync(out, '            return;\n');
+    fs.appendFileSync(out, '        }\n');
+    fs.appendFileSync(out, '        log.info(\'Backed up to \', fname);\n');
+    fs.appendFileSync(out, '        ' + prefix + '.updateDb_(pool, cb);\n');
+    fs.appendFileSync(out, '    });\n');
+    fs.appendFileSync(out, '};\n\n');
+    fs.appendFileSync(out, '/**\n * @private\n');
+    fs.appendFileSync(out, ' * @param {!aurora.db.Pool} pool\n');
+    fs.appendFileSync(out, ' * @param {function(?)} cb\n */\n');
+    fs.appendFileSync(out, prefix + '.updateDb_ = function (pool, cb) {\n');
 
     fs.appendFileSync(out, '    let log = aurora.log.createModule(' + stringify('DBINIT-' + ns.toUpperCase(ns)) + ');\n');
     fs.appendFileSync(out, '    let todoInserts = [];\n');
@@ -642,7 +774,7 @@ function generateDbInit(def, ns, out) {
 
     let firstTable = true;
     let first = true;
-    let foreignKeys = makeForeignKeys(def);
+    let foreignKeys = makeForeignKeys(def, types);
     let tableInfo = {passwords: {}};
     traverse(def, {
         startTable: function(name, data, stack, tName, parentCol) {
@@ -658,7 +790,7 @@ function generateDbInit(def, ns, out) {
             fs.appendFileSync(out, '        function (callback) {\n            log.info(\'Creating table\', ' + stringify(tableName) + ');\n');
             fs.appendFileSync(out, '            pool.createTable(' + stringify(tableName) + ', {\n');
             if (parentCol) {
-                let parentType = getColType(parentCol);
+                let parentType = getColType(parentCol, types);
                 fs.appendFileSync(out, '                ' + stringify(parentType.childKey) + ': {type: aurora.db.type.types.bigint}');
                 first = false;
             }
@@ -668,10 +800,9 @@ function generateDbInit(def, ns, out) {
             firstTable = false;
         },
         startCol: function(name, data) {
-            let typeInfo = parseType(data.type);
-            let factory = typeFactories[typeInfo.type];
-
-            if (!factory || factory.sqlType !== null) {
+            let typeInfo = getColType(data, types);
+            let factory = typeInfo;
+            if (!typeInfo || typeInfo.sqlType !== null) {
                 if (!first) {
                     fs.appendFileSync(out, ',\n');
                 }
@@ -739,7 +870,7 @@ function generateDbInit(def, ns, out) {
         if (tableMap[parent]) {
             tableMap[parent].columns.forEach(function(c) {
                 if (c.table && table === c.table.name) {
-                   parentKey = getColType(c).params[0];
+                    parentKey = getColType(c, types).params[0];
                 }
             });
         }
@@ -967,12 +1098,55 @@ module.exports = {
         let tableMap = {};
         let defs = {tables: []};
         let requires = {};
+        let requiresServerOnly = {};
+        let requiresClientOnly = {};
+        let types = {};
+        let actions = {};
         sqlDefFiles.forEach(function(sqlDefFile) {
             let curDef = JSON.parse(fs.readFileSync(sqlDefFile));
             if (curDef.require) {
                 curDef.require.forEach(function(req) {
-                    requires[req] = true;
+                    if (req.client === true || req.server === false) {
+                        requires[req.name] = true;
+                        requiresClientOnly[req.name] = true;
+                    }
+                    else if (req.client === false || req.server === true) {
+                        requires[req.name] = true;
+                        requiresServerOnly[req.name] = true;
+
+                    }
+                    else {
+                        requires[req] = true;
+                    }
+
                 });
+            }
+            if (curDef.actions) {
+                for (let i = 0; i < curDef.actions.length; i++) {
+                    let action = curDef.actions[i];
+                    let parts = action.path.split('/');
+                    let cur = actions;
+                    parts.shift();
+                    while (parts.length > 0) {
+                        let part = parts.shift();
+                        cur[part] = actions[part] || {};
+                        cur = cur[part];
+                    }
+                    cur.path = '/actions/' + curDef.namespace + action.path;
+                    cur.inputs = action.inputs || [];
+                    cur.outputs = action.outputs || [];
+                    cur.func = action['function'];
+                    cur.access = action.access;
+
+                }
+            }
+            if (curDef.types) {
+                for (let k in curDef.types) {
+                    if (types[k] !== undefined) {
+                        throw 'redefinition of type';
+                    }
+                    types[k] = curDef.types[k];
+                }
             }
             if (curDef.tables) {
                 for (let i = 0; i < curDef.tables.length; i++) {
@@ -988,8 +1162,17 @@ module.exports = {
             }
 
         });
-        doGenerate(defs, ns, true, requires, output + '.gen.client.js');
-        doGenerate(defs, ns, false, requires, output + '.gen.server.js');
-        generateDbInit(defs, ns, output + '.init.gen.server.js');
+        let filterReq = function(reqs, excludes) {
+            let res = {};
+            for (let k in reqs) {
+                if (!excludes[k]) {
+                    res[k] = true;
+                }
+            }
+            return res;
+        };
+        doGenerate(defs, ns, true, filterReq(requires, requiresServerOnly), types, actions, output + '.gen.client.js');
+        doGenerate(defs, ns, false, filterReq(requires, requiresClientOnly), types, actions, output + '.gen.server.js');
+        generateDbInit(defs, ns, types, output + '.init.gen.server.js');
     },
 };

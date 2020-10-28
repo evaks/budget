@@ -81,7 +81,15 @@ aurora.ui.DialogErrorWidget.prototype.updateValue_ = function(helper) {
     if (helper.isGood() && this.errorsB_.get().length > 0) {
         goog.dom.insertSiblingBefore(this.errorContainer_, this.widgetContainer_);
         var errors = [];
+        let warning = true;
         this.errorsB_.get().forEach(function(error) {
+            if (error && error.warning) {
+                error = error.warning;
+            }
+            else {
+                warning = false;
+            }
+
             if (error.error) {
                 if (error.error.errorno === 'NOT_CREATABLE') {
                     errors.push(recoil.ui.message.toMessage('Not Createable'));
@@ -102,6 +110,8 @@ aurora.ui.DialogErrorWidget.prototype.updateValue_ = function(helper) {
                 errors.push(recoil.ui.message.toMessage(error));
             }
         });
+        goog.dom.classlist.enable(this.errorContainer_, 'warning', warning);
+
         this.message_.nodeValue = recoil.ui.messages.join(errors).toString();
         ui.dom.tidyErroredTags();
     }

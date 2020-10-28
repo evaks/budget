@@ -11,8 +11,10 @@ goog.require('recoil.db.ReadWriteDatabase');
 goog.require('recoil.frp.Frp');
 goog.require('recoil.ui.widgets.table.BooleanColumn');
 goog.require('recoil.ui.widgets.table.NumberColumn');
+goog.require('recoil.ui.widgets.table.PasswordColumn');
 goog.require('recoil.ui.widgets.table.SelectColumn');
 goog.require('recoil.ui.widgets.table.StringColumn');
+goog.require('recoil.ui.widgets.table.TextAreaColumn');
 goog.require('recoil.util.Sequence');
 
 /**
@@ -91,6 +93,15 @@ aurora.Client.prototype.loadDoneFunc_ = function() {
     }
 };
 
+/**
+ * @param {!recoil.frp.Behaviour<!recoil.structs.table.Table>} tableB
+ * @param {!recoil.frp.Behaviour<Array>} pkB
+ * @param {!recoil.structs.table.ColumnKey} col
+ * @return {!recoil.frp.Behaviour<!recoil.structs.table.Table>}
+ */
+aurora.Client.prototype.createSubTableB = function(tableB, pkB, col) {
+    return aurora.db.Helper.createSubTableB(new aurora.db.Schema(), tableB, pkB, col);
+};
 /**
  * @return {!recoil.frp.Behaviour<boolean>}
  */
@@ -200,6 +211,10 @@ aurora.Client.typeFactories = {
         return new recoil.ui.widgets.table.NumberColumn(key, name, meta);
     }, 'string': function(key, name) {
         return new recoil.ui.widgets.table.StringColumn(key, name);
+    }, 'text': function(key, name) {
+        return new recoil.ui.widgets.table.TextAreaColumn(key, name);
+    }, 'password': function(key, name) {
+        return new recoil.ui.widgets.table.PasswordColumn(key, name);
     }, 'binary': function(key, name) {
         return new recoil.ui.widgets.table.StringColumn(key, name);
     }, 'hex-string': function(key, name) {
@@ -222,11 +237,6 @@ aurora.Client.typeFactories = {
 };
 
 
-
-/**
- * @final
- */
-aurora.ui.instance = new recoil.util.Sequence();
 /**
  * sees if the browser need literal ipv6 address
  * @return {boolean}

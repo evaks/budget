@@ -1,7 +1,53 @@
 {
     "namespace": "base",
     "depends": ["aurora_sql"],
-    "require": ["budget.filter"],
+    "require": ["budget.filter",{"client": false, "name": "budget.actions"}],
+    "types": {
+	"Phone": {"type":"string(16)"},
+	"Gender": {"type": "enum", "enum": [
+	    {"id":0, "name": "Male"},
+	    {"id":1, "name": "Female"},
+	    {"id":2, "name": "Other"}
+	]},
+	"MaritalStatus": {"type": "enum", "enum": [
+	    {"id":0, "name": "Married"},
+	    {"id":1, "name": "Defacto"},
+	    {"id":2, "name": "Single"}
+	]},
+	"IncomeSource": {"type": "enum", "enum": [
+	    {"id":0, "name": "Benefit"},
+	    {"id":1, "name": "Wage"},
+	    {"id":2, "name": "Other"}
+	]},
+	"Housing": {"type":"enum", "enum": [
+	    {"id": 0, "name": "Rent"},
+	    {"id": 1, "name": "Mortgage"},
+	    {"id": 2, "name": "Board"}
+	]}
+    },
+	
+    "actions": [{
+	"path": "/account/register",
+	"function": "budget.actions.register",
+	"access": "aurora.db.access.basic([{'': 'r'}])",
+	"inputs": [
+	    {"name":"username", "type":"string"},
+	    {"name":"password", "type":"string"},
+	    {"name":"email", "type":"string"},
+	    {"name":"newClient", "type":"boolean"},
+	    {"name":"firstName", "type":"string"},
+	    {"name":"lastName", "type":"string"},
+	    {"name":"address", "type":"string"},
+	    {"name":"phone", "type":"Phone"},
+	    {"name":"gender", "type":"Gender"},
+	    {"name":"incomeSource", "type":"IncomeSource"},
+	    {"name":"maritalStatus", "type":"MaritalStatus"},
+	    {"name":"housing", "type":"Housing"},
+	    {"name":"ethnicity", "type":"Ethnicity"},
+	    {"name":"countryOfBirth", "type":"CountryOptions"},
+	    {"name":"dateOfBirth", "type":"date"}
+	]}],
+
     "tables": [
 	{
 	    "name" : "user",
@@ -11,7 +57,16 @@
 		{"mentor": "budget.filter.userMentor"},
 		{"": "aurora.db.access.filter.equal('id','@userid')"}],
 	    "columns": [
-		{ "name": "mentorid", "type": "ref(user)", "nullable": true}		
+		{ "name": "mentorid", "type": "ref(user)", "nullable": true},	
+		{ "name": "firstName", "type": "string(100)", "nullable": true},
+		{ "name": "lastName", "type": "string(100)", "nullable": true},
+		{ "name": "address", "type": "text(255)", "nullable": true},
+		{ "name": "phone", "type": "Phone", "nullable": true, "stuff": "xyz"},
+		{ "name": "gender", "type": "Gender", "nullable": true},
+		{ "name": "maritalStatus", "type": "MaritalStatus", "nullable": true},
+		{ "name": "incomeSource", "type": "IncomeSource", "nullable": true},
+		{ "name": "housing", "type": "Housing", "nullable": true},
+		{ "name": "newClient", "type": "boolean", "nullable": true}
 	    ]
 
 	},
@@ -42,3 +97,4 @@
 	}
     ]
 }
+    

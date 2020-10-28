@@ -274,3 +274,129 @@ button.goog-button {
 .modal-dialog-title {
     background: LINEAR-GRADIENT(20deg, #0a8ed38f, #0a8ed345 50%, #eee calc(50% + 50px), #0a8ed38f 100%);
 }
+
+.signup-password-ok {
+    background-image: url(/images/ok.jpg);
+    background-repeat: no-repeat;
+    background-size: contain;
+    height: 28px;
+    width: 28px;
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: 5px;
+}
+
+.signup-password-not-ok {
+    background-image: url(/images/not-ok.jpg);
+    background-repeat: no-repeat;
+    background-size: contain;
+    height: 28px;
+    width: 28px;
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: 5px;
+}
+
+.content .goog-checkbox-undetermined {
+    background-image: none;
+}
+
+.content .goog-combobox {
+    background-image: url(/images/button-bg.png);
+    width: fit-content;
+    width: -moz-fit-content;
+}
+
+.budget-budget-template .field-name {
+    vertical-align: top;
+}
+
+
+div.budget-budget-template div.group-header {
+    color: #636363;
+    font-size: 16.0pt;
+    font-weight: normal;
+    font-variant-caps: all-petite-caps;
+    text-align: center;
+    padding-bottom: 10px;
+    padding-top: 10px;
+    border-bottom: aliceblue ridge;
+}
+
+
+
+div.budget-budget-template {
+    display:flex;
+    flex-direction: column;
+    flex-flow: row;
+}
+div.budget-budget-template div.budget-budget-template-column {
+    display: flex;
+    flex-flow: column;
+    padding: 10px;
+}
+
+div.budget-budget div.budget-header {
+    color: #636363;
+    font-size: 18.0pt;
+    font-weight: normal;
+    font-variant-caps: petite-caps;
+    text-align: center;
+    padding-bottom: 10px;
+    padding-top: 10px;
+
+}
+
+div.budget-budget div.budget-subheader {
+    color: #636363;
+    font-size: 16.0pt;
+    font-weight: normal;
+    font-variant-caps: petite-caps;
+    text-align: center;
+    padding-bottom: 10px;
+
+}
+
+div.side-list-page {
+    display: flex;
+    flex-flow: row;
+}
+
+div.side-list-side {
+    display:flex;
+    flex-flow: column;
+    width: 235px;
+    overflow: auto;
+    background: #f0f0f0;
+    border-right: grey 2px ridge;
+}
+div.side-list-body {
+    display:flex;
+    width: calc(100vw - 237px);
+    overflow: auto;
+}
+
+
+
+div.budget-side-list-cont {
+    display: flex;
+}
+div.budget-side-list-cont > .goog-control{
+    display: flex;
+}
+
+div.side-list-side h2.group-header {
+    color: #636363;
+    font-size: 16.0pt;
+    font-weight: normal;
+    font-variant-caps: all-petite-caps;
+    text-align: left;
+    padding-top: 10px;
+    padding-left: 5px;
+    border-bottom: aliceblue ridge;
+    margin-bottom: 2px;
+}
+
+.small-time {
+    font-size: small;
+}

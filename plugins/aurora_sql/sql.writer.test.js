@@ -105,6 +105,7 @@ test('set-children-when-parent-does-not-exist', done => {
         expect(result.length).toBe(2);
         expect(result[0].error).toBeTruthy();
         expect(result[1].error).toBeTruthy();
+        expect(mockReader.writes.length).toBe(0);
         done();
     });
 });

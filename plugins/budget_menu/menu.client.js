@@ -89,20 +89,27 @@ budget.widgets.Menu.prototype.makeMenuBar = function() {
                 let action = frp.createCallback(function() {
                     window.location = item.url;
                 }, frp.createB(null));
-                menuButton.attachStruct({name: item.name.toString(), action: action, items: []});
+                menuButton.attachStruct({name: item.name, action: action, items: []});
                 res.push(menuButton);
             }
             else {
                 let menuButton = new recoil.ui.widgets.MenuButtonWidget(scope);
                 item.children.forEach(function(menuItemInfo) {
-                    let itemWidget = new recoil.ui.widgets.MenuItemActionWidget(scope);
+                    if (menuItemInfo.seperator) {
+                        let menuButton = new recoil.ui.widgets.MenuSeparatorWidget();
+                        menuItems.push(menuButton);
+                    }
+                    else {
 
-                    itemWidget.attach(menuItemInfo.name.toString(), true, frp.createCallback(function() {
-                        window.location = menuItemInfo.url;
-                    }, frp.createB(null)));
-                    menuItems.push(itemWidget);
+                        let itemWidget = new recoil.ui.widgets.MenuItemActionWidget(scope);
+
+                        itemWidget.attach(menuItemInfo.name.toString(), true, frp.createCallback(function() {
+                            window.location = menuItemInfo.url;
+                        }, frp.createB(null)));
+                        menuItems.push(itemWidget);
+                    }
                 });
-                menuButton.attach(item.name.toString(), menuItems);
+                menuButton.attach(item.name, menuItems);
                 res.push(menuButton);
             }
         });
@@ -157,25 +164,30 @@ budget.widgets.Menu.prototype.updatePageInfo_ = function() {
 budget.widgets.Menu.menu = [
     {'name': 'Intro', 'url': '/'},
     {'name': 'Features', url: '/features'},
-    {'name': 'Video', url: '/video'},
-    {'name': 'Gallery', url: '/gallery'},
     {'name': 'Contact', url: '/contact'},
-    {'name': 'Account', 'children' : [
+    {'name': goog.dom.createDom('i', {class: 'fas fa-bars'}), 'children' : [
+        {'name': 'Users', 'url': '/admin/mentors', perm: aurora.permissions.has('user-management')},
+        {seperator: true, perm: aurora.permissions.has('user-management')},
+        {'name': 'Budget Template', 'url': '/budget_template', perm: aurora.permissions.has('site-management')},
+        {seperator: true, perm: aurora.permissions.has('user-management')},
+
+        {'name': 'New Client', 'url': '/client/new', perm: aurora.permissions.has('mentor')},
+        {'name': 'Manage Client', 'url': '/client/manage', perm: aurora.permissions.has('mentor')},
+        {seperator: true, perm: aurora.permissions.has('mentor')},
         {'name': 'Login', 'url': '/account/login', perm: aurora.permissions.loggedIn(false)},
         {'name': 'Signup', 'url': '/account/signup', perm: aurora.permissions.loggedIn(false)},
+        {seperator: true, perm: aurora.permissions.loggedIn(false)},
         {'name': 'Schedule Appointment', 'url': '/account/appointment', perm: aurora.permissions.has('customer')},
         {'name': 'Personal Details', 'url': '/account/details', perm: aurora.permissions.has('customer')},
         {'name': 'Remove Details', 'url': '/account/details', perm: aurora.permissions.has('customer')},
         {'name': 'Budgets', 'url': '/account/budgets', perm: aurora.permissions.has('customer')},
         {'name': 'Cashflow', 'url': '/account/cashflow', perm: aurora.permissions.has('customer')},
+        {seperator: true, perm: aurora.permissions.has('customer')},
+        {'name': 'Video', url: '/video'},
+        {'name': 'Gallery', url: '/gallery'},
+        {seperator: true, perm: aurora.permissions.loggedIn(true)},
         {'name': 'Logout', 'url': '/logout', perm: aurora.permissions.loggedIn(true)}
     ]},
-    {'name': 'Mentor', 'children': [
-        {name: 'Customer', perm: aurora.permissions.has('mentor')}]},
-    {'name': 'Admin', 'children': [
-        {'name': 'Manage Mentors', 'url': '/admin/mentors', perm: aurora.permissions.has('user-management')},
-        {'name': 'Manage Clients', 'url': '/admin/customers', perm: aurora.permissions.has('user-management')},
-    ]}
 ];
 
 /**

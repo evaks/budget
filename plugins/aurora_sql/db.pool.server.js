@@ -301,6 +301,23 @@ aurora.db.Pool.hashPassword = function(password, callback) {
 };
 /**
  * @param {string} password
+ * @return {Promise}
+ */
+aurora.db.Pool.hashPasswordPromise = function(password) {
+    return new Promise(function(resolve, reject) {
+        aurora.db.Pool.hashPassword(password, function(err, pword) {
+            if (err) {
+                reject(err);
+            }
+            else {
+                resolve(pword);
+            }
+        });
+    });
+};
+
+/**
+ * @param {string} password
  * @param {buffer.Buffer} hash the whole hash read from the database should include version an salt
  * @param {function(boolean)} callback true if password matches
  */
@@ -381,3 +398,19 @@ aurora.db.Pool.prototype.toJson = function(str) {};
  * @return {?}
  */
 aurora.db.Pool.prototype.fromJson = function(str) {};
+
+
+
+/**
+ * @param {string} exp
+ * @return {?}
+ */
+
+aurora.db.Pool.prototype.expression = function(exp) {};
+
+
+/**
+ * backs up the database
+ * @param {function(?, ?string)} cb
+ */
+aurora.db.Pool.prototype.backup = function(cb) {};

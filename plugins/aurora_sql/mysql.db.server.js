@@ -86,6 +86,53 @@ aurora.db.mysql.Pool.prototype.addOptions = function(select, options) {
     }
     return select;
 };
+
+/**
+ * backs up the database
+ * @param {function(?,?string)} cb
+ * @suppress {checkTypes}
+ */
+aurora.db.mysql.Pool.prototype.backup = function(cb) {
+    const { spawn } = require('child_process');
+    const fs = require('fs');
+    const path = require('path');
+    const fname = path.join(this.options_['backup'] || '.', this.options_['database'] + '-' + new Date().toISOString().replace(/:/g, '_') + '.sql');
+    let write = fs.createWriteStream(fname);
+    let error = null;
+    let me = this;
+    //
+    write.on('ready', function() {
+        let process = spawn('mysqldump', ['-u', me.options_['user'], '-p' + me.options_['password'], me.options_['database']]);
+        process.stdout.on('data', (data) => {
+            console.log('writing');
+            write.write(data);
+        });
+
+        process.on('error', function(e) {
+            if (!error) {
+                error = e;
+                cb(e, null);
+            }
+        });
+        process.on('exit', (code) => {
+            if (code && !error) {
+                error = 'Process exited with code ' + code;
+                cb(error, null);
+            }
+            write.end();
+        });
+    });
+    write.on('error', function (e) {
+        if (e && !error) {
+            error = e;
+            cb(error, null);
+        }
+    });
+    write.on('finish', function () {
+        cb(error, fname);
+    });
+};
+
 /**
  * @param {{host:string, user:string, password:string, database:string}} options
  * @param {function(?)} cb
@@ -456,25 +503,29 @@ aurora.db.mysql.Pool.prototype.transaction = function(callback, doneFunc) {
         if (this.connection_) {
             let connection = this.connection_;
             connection.beginTransaction(function(err) {
+                
                 if (err) {
                     // do nothing we we haven't started
                     doneFunc(err);
                     return;
                 }
+                console.log("start transaction");
+                me.transactionCount_++;
+                
                 callback(me, function(err) {
+                    console.log("ending transaction", err, me.transactionCount_);
                     let args = makeArguments(arguments);
                     me.transactionCount_--;
                     if (err) {
                         connection.rollback(function() {
-                            me.transactionCount_--;
                             doneFunc(err);
                         });
                     }
                     else {
+                        console.log("comitting", err);
                         connection.commit(function(err) {
                             if (err) {
                                 connection.rollback(function() {
-                                    me.transactionCount_--;
                                     doneFunc(err);
                                 });
                             } else {
@@ -553,7 +604,7 @@ aurora.db.mysql.Pool.prototype.createTable = function(table, fields, indexes, op
         sql += '\n  ' + this.escapeId(name) + ' ' + makeType(field);
         sql += ' ' + (field.nullable ? '' : 'NOT ') + 'NULL';
         if (field.default != undefined) {
-            sql += ' DEFAULT ' + field.default;
+            sql += ' DEFAULT ' + this.escape(field.default);
         }
         if (field.pk) {
             if (field.auto === false) {
@@ -662,3 +713,11 @@ aurora.db.mysql.Pool.prototype.fromJson = function(str) {
     return JSON.parse(str);
 };
 
+/**
+ * @param {string} exp
+ * @return {?}
+ */
+
+aurora.db.mysql.Pool.prototype.expression = function(exp) {
+    return this.mysql_.raw(exp);
+};

@@ -90,4 +90,7 @@ budget.Server.prototype.getReader = function() {
     return this.reader_;
 };
 
+/**
+ * @final
+ */
 budget.Server.instance = new budget.Server();

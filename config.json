@@ -1,7 +1,9 @@
 {
     "authentication": {
 	"sessionTable" : "aurora.auth.DbSessionTable.factory",
-	"persistantTimeoutMins" : 525600
+	"persistantTimeoutMins" : 525600,
+	"lockoutMins": 5,
+	"maxTries": 3
 	
     },
     "database": {
@@ -15,7 +17,7 @@
 	
 	    "create-settings" :
 	    {
-		"host":"localhost", "user": "root", "password": "password", "database": "budget"
+		"host":"localhost", "user": "root", "password": "password", "database": "budget", "backup": "."
 	    }
 	    
 	}]

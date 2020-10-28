@@ -38,7 +38,8 @@ aurora.db.sql.ChangeWriter.ChangeKey;
 aurora.db.sql.Result_;
 
 /**
- * @typedef {{key:!aurora.db.sql.ChangeWriter.ChangeKey, value:recoil.db.ChangeSet.Change, object:(undefined|Object), hasRefs:(undefined|!Array), needsRefs:(undefined|!Array)}}
+ * @typedef {{key:!aurora.db.sql.ChangeWriter.ChangeKey, value:recoil.db.ChangeSet.Change, results: !Array<!aurora.db.sql.Result_>,
+ *    object:(undefined|Object), hasRefs:(undefined|!Array), needsRefs:(undefined|!Array)}}
  */
 aurora.db.sql.ChangeWriter.ChangeKeyValue;
 
@@ -330,7 +331,47 @@ aurora.db.sql.ChangeWriter.prototype.applyChanges = function(changes, secContext
 
 };
 
+/**
+ * goes through all the results and if any of them have an error puts a error, that won't be displayed to the user
+ * in all the other results, this is needed because changes are applied in a transaction so if 1 change errors all
+ * changes error, the client should not need to know this, since other systems this may not be true
+ * @param {?} err maybe a non-change specific error occured in that case all items will error with that
+ * @param {!Array<!aurora.db.sql.Result_>} results
+ * @return {?} the first error that was there or null, the err parameter is considered the first if supplied
+ */
+aurora.db.sql.ChangeWriter.prototype.applySilentError = function(err, results) {
+    let calcError = null;
+    if (!err) {
+        let calcErrorFunc = function(results) {
+            if (results) {
+                for (let i = 0; i < results.length; i++) {
+                    if (results[i].error) {
+                        calcError = {silent: true};
+                        break;
+                    }
+                    calcErrorFunc(results[i].children);
 
+                }
+            }
+        };
+        calcErrorFunc(results);
+    }
+    if (err || calcError) {
+        let setError = function(results) {
+            if (results) {
+                for (let i = 0; i < results.length; i++) {
+                    if (!results[i].error) {
+                        results[i].error = err ? err : calcError;
+                        setError(results[i].children);
+                    }
+                }
+            }
+        };
+        setError(results);
+    }
+
+    return err || calcError;
+};
 /**
  * once the paths have been validated, and security checks have been done
  * actually apply the changes to the database
@@ -412,21 +453,38 @@ aurora.db.sql.ChangeWriter.prototype.applyChanges_ = function(changes, context, 
     let passwords = [];
     let changeList = aurora.db.sql.ChangeWriter.optimizeChanges_(objectPathMap, schema, passwords, refMap);
     changeList.sort(aurora.db.sql.ChangeWriter.changeComparator(changeList));
-    // check passwords
+
+    // in sql changes happen in a transaction basis, if there is 1 error everything errors, put a silent error on all changes
+    let error = me.applySilentError(null, results);
+    if (error) {
+        callback(error);
+        return;
+    }
+
+    // passwords must be hashed this is an asynchronus call since it may take a while
     me.async_.each(passwords, function(entry, cb) {
         aurora.db.Pool.hashPassword(entry.value, function(err, value) {
             if (!err) {
                 entry.obj[entry.field] = value;
+            }
+            else {
+                entry.result.error = error;
             }
             cb(err);
         });
 
     }, function(err) {
         if (err) {
+            me.applySilentError(null, results);
             callback(err);
         }
         else {
-            me.applyTransactionChanges_(changeList, context, callback);
+            me.applyTransactionChanges_(changeList, context, function(err) {
+                if (err) {
+                    me.applySilentError(err, results);
+                }
+                callback(err);
+            });
         }
     });
 };
@@ -659,7 +717,7 @@ aurora.db.sql.ChangeWriter.prototype.addDelete_ = function(objectPathMap, change
                 entry.hasRefs.push(recoil.db.ChangeSet.Path.fromString(table.info.path).setKeys(/** @type {!Array<string>} */ (table.info.keys), [new aurora.db.PrimaryKey(val)]));
             }
         }
-        else if (meta.list) {
+        else if (meta.isList) {
 
             if (val instanceof Array) {
                 let childPath = path.appendName(field);
@@ -676,7 +734,7 @@ aurora.db.sql.ChangeWriter.prototype.addDelete_ = function(objectPathMap, change
             }
 
         }
-        else if (meta.object) {
+        else if (meta.isObject) {
             let childPath = path.appendName(field);
             let childTable = this.schema_.getTableByName(childPath);
             let child = val;
@@ -697,7 +755,7 @@ aurora.db.sql.ChangeWriter.prototype.addDelete_ = function(objectPathMap, change
  * @private
  * @param {!goog.structs.AvlTree<!aurora.db.sql.ChangeWriter.ChangeKeyValue>} changeMap
  * @param {!aurora.db.SchemaType} schema
- * @param {!Array<{obj:Object,field:string,value:string}>} passwords
+ * @param {!Array<{obj:Object,field:string,value:string,result:aurora.db.sql.Result_}>} passwords
  * @param {!goog.structs.AvlTree} refMap
  * @return {!Array<!aurora.db.sql.ChangeWriter.ChangeKeyValue>}
  */
@@ -708,7 +766,9 @@ aurora.db.sql.ChangeWriter.optimizeChanges_ = function(changeMap, schema, passwo
     let DelayedRef = aurora.db.sql.ChangeWriter.DelayedRef;
     changeMap.inOrderTraverse(function(entry) {
         let key = entry.key;
-
+        if (entry.result.error) {
+            return;
+        }
         if (CType.DEL === key.type) {
             let curEntry = goog.object.clone(entry);
             curEntry.results = [curEntry.result];
@@ -724,7 +784,7 @@ aurora.db.sql.ChangeWriter.optimizeChanges_ = function(changeMap, schema, passwo
                 let isPassword = meta && meta.type === 'password' && val != null && typeof(val) === 'string';
 
                 if (isPassword) {
-                    passwords.push({obj: entry.object, field: k, value: val});
+                    passwords.push({obj: entry.object, field: k, value: val, result: entry.result});
                 }
             }
             changeList.push(curEntry);
@@ -774,7 +834,7 @@ aurora.db.sql.ChangeWriter.optimizeChanges_ = function(changeMap, schema, passwo
                 if (entry.value.value() != null) {
                     let val = entry.value.value();
                     if (typeof(val) === 'string') {
-                        passwords.push({obj: curEntry.object, field: key.last.name(), value: val});
+                        passwords.push({obj: curEntry.object, field: key.last.name(), value: val, result: entry.result});
                     }
                 }
             }
@@ -964,13 +1024,13 @@ aurora.db.sql.ChangeWriter.prototype.getPath_ = function(base, path) {
         curObj = curObj[items[i].name()];
         let pks = items[i].keys();
         let subTable = null;
-        if (meta.list || meta.object) {
+        if (meta.isList || meta.isObject) {
             subTable = this.schema_.getTable(meta.key);
             if (!pks || !(pks[0] instanceof aurora.db.PrimaryKey) || !subTable) {
                 return null;
             }
         }
-        if (meta.list) {
+        if (meta.isList) {
             if (curObj instanceof Array) {
                 let j = 0;
                 for (j = 0; j < curObj.length; j++) {
@@ -991,7 +1051,7 @@ aurora.db.sql.ChangeWriter.prototype.getPath_ = function(base, path) {
             }
 
         }
-        else if (meta.object) {
+        else if (meta.isObject) {
             curTbl = subTable;
             console.log('todo set object');
             return null;

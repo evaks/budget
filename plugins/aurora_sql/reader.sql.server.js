@@ -173,7 +173,7 @@ aurora.db.sql.Reader.readObject_ = function(driver, path, start, data, table, co
         let type = meta.type;
         let subPath = [...path];
         subPath.push(key.getName());
-        if (meta.list) {
+        if (meta.isList) {
             let subTableRows = [];
             let subTable = aurora.db.schema.getTable(key);
             curObject[k] = subTableRows;
@@ -259,7 +259,7 @@ aurora.db.sql.Reader.prototype.selectReference = function(baseTable, links, filt
         for (let j = 0; j < remainingParts.length; j++) {
             let part = remainingParts[j];
             let meta = curTable.meta[part];
-            if (meta.type === 'ref' || meta.list || meta.object) {
+            if (meta.type === 'ref' || meta.isList || meta.isObject) {
                 let subTable = meta.type === 'ref' ? aurora.db.schema.tableMap[meta.table] : /** @type {!aurora.db.schema.TableType} */ (aurora.db.schema.getTable(meta.key));
 
                 tName = scope.addPathTable([], me.getColumns_(subTable));
@@ -308,7 +308,6 @@ aurora.db.sql.Reader.prototype.selectReference = function(baseTable, links, filt
  * @return {function((!Array<string|!recoil.structs.table.ColumnKey>)):!Array<{id: string, parent: string, col: string, table:string}>}
  */
 aurora.db.sql.Reader.prototype.makeChildPathFunc = function(base) {
-    console.log('todo put some checkes in here to stop execptions on invalid data');
     return function(path) {
         try {
             let col = path[0];
@@ -322,7 +321,7 @@ aurora.db.sql.Reader.prototype.makeChildPathFunc = function(base) {
             }
 
             let meta = aurora.db.schema.getMeta(col);
-            if ((meta.list || meta.object)) {
+            if ((meta.isList || meta.isObject)) {
                 if (meta.leaf) {
                     let tbl = aurora.db.schema.getTable(col);
                     for (let k in tbl.meta) {
@@ -380,12 +379,11 @@ aurora.db.sql.Reader.prototype.readObjectByKey = function(context, table, keys, 
                 where.push(query.eq(query.field(path.concat(col.getName())), keyValue));
             }
             let meta = t.meta[col.getName()];
-            if (meta.list || meta.object) {
+            if (meta.isList || meta.isObject) {
                 let subTable = t[k];
                 // outer equals
                 let subPath = [...path];
                 subPath.push(col.getName());
-
                 makeWhere(subTable, subPath);
             }
         }
@@ -494,7 +492,7 @@ aurora.db.sql.Reader.prototype.mkSelectSql_ = function(scope, colMap, cur, colum
             for (let k in table.cols) {
                 let col = table.cols[k];
                 let meta = table.meta[col.getName()];
-                if (!meta.list && !meta.object) {
+                if (!meta.isList && !meta.isObject) {
                     colMap[col.getId()] = 'col' + colIdx;
                     columns.push({tid: tableIdMap.get(path), col: col.getName(), colName: 'col' + colIdx++});
                 }
@@ -502,7 +500,7 @@ aurora.db.sql.Reader.prototype.mkSelectSql_ = function(scope, colMap, cur, colum
                     let subTable = table[k];
                     let subPath = [...path];
                     subPath.push(col.getName());
-                    getDataInternal(subTable, meta.list, columns, subPath, listCount,
+                    getDataInternal(subTable, meta.isList, columns, subPath, listCount,
                             new Field(path.concat(table.info.pk.getName())), new Field(subPath.concat([meta.childKey])));
                 }
             }
@@ -761,14 +759,24 @@ aurora.db.sql.Reader.prototype.insert = function(context, table, object, callbac
                     // important user does not get to choose the primary key
                     pk = name;
                 }
-                else if (meta.list || meta.object) {
+                else if (meta.isList || meta.isObject) {
                     // only insert owned outer items will deal with inserting references
                     if (meta.owned) {
                         let subTable = aurora.db.schema.getTable(key);
                         let childVal = object[name];
-                        if (meta.list) {
+                        if (meta.isList) {
+                            let order = null;
+                            for (let k in subTable.meta) {
+                                if (subTable.meta[k].type === 'order') {
+                                    order = k;
+                                }
+                            }
+
                             if (childVal instanceof Array) {
-                                object.forEach(function(item) {
+                                childVal.forEach(function(item, idx) {
+                                    if (order) {
+                                        item[order] = idx;
+                                    }
                                     children.push({table: subTable, item: item});
                                 });
                             }
@@ -871,7 +879,7 @@ aurora.db.sql.Reader.prototype.getDependancyMap_ = function(table) {
         for (let col in table.meta) {
             let meta = table.meta[col];
 
-            if (meta.owned && (meta.list || meta.object)) {
+            if (meta.owned && (meta.isList || meta.isObject)) {
                 let childTable = aurora.db.schema.getTable(meta.key);
                 subParents.forEach(function(parent) {
                     recoil.util.map.safeRecGet(deps, [parent.info.table, childTable.info.table], {table: childTable, key: meta.childKey});
@@ -898,7 +906,7 @@ aurora.db.sql.Reader.prototype.getChildTables_ = function(table) {
     for (let col in table.meta) {
         let meta = table.meta[col];
 
-        if (meta.owned && (meta.list || meta.object)) {
+        if (meta.owned && (meta.isList || meta.isObject)) {
             res.push(/** @type {!aurora.db.schema.TableType}*/ (aurora.db.schema.getTable(meta.key)));
         }
     }
@@ -973,7 +981,7 @@ aurora.db.sql.Reader.prototype.getColumns_ = function(table) {
 
     for (let k in table.meta) {
         let meta = table.meta[k];
-        if (!meta.list && !meta.object) {
+        if (!meta.isList && !meta.isObject) {
             res.push(meta.key);
         }
     }
@@ -1089,4 +1097,13 @@ aurora.db.sql.Reader.prototype.escape = function(str) {
         return this.driver_.escape(str.db);
     }
     return this.driver_.escape(str);
+};
+
+/**
+ * @param {string} exp
+ * @return {?}
+ */
+
+aurora.db.sql.Reader.prototype.expression = function(exp) {
+    return this.driver_.expression(exp);
 };

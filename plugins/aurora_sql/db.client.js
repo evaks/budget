@@ -348,10 +348,13 @@ aurora.db.Helper.prototype.createTable = function(path, value, currentErrors) {
  */
 aurora.db.Helper.makeServerValue_ = function(value, orig, meta, opt_inlist) {
     if (!meta || value == undefined) {
+        if (meta && meta.type === 'id') {
+            return meta.key.getDefault();
+        }
         return value;
     }
 
-    if ((opt_inlist && meta.list) || meta.object) {
+    if ((opt_inlist && meta.isList) || meta.isObject) {
         let subTable = aurora.db.schema.getTable(meta.key);
         if (subTable) {
             let res = {};
@@ -394,7 +397,7 @@ aurora.db.Helper.makeServerValue_ = function(value, orig, meta, opt_inlist) {
             return res;
         }
     }
-    if (meta.list) {
+    if (meta.isList) {
         let subTable = aurora.db.schema.getTable(meta.key);
         if (subTable) {
             if (meta.leaf) {
@@ -417,11 +420,12 @@ aurora.db.Helper.makeServerValue_ = function(value, orig, meta, opt_inlist) {
                 orig.forEach(function(v) {
                     origMap.add({key: primaryCols.map(function(k) {return v[k];}), value: v});
                 });
-                return value.map(function(v, idx) {
-                    let old = origMap.findFirst({key: primaryCols.map(function(k) {return v[k];}), value: null});
-                    return aurora.db.Helper.makeServerValue_(v, old ? old.value : null, meta, true);
-                });
             }
+            return value.map(function(v, idx) {
+                let old = origMap.findFirst({key: primaryCols.map(function(k) {return v[k];}), value: null});
+                return aurora.db.Helper.makeServerValue_(v, old ? old.value : null, meta, true);
+            });
+
         }
 
     }
@@ -436,11 +440,14 @@ aurora.db.Helper.makeServerValue_ = function(value, orig, meta, opt_inlist) {
  * @return {?}
  */
 aurora.db.Helper.makeValue_ = function(value, meta, opt_inlist) {
-    if (value == undefined || !(value instanceof Object)) {
+    if (value == undefined) {
+        return value;
+    }
+    if (!(value instanceof Object)) {
         return value;
     }
     if (meta) {
-        if ((opt_inlist && meta.list) || meta.object) {
+        if ((opt_inlist && meta.isList) || meta.isObject) {
             let subTable = aurora.db.schema.getTable(meta.key);
             if (subTable) {
                 let res = {};
@@ -467,7 +474,7 @@ aurora.db.Helper.makeValue_ = function(value, meta, opt_inlist) {
             return value;
         }
 
-        if (meta.list) {
+        if (meta.isList) {
             return value.map(function(v) {
                 return aurora.db.Helper.makeValue_(v, meta, true);
             });
@@ -475,6 +482,62 @@ aurora.db.Helper.makeValue_ = function(value, meta, opt_inlist) {
 
     }
     return value;
+};
+/**
+ * @param {!aurora.db.Schema} schema
+ * @param {!recoil.frp.Behaviour<!recoil.structs.table.Table>} tableB
+ * @param {!recoil.frp.Behaviour<Array>} pkB
+ * @param {!recoil.structs.table.ColumnKey} col
+ * @return {!recoil.frp.Behaviour<!recoil.structs.table.Table>}
+ */
+aurora.db.Helper.createSubTableB = function(schema, tableB, pkB, col) {
+    let frp = tableB.frp();
+
+    return frp.liftBI(function(baseTable) {
+        let pk = pkB.get();
+        let row = null;
+        let basePath = baseTable.getMeta().basePath;
+        if (pk === null) {
+            // just find a row should only be one if no pk specified
+            baseTable.forEach(function(r, pks) {
+                row = r;
+                pk = pks;
+            });
+        }
+        else {
+            row = baseTable.getRowKeys(pk);
+        }
+
+        if (row) {
+            let pkNames = baseTable.getPrimaryColumns().map(function(col) {return col.getName();});
+            let path = basePath.setKeys(pkNames, pk).appendName(col.getName());
+            let errors = new recoil.db.PathMap(schema);
+            let cellErrors = row.getCellMeta(col).errors || [];
+            cellErrors.forEach(function(e) {
+                if (e.path) {
+                    errors.put(e.path, e);
+                }
+            });
+
+            return aurora.db.Helper.createTable(path, row.get(col), errors);
+        }
+        return aurora.db.Helper.createTable(basePath, []);
+    }, function(tbl) {
+        let res = tableB.get().createEmpty();
+        let basePath = tableB.get().getMeta().basePath.appendName(col.getName());
+        let pk = pkB.get();
+        tableB.get().forEachModify(function(row, pks) {
+
+            if (pk === null || recoil.util.object.isEqual(pk, pks)) {
+                let keyInfo = aurora.db.schema.keyMap[basePath.pathAsString()];
+
+                let toList = aurora.db.Comms.convertFromTable_(tbl, row.get(col), keyInfo);
+                row.set(col, toList);
+            }
+            res.addRow(row);
+        });
+        tableB.set(res.freeze());
+    }, tableB, pkB);
 };
 /**
  * @param {!recoil.db.ChangeSet.Path} path
@@ -488,11 +551,26 @@ aurora.db.Helper.createTable = function(path, value, currentErrors) {
     var primaryMeta = [];
     var keys = aurora.db.Helper.extractKeys(keyInfo.info.pk, tableMeta);
     var tbl = new recoil.structs.table.MutableTable(keys.primaryKeys, keys.otherKeys);
-
+    let filterSilent = function(errors) {
+        if (errors) {
+            return errors;
+        }
+        let res = [];
+        for (let i = 0; i < errors.length; i++) {
+            if (!errors[i].silent) {
+                res.push(errors[i]);
+            }
+        }
+        return res;
+    };
+    let order = null;
     for (var k in tableMeta) {
         var meta = tableMeta[k];
         if (meta && meta.hasOwnProperty('primary')) {
             primaryMeta.push({name: k, meta: meta});
+        }
+        if (meta && meta.type === 'order') {
+            order = k;
         }
     }
 
@@ -528,12 +606,16 @@ aurora.db.Helper.createTable = function(path, value, currentErrors) {
                 // item can be null if the toplevel container is not present
                 row.set(colKey, aurora.db.Helper.makeValue_(item[tMeta], tableMeta[tMeta]));
                 if (currentErrors) {
-                    row.addRowMeta({errors: currentErrors.getExact(rowPath)});
+                    row.addRowMeta({errors: filterSilent(currentErrors.getExact(rowPath))});
                     row.addCellMeta(
                         colKey,
-                        {errors: currentErrors.get(rowPath.appendName(tMeta))});
+                        {errors: filterSilent(currentErrors.get(rowPath.appendName(tMeta)))});
                 }
             }
+            if (order !== null) {
+                row.setPos(parseInt(item[order], 10));
+            }
+
             tbl.addRow(row);
             i++;
         });
@@ -624,6 +706,12 @@ aurora.db.Helper.prototype.keyToQuery_ = function(inKey) {
  * @param {!recoil.db.QueryOptions} options
  */
 aurora.db.Helper.prototype.get_ = function(success, failure, id, inKey, options) {
+    console.log('check action, id', id.getData());
+    if (id.getData().action) {
+        success({action: null, data: null, output: null, enabled: recoil.ui.BoolWithExplanation.TRUE});
+        return;
+    }
+
     let key = this.keyToQuery_(inKey);
 
     options = options.cleanStart();
@@ -671,7 +759,7 @@ aurora.db.Helper.makeLoadId = function(id, query, options) {
 };
 
 /**
- * @private
+ * @private x
  * @param {!goog.structs.AvlTree<{key:!recoil.db.ChangeSet.Path, id: number}>} idMap
  * @param {!Array<!recoil.db.ChangeSet.Change>} changes
  * @param {(Array<{id:(undefined|?),children:(!Array|undefined)}>|undefined)} results
@@ -823,7 +911,7 @@ aurora.db.Comms.prototype.performAction = function(action, opt_pathParams, opt_p
         this.pendingActions_[id] = {action: action, callback: opt_callback};
     }
 
-    this.channel_.send({command: 'action', id: id, path: path.serialize(serializor, compressor), inputs: inputs});
+    this.channel_.send({'command': 'action', id: id, path: path.serialize(serializor, compressor), inputs: inputs});
 
 };
 /**
@@ -914,7 +1002,7 @@ aurora.db.Comms.prototype.createChannel_ = function() {
         this.channel_ = aurora.websocket.getObjectChannel(
             aurora.db.shared.PLUGIN_ID, aurora.db.shared.DATA,
             /**
-             * @param {{command:string,plugin:string, results:?,changes:?,id:?}} obj
+             * @param {!coms.Command} obj
              */
             function(obj) {
                 if (obj.command === 'action-response') {
@@ -960,6 +1048,13 @@ aurora.db.Comms.prototype.createChannel_ = function() {
                         }
                     }
 
+                }
+                else if (obj.command === 'action') {
+                    let action = me.pendingActions_[obj.id];
+                    if (action) {
+                        delete me.pendingActions_[obj.id];
+                        action.success({action: null, id: obj.id, output: {value: obj.output, error: obj.error}, enabled: recoil.ui.BoolWithExplanation.TRUE});
+                    }
                 }
                 else if (obj.command === 'set') {
                     var setChanges = me.sentChanges_;
@@ -1378,6 +1473,14 @@ aurora.db.Comms.valSerializer_ = new aurora.db.Comms.ValueSerializor();
  * @param {recoil.db.QueryOptions} options
  */
 aurora.db.Comms.prototype.set = function(data, oldData, successFunc, failFunc, id, inKey, options) {
+    if (id.getData().action) {
+        let idSeq = this.transId_.next();
+        let toSend = {'command': 'action', 'id': idSeq, 'inputs': data.action, 'path': id.getData().path};
+        this.pendingActions_[idSeq] = {success: successFunc, fail: failFunc};
+        this.channel_.send(toSend);
+        successFunc({action: null, output: null, enabled: recoil.ui.BoolWithExplanation.FALSE});
+        return;
+    }
     let key = this.helper_.keyToQuery_(inKey);
 
     let schema = this.schema_;

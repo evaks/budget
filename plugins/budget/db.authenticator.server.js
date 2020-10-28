@@ -4,6 +4,8 @@ goog.provide('aurora.db.Authenticator');
 goog.require('aurora.auth.Auth');
 goog.require('aurora.db.access');
 goog.require('aurora.db.schema.tables.base.user');
+goog.require('aurora.log');
+
 
 /**
  * @constructor
@@ -14,6 +16,7 @@ goog.require('aurora.db.schema.tables.base.user');
 aurora.db.Authenticator = function(reader, allowAnon) {
     this.reader_ = reader;
     this.allowAnon_ = allowAnon;
+    this.log_ = aurora.log.createModule('DBAUTH');
 };
 
 /**
@@ -27,6 +30,7 @@ aurora.db.Authenticator.prototype.validate = function(token, cred, data, cb) {
     let userT = aurora.db.schema.tables.base.user;
     let groupT = aurora.db.schema.tables.base.group;
     let permT = aurora.db.schema.tables.base.permission;
+    let me = this;
     if (cred.anon) {
         data.permissions = {};
         data.ip = cred.srcAddr;
@@ -37,19 +41,34 @@ aurora.db.Authenticator.prototype.validate = function(token, cred, data, cb) {
     }
     reader.readObjectByKey({}, userT, [{col: userT.cols.username, value: cred.username}], null, function(err, user) {
         // hide errors
-        console.log('todo lock user out, if too many login attempts', err);
+        let maxLocks = ((config['authentication'] || {})['maxTries'] || 3);
+        let locktimeout = ((config['authentication'] || {})['lockoutMins'] || 15) * 60 * 1000;
+
         if (err || !user) {
+            if (!err) {
+                me.log_.warn('Invalid User', cred.username);
+            }
             cb({message: 'Invalid User/Password'});
         }
+        else if (maxLocks > 0 && user.lastinvalidtime && user.lockcount >= maxLocks && user.lastinvalidtime + locktimeout > new Date().getTime()) {
+            cb({message: 'Account locked out try again in ' + Math.ceil(locktimeout / 60000) + ' Minutes'});
+            me.log_.warn('Account Locked for', cred.username);
+            let query = new recoil.db.Query();
+            // do the increment in an expression as oposed to simply setting to lockcount + 1 an increment is never missed even if they happen at the same time
+            reader.updateOneLevel({}, userT, {lockcount: reader.expression('lockcount + 1'), lastinvalidtime: new Date().getTime()}, query.eq(userT.info.pk, user.id), function(err) {});
+        }
         else {
-            console.log('******************** checking passwords');
             aurora.db.Pool.checkPassword(cred.password, user.password, function(valid) {
                 if (!valid) {
+                    me.log_.warn('Invalid Password for', cred.username);
                     cb({message: 'Invalid User/Password'});
+                    let query = new recoil.db.Query();
+                    reader.updateOneLevel({}, userT, {lockcount: reader.expression('lockcount + 1'), lastinvalidtime: new Date().getTime()}, query.eq(userT.info.pk, user.id), function(err) {});
                 }
                 else {
                     let query = new recoil.db.Query();
                     let groups = user.groups.map(function(group) { return group.groupid; });
+                    reader.updateOneLevel({}, userT, {lockcount: 0}, query.eq(userT.info.pk, user.id), function(err) {});
                     reader.readObjects({}, groupT, query.isIn(
                         query.field(groupT.cols.id.getName()), groups), null, function(err, groups) {
                             let permissions = {};

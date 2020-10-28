@@ -112,7 +112,7 @@ Moment.prototype.isDSTShifted =  function () {};
  * @param {(string|Array<string>)=} opt_format
  * @param {string=} opt_lang
  * @param {boolean=} opt_strict
- * @return {Moment}
+ * @return {!Moment}
  */
 var moment = function (opt_time, opt_format, opt_lang, opt_strict) {};
 

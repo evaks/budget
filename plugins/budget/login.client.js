@@ -49,7 +49,9 @@ budget.widgets.Login = function(scope) {
             return new BWE(false, undefined, mess.LOGGING_IN);
         }
         if (!username) {
-            return new BWE(false, undefined, mess.MUST_SPECIFY.resolve({field: mess.USERNAME.toString()}));
+            // this is to deal with a bug that seems not to populate the username if it auto poplated, until the user does something
+            //return new BWE(false, undefined, mess.MUST_SPECIFY.resolve({field: mess.USERNAME.toString()}));
+            return BWE.TRUE;
         }
         if (!password) {
             return new BWE(false, undefined, mess.MUST_SPECIFY.resolve({field: mess.PASSWORD.toString()}));

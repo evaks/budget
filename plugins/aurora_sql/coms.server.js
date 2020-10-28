@@ -45,6 +45,44 @@ aurora.db.Coms = function(authenticator) {
             else if (action === 'set') {
                 me.doChanges_(reader, e, secContext);
             }
+            else if (action === 'action') {
+                let path = e.data['path'];
+
+                let action = aurora.db.schema.actionMap[path];
+                if (action) {
+                    let response = {'command': 'action', 'id': e.data['id']};
+                    if (action.access) {
+                        if (!action.access(secContext, 'r')) {
+                            response['error'] = 'Access Denied';
+                            me.channel_.send(response, e.clientId);
+                            return;
+                        }
+                        if (!reader) {
+                            me.log_.warn('Reader not initialized', path);
+                            return;
+                        }
+                        action.func(secContext, reader, e.data['inputs'], function(err, outputs) {
+                            if (err) {
+                                response['error'] = err;
+                            }
+                            else {
+                                response['outputs'] = outputs;
+                            }
+                            console.log('sending response', response);
+                            me.channel_.send(response, e.clientId);
+                        });
+
+                    }
+                    else {
+                        me.log_.error('No access rights specified on action', path);
+                    }
+
+                }
+                else {
+                    me.log_.error('Unknown action', path);
+                }
+
+            }
             else {
             // todo check permission filters
                 me.log_.error('got unknown command', action);
@@ -96,12 +134,12 @@ aurora.db.Coms.traverseObject_ = function(tbl, obj, callback) {
     for (let col in tbl.meta) {
         let meta = tbl.meta[col];
         if (doSub[col] !== false) {
-            if (meta.list) {
+            if (meta.isList) {
                 obj[col].forEach(function(v) {
                     aurora.db.Coms.traverseObject_(aurora.db.schema.getTable(meta.key), v, callback);
                 });
             }
-            else if (meta.object) {
+            else if (meta.isObject) {
                 aurora.db.Coms.traverseObject_(aurora.db.schema.getTable(meta.key), obj[col], callback);
             }
         }

@@ -11,9 +11,13 @@ goog.require('recoil.ui.widgets.table.PagedTableWidget');
  * @param {number|!recoil.frp.Behaviour<number>} pageSize
  * @param {function(!aurora.WidgetScope,!recoil.frp.Behaviour<!recoil.structs.table.Table>):!recoil.frp.Behaviour<!recoil.structs.table.Table>} factory
  * @param {function(!aurora.WidgetScope,!recoil.frp.Behaviour<!recoil.structs.table.Table>):!recoil.frp.Behaviour<!recoil.structs.table.Table>} headerFactory
+ * @param {!recoil.frp.Behaviour<!recoil.db.Query>=} opt_filters
  */
-aurora.widgets.PagedTable = function(scope, tableT, pageSize, factory, headerFactory) {
+aurora.widgets.PagedTable = function(scope, tableT, pageSize, factory, headerFactory, opt_filters) {
+
     let frp = scope.getFrp();
+    let query = new recoil.db.Query();
+    let inFiltersB = opt_filters ? opt_filters : frp.createConstB(query.True());
     let lastGoodDataTableB = frp.createNotReadyB();
     let sortOrderB = frp.createB([{id: true}]);
     let pageKeyB = frp.createB(/** @type {?Object} */ (null));
@@ -73,12 +77,12 @@ aurora.widgets.PagedTable = function(scope, tableT, pageSize, factory, headerFac
     };
 
     let filtersB = frp.liftB(
-        function(userFilter) {
+        function(userFilter, inFilter) {
             let query = new recoil.db.Query();
             if (!userFilter) {
-                return query.True();
+                return inFilter;
             }
-            let parts = [];
+            let parts = [inFilter];
             let tableMeta = userFilter.getMeta();
             userFilter.forEach(function(row) {
                 userFilter.forEachPlacedColumn(function(col) {
@@ -104,12 +108,10 @@ aurora.widgets.PagedTable = function(scope, tableT, pageSize, factory, headerFac
 
                 });
             });
-            if (parts.length > 0) {
-                return query.and.apply(query, parts);
-            }
-            return query.True();
+
+            return query.and.apply(query, parts);
         },
-        filterTableB
+        filterTableB, inFiltersB
     );
 
     let serverDataTableB = ns.createKeyedValue(
@@ -197,6 +199,7 @@ aurora.widgets.PagedTable = function(scope, tableT, pageSize, factory, headerFac
         let used = [];
         table.getOtherColumns().forEach(function(col) {
             outRow.set(col, null);
+            outRow.addCellMeta(col, {editable: true});
         });
 
         table.getPrimaryColumns().forEach(function(col) {
@@ -207,7 +210,10 @@ aurora.widgets.PagedTable = function(scope, tableT, pageSize, factory, headerFac
         });
 
 
-        table.forEachPlacedColumn(function(col) {
+        table.forEachColumn(function(col, meta) {
+            if (meta.position == undefined && !meta.hidden) {
+                return;
+            }
             outRow.set(col, null);
             if (header) {
                 header.forEach(function(row) {
