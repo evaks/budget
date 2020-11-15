@@ -18,12 +18,13 @@ budget.Client = function() {
     let db = new recoil.db.ChangeDb(schema);
     let comms = new aurora.db.Comms(db, schema, this);
 
+
     let database = new recoil.db.ReadWriteDatabase(aurora.recoil.frp, comms);
 
     let scope = new budget.WidgetScope(aurora.recoil.frp, database, comms);
     aurora.Client.call(this, scope, function() {
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('contentInner').style.display = 'block';
+        document.getElementById('budget-loading').style.display = 'none';
+        document.getElementById('budget-content').style.display = 'flex';
     });
 };
 goog.inherits(budget.Client, aurora.Client);

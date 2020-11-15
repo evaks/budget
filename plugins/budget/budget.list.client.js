@@ -22,14 +22,16 @@ budget.widgets.BudgetList = function(scope) {
     const entryT = budgetT.entries;
     let PeriodType = aurora.db.schema.getEnum(budgetT.cols.period);
 
-    let budgetsB = scope.getDb().get(budgetT.key);
+    let userId = parseInt(budget.widgets.BudgetList.getSearchParams()['id'][0], 10);
+    let query = new recoil.db.Query();
+
+    let budgetsB = scope.getDb().get(budgetT.key, query.eq(query.val(userId), budgetT.cols.userid));
     let templateB = scope.getDb().get(templateT.key);
     let frp = scope.getFrp();
     let converter = new aurora.ui.coverters.LocaleDateConverter();
 
     const COPY = new recoil.structs.table.ColumnKey('copy');
     this.widget_ = new recoil.ui.widgets.table.TableWidget(scope);
-    let userId = parseInt(budget.widgets.BudgetList.getSearchParams()['id'][0], 10);
     let formatedB = frp.liftBI(function(tbl) {
         let columns = new recoil.ui.widgets.TableMetaData();
         columns.add(budgetT.cols.name, 'Name');

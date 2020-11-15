@@ -237,14 +237,14 @@ aurora.widgets.Selectize.prototype.update_ = function(helper) {
     cl.set(me.control_, controlClasses.join(' '));
 
     if (helper.isGood()) {
-      
+
         let settings = this.settingsB_.get();
         let renderValue = function(v) {
             let remove = createDom('a', {class: 'remove',
                                          title: 'Remove',
                                          tabindex: '-1',
                                          href: 'javascript:void(0)'}, 'x');
-            
+
             let res = createDom('div', {class: 'item', 'data-value': v.id}, settings.renderer(v.value), remove);
 
             goog.events.listen(res, 'mousedown', function(e) {
@@ -262,7 +262,7 @@ aurora.widgets.Selectize.prototype.update_ = function(helper) {
         };
 
         let inputMode = me.mode_();
-        if(inputMode === 'multi') {
+        if (inputMode === 'multi') {
             wrapperClasses.push('plugin-remove_button');
         }
 
@@ -329,9 +329,9 @@ aurora.widgets.Selectize.prototype.deleteItem = function(item) {
         let caret = self.calcCaret_();
 
         activeItems.remove(item);
-        
+
         let oldVals = self.uniqValueB_.get();
-        let delIdx = null; 
+        let delIdx = null;
         values = oldVals.filter(function(v, idx) {
             if (v.id === item.id) {
                 delIdx = idx;
@@ -343,10 +343,10 @@ aurora.widgets.Selectize.prototype.deleteItem = function(item) {
         let caretPos = (delIdx < caret) ? caret - 1 : caret;
 
         self.setCaret(caretPos);
-        
+
         self.uniqValueB_.set(values);
         self.activeB_.set(activeItems);
-        
+
     });
 
     setTimeout(self.positionDropdown.bind(this), 1);

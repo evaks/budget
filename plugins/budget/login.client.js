@@ -111,15 +111,15 @@ budget.widgets.Login = function(scope) {
                  cd('td', {class: 'login-forgot'}, cd('a', {href: '/account/forgot'}, mess.FORGOT_PASSWORD.toString())))
              ))
     );
-    goog.events.listen(container, goog.events.EventType.KEYDOWN, function (e) {
+    goog.events.listen(container, goog.events.EventType.KEYDOWN, function(e) {
 
-        if(e.keyCode === goog.events.KeyCodes.ENTER) {
-            frp.accessTrans(function(){
+        if (e.keyCode === goog.events.KeyCodes.ENTER) {
+            frp.accessTrans(function() {
                 loginActionB.set(e);
             }, loginActionB);
         }
     });
-    
+
     let alreadyLoggedIn = cd('div', {}, 'You are already logged in');
 
     let loggedIn = goog.net.cookies.get('username');

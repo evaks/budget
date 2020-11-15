@@ -338,18 +338,21 @@ budget.widgets.BudgetTemplate.createMovableSizable = function(tableB, opt_movabl
         let newDecorators = new goog.structs.AvlTree(recoil.util.object.compareKey);
         tbl.forEach(function(row, pks) {
             let mrow = row.unfreeze();
-            if (movable) {
+            mrow.set(ADD_COL, null);
+            mrow.set(DEL_COL, null);
+            mrow.set(MOVE_COL, null);
+            if (movable && row.getRowMeta().movable !== false) {
                 let decorator = decorators.findFirst({key: pks, decorator: null});
                 if (!decorator) {
                     decorator = {key: pks, decorator: rowDecoratorFunc(pks)};
                 }
                 newDecorators.add(decorator);
                 mrow.addRowMeta({rowDecorator: decorator.decorator});
-            }
-            mrow.set(ADD_COL, null);
-            mrow.set(DEL_COL, null);
-            mrow.set(MOVE_COL, null);
 
+            }
+            if (row.getRowMeta().movable === false) {
+                mrow.addCellMeta(MOVE_COL, {cellDecorator: null});
+            }
             res.addRow(mrow);
         });
         decoratorsB.set(newDecorators);

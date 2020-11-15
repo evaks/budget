@@ -489,14 +489,29 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out) {
                 fs.appendFileSync(out, data.enum.map(x => x.id).join(','));
                 fs.appendFileSync(out, ']');
                 fs.appendFileSync(out, ',\n       enum: {');
+                let hasInfo = false;
                 data.enum.forEach(function(e, idx) {
                     if (idx !== 0) {
                         fs.appendFileSync(out, ',');
                     }
-
+                    hasInfo = hasInfo || e.info;
                     fs.appendFileSync(out, '\n            ' + jsEscape(e.name.toLowerCase()) + ': ' + e.id);
                 });
                 fs.appendFileSync(out, '\n       }');
+                if (hasInfo) {
+                    fs.appendFileSync(out, ',\n       enumInfo: {');
+                    let first = true;
+                    data.enum.forEach(function(e, idx) {
+                        if (e.info) {
+                            if (!first) {
+                                fs.appendFileSync(out, ',');
+                            }
+                            first = false;
+                            fs.appendFileSync(out, '\n            \'' + e.id + '\': ' + stringify(e.info));
+                        }
+                    });
+                    fs.appendFileSync(out, '\n       }');
+                }
                 if (client) {
                     fs.appendFileSync(out, ',\n       enumDisplay: new recoil.ui.message.BasicMessageEnum ({');
                     data.enum.forEach(function(e, idx) {
@@ -508,7 +523,12 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out) {
                     fs.appendFileSync(out, '}, {key: \'val\', msg: recoil.ui.messages.UNKNOWN_VAL})');
                     fs.appendFileSync(out, ',\n       renderer: recoil.ui.renderers.MapRenderer ({' + data.enum.map(x => stringify(x.name) + ':' + x.id) + '}');
                     if (data.nullable === true) {
-                        fs.appendFileSync(out, ', recoil.ui.messages.NOT_SPECIFIED');
+                        if (data.null) {
+                            fs.appendFileSync(out, ', recoil.ui.message.toMessage(' + stringify(data.null) + ')');
+                        }
+                        else {
+                            fs.appendFileSync(out, ', recoil.ui.messages.NOT_SPECIFIED');
+                        }
                     }
                     fs.appendFileSync(out, ')');
                 }

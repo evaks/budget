@@ -39,6 +39,7 @@ aurora.Client = function(scope, loadDone) {
     let frp = this.frp_;
     this.storedStateB_ = frp.createB(null);
     this.screenShownB_ = aurora.ui.screenShownB;
+    this.loadingDone_ = loadDone;
 
     var me = this;
     let canReload = false;

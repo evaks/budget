@@ -503,36 +503,42 @@ aurora.db.mysql.Pool.prototype.transaction = function(callback, doneFunc) {
         if (this.connection_) {
             let connection = this.connection_;
             connection.beginTransaction(function(err) {
-                
                 if (err) {
                     // do nothing we we haven't started
                     doneFunc(err);
                     return;
-                }
-                console.log("start transaction");
-                me.transactionCount_++;
-                
-                callback(me, function(err) {
-                    console.log("ending transaction", err, me.transactionCount_);
-                    let args = makeArguments(arguments);
-                    me.transactionCount_--;
+                }                 
+                connection.query('SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED', function(err) {
                     if (err) {
-                        connection.rollback(function() {
-                            doneFunc(err);
-                        });
+                        doneFunc(err);
+                        return;
                     }
-                    else {
-                        console.log("comitting", err);
-                        connection.commit(function(err) {
-                            if (err) {
-                                connection.rollback(function() {
-                                    doneFunc(err);
-                                });
-                            } else {
-                                doneFunc.apply(null, args);
-                            }
-                        });
-                    }
+                    me.transactionCount_++;
+                    
+                    callback(me, function(err) {
+                        console.log("ending transaction", err, me.transactionCount_);
+                        let args = makeArguments(arguments);
+                        me.transactionCount_--;
+                        if (err) {
+                            connection.rollback(function() {
+                                doneFunc(err);
+                            });
+                        }
+                        else {
+                            console.log("comitting", err);
+                            connection.commit(function(err) {
+                                if (err) {
+                                    connection.rollback(function() {
+                                        doneFunc(err);
+                                    });
+                                } else {
+                                    doneFunc.apply(null, args);
+                                }
+                            });
+                        }
+                    });
+
+
                 });
 
             });

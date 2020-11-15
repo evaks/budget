@@ -1,6 +1,16 @@
 {
   "scripts": {
     "test": "jest"
+  },
+  "dependencies": {
+    "async": "^3.2.0",
+    "excel-export": "^0.5.1",
+    "mime": "^2.4.6",
+    "modern-syslog": "^1.2.0",
+    "moment": "^2.29.1",
+    "mysql": "^2.18.1",
+    "node-forge": "^0.10.0",
+    "websocket": "^1.0.32",
+    "xlsx": "^0.16.8"
   }
 }
-

@@ -15,7 +15,7 @@
 	    {"id":3, "name": "Monthly", "info": {"rate": 30.416666666667}},
 	    {"id":4, "name": "Quarterly", "info": {"rate": 91.25}},
 	    {"id":5, "name": "Yearly", "info": {"rate": 365}}
-	]}
+	], "null" : "None"}
     },
     "tables": [
 	{
@@ -70,7 +70,9 @@
 	    ],
 
 	    "access": "aurora.db.access.basic([{'site-management':'crud'},{'': 'r'}])",
-	    "accessFilter": [{"" : "all"}],
+	    "accessFilter": [
+		{"" : "all"}
+	    ],
 	    "columns": [
 		{ "name": "id", "type": "id"},
 		{ "name": "order", "type": "order"},
@@ -82,8 +84,13 @@
 	{
 	    "name" : "budget",
 	    "indexes": [],
-	    "access": "aurora.db.access.basic([{'site-management':'crud'},{'': 'r'}])",
-	    "accessFilter": [{"" : "all"}],
+	    "access": "aurora.db.access.basic([{'site-management':'crud'}, {'mentor':'crud'}, {'client':'crud'}, {'': 'r'}])",
+	    "accessFilter": [
+		{"user-management" : "all"},
+		{"mentor": "budget.filter.budgetMentor"},
+		{"": "aurora.db.access.filter.equal('id','@userid')"}
+		
+	    ],
 	    "columns": [
 		{ "name": "id", "type": "id"},
 		{ "name": "userid", "type": "ref(user)"},

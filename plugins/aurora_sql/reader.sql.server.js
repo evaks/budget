@@ -316,8 +316,53 @@ aurora.db.sql.Reader.prototype.makeChildPathFunc = function(base) {
                 // traverse path from base to get the col
                 let fullPathParts = base.info.path.split('/').concat(path);
                 let colName = fullPathParts.pop();
-                let tbl = aurora.db.schema.getTableByName(fullPathParts.join('/'));
-                col = tbl.meta[colName].key;
+
+                try {
+                    let tbl = aurora.db.schema.getTableByName(fullPathParts.join('/'));
+                    col = tbl.meta[colName].key;
+                }
+                catch (e) {
+                    if (path.length > 1) {
+                        // this could be following a foriegn key do that check
+
+                        let res = [];
+                        let cur = base;
+                        for (let i = 0; i < path.length - 1; i++) {
+                            let meta = cur.meta[path[i]];
+                            if (!meta) {
+                                throw e;
+                            }
+
+                            if (meta.type === 'ref') {
+                                res.push({
+                                    id: cur.info.pk.getName(),
+                                    col: path[i],
+                                    table: cur.info.table
+                                });
+                                cur = aurora.db.schema.getTableByName(meta.ref);
+
+                            }
+                            else {
+                                cur = aurora.db.schema.getTableByName(cur.info.path + '/' + path[i]);
+                                res.push({
+                                    id: cur.info.pk.getName(),
+                                    parent: cur.info.parentKey.getName(),
+                                    table: cur.info.table,
+
+                                });
+                            }
+                        }
+                        col = cur.meta[path[path.length - 1]].key;
+                        res.push({
+                            id: cur.info.pk.getName(),
+                            parent: null,
+                            col: col.getName(), table: cur.info.table});
+                        return res;
+                    }
+                    else {
+                        throw e;
+                    }
+                }
             }
 
             let meta = aurora.db.schema.getMeta(col);
@@ -326,11 +371,11 @@ aurora.db.sql.Reader.prototype.makeChildPathFunc = function(base) {
                     let tbl = aurora.db.schema.getTable(col);
                     for (let k in tbl.meta) {
                         let e = tbl.meta[k];
-                    if (e.type !== 'id' && e.type !== 'order') {
-                        col = e.key;
-                        meta = tbl.meta[k];
-                        break;
-                    }
+                        if (e.type !== 'id' && e.type !== 'order') {
+                            col = e.key;
+                            meta = tbl.meta[k];
+                            break;
+                        }
                     }
                 }
                 else {
@@ -611,6 +656,8 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
             }
 
             if (filter) {
+                // todo add extra JOINs to table so we can get subtables
+
                 sql.query += ' WHERE ' + sql.filter.query(scope);
             }
 
@@ -1093,7 +1140,6 @@ aurora.db.sql.Reader.prototype.escapeId = function(str) {
  */
 aurora.db.sql.Reader.prototype.escape = function(str) {
     if (str instanceof aurora.db.PrimaryKey) {
-        console.log('escape *********', str.db, this.driver_.escape(str.db));
         return this.driver_.escape(str.db);
     }
     return this.driver_.escape(str);

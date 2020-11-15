@@ -161,7 +161,7 @@ aurora.db.Coms.prototype.doGet_ = function(reader, e, secContext) {
     let response = {'command': 'full', 'name': name, 'query': queryIn, 'options': optionsIn, 'value': null};
     let serializer = new aurora.db.Serializer;
     let context = {'@userid': secContext.userid};
-
+    let start = new Date().getTime();
     if (name === secName) {
         // this is special every one can request what permissions they have
         me.channel_.send({'command': 'full', 'name': name, 'query': queryIn, 'options': optionsIn, 'value': secContext}, e.clientId);
@@ -202,7 +202,8 @@ aurora.db.Coms.prototype.doGet_ = function(reader, e, secContext) {
                         });
                     }
                     response['value'] = data;
-                    me.log_.debug('read data', queryIn, optionsIn, data);
+                    me.log_.info('performance', queryIn, optionsIn, (new Date().getTime() - start) / 1000);
+                    me.log_.debug('read data', queryIn, optionsIn, data, (new Date().getTime() - start) / 1000);
                 }
                 me.channel_.send(response, e.clientId);
             }, options);
@@ -238,6 +239,7 @@ aurora.db.Coms.prototype.doSecurityCheck_ = function(e, secContext, opType, resp
     }
 
     if (!tbl.info.access(secContext, opType)) {
+        console.log('-------------------------- ad');
         response['error-value'] = 'Access Denied';
         me.channel_.send(response, e.clientId);
         return null;

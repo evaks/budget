@@ -161,6 +161,7 @@ aurora.db.sql.ChangeWriter.prototype.hasPermission_ = function(change, secContex
     let tbl = this.schema_.getTableByName(path);
     while (tbl && path.length() > 0) {
         let allowed = tbl.info.access ? tbl.info.access(secContext, access) : null;
+        console.log('checking access', path.toString(), allowed);
         if (allowed != undefined) {
             return allowed;
         }
@@ -208,6 +209,7 @@ aurora.db.sql.ChangeWriter.prototype.applyChanges = function(changes, secContext
         // found it, now we don't need to read items that are adds since they won't
         // exist in the database anyway however only adds that are base objects
         if (!me.hasPermission_(change, secContext)) {
+            me.log_.warn('Field Access Denied', change.path().toString());
             results[changeIdx] = {error: 'Access Denied'};
             continue;
         }
@@ -324,7 +326,7 @@ aurora.db.sql.ChangeWriter.prototype.applyChanges = function(changes, secContext
 
 
     }, function(err) {
-        me.applyChanges_(changes, context, results, bases, function(err) {
+        me.applyChanges_(changes, context, secContext, results, bases, function(err) {
             callback(results);
         });
     });
@@ -379,11 +381,12 @@ aurora.db.sql.ChangeWriter.prototype.applySilentError = function(err, results) {
  * @private
  * @param {!Array<recoil.db.ChangeSet.Change>} changes
  * @param {!Object} context
+ * @param {!aurora.db.access.SecurityContext} secContext
  * @param {!Array<!aurora.db.sql.Result_>} results
  * @param {Object} bases
  * @param {function(?)} callback
  */
-aurora.db.sql.ChangeWriter.prototype.applyChanges_ = function(changes, context, results, bases, callback) {
+aurora.db.sql.ChangeWriter.prototype.applyChanges_ = function(changes, context, secContext, results, bases, callback) {
     let reader = this.reader_;
     let objectPathMap = new goog.structs.AvlTree(recoil.util.object.compareKey);
     let me = this;
@@ -479,7 +482,7 @@ aurora.db.sql.ChangeWriter.prototype.applyChanges_ = function(changes, context, 
             callback(err);
         }
         else {
-            me.applyTransactionChanges_(changeList, context, function(err) {
+            me.applyTransactionChanges_(changeList, context, secContext, function(err) {
                 if (err) {
                     me.applySilentError(err, results);
                 }
@@ -492,15 +495,17 @@ aurora.db.sql.ChangeWriter.prototype.applyChanges_ = function(changes, context, 
  * @private
  * @param {!Array<!aurora.db.sql.ChangeWriter.ChangeKeyValue>} changeList
  * @param {!Object} context
+ * @param {!aurora.db.access.SecurityContext} secContext
  * @param {function(?)} callback
  */
-aurora.db.sql.ChangeWriter.prototype.applyTransactionChanges_ = function(changeList, context, callback) {
+aurora.db.sql.ChangeWriter.prototype.applyTransactionChanges_ = function(changeList, context, secContext, callback) {
     let reader = this.reader_;
     let me = this;
     let query = new recoil.db.Query();
     let CType = recoil.db.ChangeSet.Change.Type;
     let schema = this.schema_;
     let DelayedRef = aurora.db.sql.ChangeWriter.DelayedRef;
+    let addsToCheck = [];
     reader.transaction(function(reader, callback) {
         me.async_.eachSeries(changeList, function(entry, eachCallback) {
             let makeObject = function(path) {
@@ -534,21 +539,30 @@ aurora.db.sql.ChangeWriter.prototype.applyTransactionChanges_ = function(changeL
             if (entry.key.type === CType.ADD) {
                 let info = makeObject(entry.key.path);
                 if (info) {
+                    let curBasePath = me.getBasePath_(entry.key.path);
+                    let isBase = me.isBase_(curBasePath, entry.key.path);
+                        // security check needed here we don't want to add items we can't see
                     reader.insert(context, info.tbl, info.obj, function(error, insertId) {
                         if (error) {
                             entry.result.error = error;
                             eachCallback(error);
                         }
                         else {
+
+
                             // todo we get no error without an insertid object
                             entry.id.value = BigInt(insertId.insertId);
+                            if (isBase) {
+                                let keyNames = entry.key.path.last().keyNames();
+                                let newPath = entry.key.path.setKeys(keyNames, [new aurora.db.PrimaryKey(entry.id.value)]);
+                                addsToCheck.push({tbl: info.tbl, entry: entry, id: entry.id.value});
+                            }
                             entry.result.id = entry.id.value;
                             eachCallback(null);
                         }
                     });
                     return;
                 }
-
             }
             else if (entry.key.type === CType.DEL) {
                 let path = entry.key.path;
@@ -575,7 +589,30 @@ aurora.db.sql.ChangeWriter.prototype.applyTransactionChanges_ = function(changeL
             eachCallback('Unable to apply change' + entry.key.path.toString());
 
         }, function(err) {
-            callback(err);
+            if (err || addsToCheck.length === 0) {
+                callback(err);
+            }
+            else {
+                me.async_.eachSeries(addsToCheck, function(info, eachCallback) {
+                    let securityFilter = info.tbl.info.accessFilter(secContext);
+                    me.reader_.readObjectByKey(
+                        context, info.tbl, [{col: info.tbl.info.pk, value: info.id}],
+                        securityFilter,
+                        function(err) {
+                            if (err) {
+                                info.entry.result.error = 'Access Denied';
+                                me.log_.warn('Add Access Denied', info.tbl.info.table, info.id);
+                                eachCallback('Access Denied');
+                            }
+                            else {
+                                eachCallback(err);
+                            }
+                        });
+
+                }, function(err) {
+                    callback(err);
+                });
+            }
         });
     }, function(err) {
         callback(err);

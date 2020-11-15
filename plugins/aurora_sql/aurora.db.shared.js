@@ -70,6 +70,15 @@ aurora.db.PrimaryKey.prototype.toString = function() {
  * @return {number}
  */
 aurora.db.comparePk = function(x, y) {
+    if (x === null && y === null) {
+        return 0;
+    }
+    if (x === null) {
+        return -1;
+    }
+    if (y === null) {
+        return 1;
+    }
     if (x.db === null && y.db === null) {
         return recoil.util.compare(x.mem, y.mem);
     }

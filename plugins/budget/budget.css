@@ -347,6 +347,18 @@ div.budget-budget div.budget-header {
 
 }
 
+div.budget-totals {
+    display: flex;
+    flex-direction: row-reverse;
+    margin-right: 44px;
+}
+
+div.budget-totals  td {
+    color: #636363;
+    font-weight: bold;
+    padding-left: 10px;
+}
+
 div.budget-budget div.budget-subheader {
     color: #636363;
     font-size: 16.0pt;
@@ -356,6 +368,13 @@ div.budget-budget div.budget-subheader {
     padding-bottom: 10px;
 
 }
+tr.budget-total td, td.budget-total {
+    border-bottom: double #636363 3px;
+    border-top: solid #636363 1px;
+    font-weight: bolder;
+    color: #636363;
+}
+
 
 div.side-list-page {
     display: flex;
@@ -376,7 +395,17 @@ div.side-list-body {
     overflow: auto;
 }
 
+div.side-list-body > div {
+    width: 100%;
+}
 
+div.side-list-body > div > div{
+    width: 100%;
+}
+
+div.side-list-body > div  > div > div.goog-control{
+    width: 100%;
+}
 
 div.budget-side-list-cont {
     display: flex;
@@ -399,4 +428,35 @@ div.side-list-side h2.group-header {
 
 .small-time {
     font-size: small;
+}
+
+
+.budget-loading {
+    position: fixed;
+    z-index: 100;
+    right: 0;
+    left: 100px;
+    height: 100%;
+}
+
+.budget-loading > div {
+    width: 130px;
+    height: 130px;
+    background: url(images/spinner2.webp) center center no-repeat;
+    right: calc(50% - 75px);
+    top: calc(50% - 75px);
+    position: absolute;
+}
+
+#budget-loading {
+    background: white;
+}
+#budget-loading div {
+    width: 130px;
+    height: 130px;
+    z-index: 1001;
+    background: url(images/spinner2.webp) center center no-repeat;
+    right: calc(50% - 75px);
+    top: calc(50% - 75px);
+    position: absolute;
 }

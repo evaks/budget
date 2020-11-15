@@ -17,21 +17,23 @@ goog.require('recoil.ui.widgets.table.TableWidget');
  * @export
  * @param {!budget.WidgetScope} scope
  * @param {{groups:!Array<string>, searchOnly:(boolean|undefined)}} options
- * @param {!Array<{col:!recoil.structs.table.ColumnKey,value:(undefined|function(recoil.structs.table.TableRow):?)}>=}  opt_extraCols
+ * @param {(!Array<{col:!recoil.structs.table.ColumnKey,value:(undefined|function(recoil.structs.table.TableRow):?)}>|!recoil.frp.Behaviour<!Array<{col:!recoil.structs.table.ColumnKey,value:(undefined|function(recoil.structs.table.TableRow):?)}>>)=}  opt_extraCols
  * @implements {recoil.ui.Widget}
  */
 aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
-    let extraCols = opt_extraCols || [];
-    let extraDataCols = extraCols.filter(function(v) {return v.hasOwnProperty('value');}).map(function(v) {return v.key;});
-    let searchWidget = new recoil.ui.widgets.InputWidget(scope);
     let frp = scope.getFrp();
+    var util = new recoil.frp.Util(frp);
+    let extraColsB = util.toBehaviour(opt_extraCols || []);
+    let extraDataColsB = frp.liftB(function(extraCols) {
+        return extraCols.filter(function(v) {return v.hasOwnProperty('value');}).map(function(v) {return v.key;});
+    }, extraColsB);
+    let searchWidget = new recoil.ui.widgets.InputWidget(scope);
     this.scope_ = scope;
     const PAGE_SIZE = 20;
     let container = goog.dom.createDom('div', {class: 'flex-display'});
     let userT = aurora.db.schema.tables.base.user;
     let groupT = aurora.db.schema.tables.base.group;
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(container);
-    var util = new recoil.frp.Util(frp);
     let usernameB = frp.createB('');
     var confirmPasswordCK = new recoil.structs.table.ColumnKey('confirmPassword');
 
@@ -80,7 +82,7 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
     };
 
     let createDialogTable = function(sample, userB, groupCol) {
-        return recoil.frp.util.memoryOnlyB(frp.liftB(function(user) {
+        return recoil.frp.util.memoryOnlyB(frp.liftB(function(user, extraDataCols) {
             var mTable = user.createEmpty([], [confirmPasswordCK].concat(extraDataCols));
             var columns = new recoil.ui.widgets.TableMetaData();
             var changePasswordCol = new recoil.ui.widgets.table.PasswordColumn(userT.cols.password, 'Password');
@@ -102,7 +104,7 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
 
             return columns.applyMeta(mTable.freeze());
 
-        }, userB));
+        }, userB, extraDataColsB));
 
     };
     let userEqual = recoil.util.object.uniq();
@@ -115,8 +117,9 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
     };
     let resetPasswordCol = new recoil.structs.table.ColumnKey('reset-password');
     let tableWidget = new aurora.widgets.PagedTable(scope, userT, PAGE_SIZE, function(scope, sourceB) {
-        return aurora.ui.ErrorWidget.createTable(scope,
-            frp.liftBI(function(tbl, groupCol) {
+        return aurora.ui.ErrorWidget.createTable(
+            scope,
+            frp.liftBI(function(tbl, groupCol, extraCols, extraDataCols) {
                 let res = tbl.createEmpty([], [resetPasswordCol].concat(extraDataCols));
                 let columns = new recoil.ui.widgets.TableMetaData();
                 columns.add(userT.cols.username, 'User Name');
@@ -255,9 +258,9 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
                         sourceB.set(res.freeze());
                     }
                 }
-            },sourceB, groupsB));
+            },sourceB, groupsB, extraColsB, extraDataColsB));
     }, function(scope, headerB) {
-        return frp.liftBI(function(header) {
+        return frp.liftBI(function(header, extraCols) {
             let res = header.createEmpty();
             header.forEach(function(row) {
                 let mrow = row.unfreeze();
@@ -274,7 +277,7 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
 
         }, function(tbl) {
             headerB.set(tbl);
-        }, headerB);
+        }, headerB, extraColsB);
     }, groupsFilterB);
 
     tableWidget.getComponent().render(container);
