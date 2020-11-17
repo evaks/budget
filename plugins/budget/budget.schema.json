@@ -19,6 +19,73 @@
     },
     "tables": [
 	{
+	    "name" : "site",
+	    "indexes": [],
+	    "access": "aurora.db.access.basic([{'site-management':'crud'},{'mentor': 'crud'}, {'': 'r'}])",
+	    "accessFilter": [
+		{"" : "all"}
+	    ],
+	    "columns": [
+		{ "name": "id", "type": "id"},
+		{ "name": "start", "type": "datetime"},
+		{ "name": "stop", "type": "datetime"},
+		{ "name": "regular", "type": "owned-list(siteid)",
+		  "table": {
+		      "name": "site_regular_hours",
+		      "columns": [
+			  {"name": "id", "type": "id"},
+			  {"name": "day", "type": "int"},
+			  {"name": "start", "type": "datetime"},
+			  {"name": "stop", "type": "datetime"}
+		      ]
+		  }
+		},
+
+		{ "name": "holidays", "type": "owned-list(siteid)",
+		  "table": {
+		      "name": "site_holidays",
+		      "columns": [
+			  {"name": "id", "type": "id"},
+			  {"name": "start", "type": "datetime"},
+			  {"name": "stop", "type": "datetime"}
+		      ]
+		  }
+		}
+	    ]
+	},
+	{
+	    "name" : "mentor_availablity",
+	    "indexes": [],
+	    "access": "aurora.db.access.basic([{'site-management':'crud'},{'mentor': 'crud'}, {'': 'r'}])",
+	    "accessFilter": [
+		{"" : "all"}
+	    ],
+	    "columns": [
+		{ "name": "id", "type": "id"},
+		{ "name": "mentorid", "type": "ref(user)"},
+		{ "name": "start", "type": "datetime"},
+		{ "name": "stop", "type": "datetime"}
+	    ]
+	},
+
+	{
+	    "name" : "appointments",
+	    "indexes": [],
+	    "access": "aurora.db.access.basic([{'site-management':'crud'}, {'': 'r'}])",
+	    "accessFilter": [
+		{"" : "all"}
+	    ],
+	    "columns": [
+		{ "name": "id", "type": "id"},
+		{ "name": "mentorid", "type": "ref(user)"},
+		{ "name": "userid", "type": "ref(user)"},
+		{ "name": "start", "type": "datetime"},
+		{ "name": "stop", "type": "datetime"},
+		{ "name": "description", "type": "string(100)", "default": ""}
+	    ]
+	},
+	
+	{
 	    "name" : "budget_template",
 	    "indexes": [],
 	    "initial": [

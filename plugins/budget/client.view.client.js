@@ -40,9 +40,9 @@ budget.widgets.ClientView = function(scope) {
     let container = cd(
         'div', {class: 'side-list-page'},
         cd('div', {class: 'side-list-side'},
-            cd('div', {}, cd('h2', {class: 'group-header'}, 'Profile'), profileDiv),
-            cd('div', {}, cd('h2', {class: 'group-header'}, 'Appointments')),
-            cd('div', {},
+           cd('div', {}, cd('h2', {class: 'group-header'}, 'Profile'), profileDiv),
+           cd('div', {}, cd('h2', {class: 'group-header'}, 'Appointments')),
+           cd('div', {class: 'budget-budget-list'},
                cd('h2', {class: 'group-header'}, 'Budgets'),
                budgetDiv)
            ),

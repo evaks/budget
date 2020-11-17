@@ -1,0 +1,68 @@
+div.budget-calendar {
+    display: flex;
+    flex-direction: row;
+    position: relative;
+}
+
+div.budget-calendar-day {
+    width: calc((100vw - 9em) / 7);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+div.budget-calendar-day .avail {
+    position: absolute;
+    background: blue;
+    width: 20px;
+    height: 20px;
+}
+
+
+div.budget-calendar-hour {
+    border-left: 1px solid;
+    border-top: 1px solid;
+    height: calc((100vh - 150px) / 24);
+    border-color: #0d3f0c;
+    background: linear-gradient(90deg, #0d3f0c, transparent 3px,transparent calc(100% - 3px),#9cb866);
+    user-select: none;
+			       
+
+}
+
+div.budget-calendar-hour.budget-calendar-bottom {
+    border-bottom: 1px solid;
+    border-color: #0d3f0c;
+}
+
+.budget-calendar-day-name{
+    text-align: center;
+    height: 20px;
+    font-variant: petite-caps;
+    font-family: sans-serif;
+    font-size: 12pt;
+    font-weight: bold;
+    color: #636363;
+    user-select: none;
+}
+div.budget-calendar-hour-labels div.budget-calendar-hour:first-child {
+    height: 20px;
+}
+
+div.budget-calendar-hour-labels div.budget-calendar-hour {
+    border-left: none;
+    border-bottom: none;
+    border-top: none;
+    border-right: none;
+    height: calc((100vh - 150px) / 24 + 1px);
+    margin-right: 2px;
+    background: none;
+}
+
+
+div.budget-calendar-highlight {
+    position: absolute;
+    background: #9cb8664d;
+    pointer-events: none;
+    border: 2px dotted #00000059;
+}

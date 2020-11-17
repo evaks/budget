@@ -63,14 +63,19 @@ img.budget-logo {
 .page-menu {
     line-height: 50px;
     color: white;
-    background: black;
+    background: linear-gradient(50deg, rgb(19 90 18) 0%,  rgb(11 53 10) 75%, rgb(41 41 41) 95%, #204220 100%);
+    border-bottom: 3px solid #204220;
+    border-bottom: 3px ridge #204220;
+    box-shadow: 1px 5px 5px #15151557;
+    z-index: 2;
+    
 }
 
 .page-menu-hutt-city {
-    font-family: Arial;
+    font-family: serif;
     font-weight: bold;
     font-size: 20pt;
-    color: #878787
+    color: #9cb866
 }
 
 .page-menu-fin-mentor {
@@ -80,6 +85,9 @@ img.budget-logo {
     padding-left: 10px;
 }
 
+.page-menu .goog-menubar {
+    background: none;
+}
 .goog-menubar {
   cursor: default;
   outline: none;
@@ -92,8 +100,9 @@ img.budget-logo {
     margin: 0px 0px;
     outline: none;
     border: none;
-    background: black;
+    background: none;
     color: white;
+    margin-bottom: 2px;
 }
 
 .menu-container .goog-menu-button-caption {
@@ -103,7 +112,8 @@ img.budget-logo {
 }
 
 .menu-container .goog-menubar .goog-menu-button.goog-menu-button-hover {
-    background: grey;
+    background: #113311;
+    box-shadow: -1px 5px 8px 1px black;
 }
 
 .page-menu .goog-menuitem-content {
@@ -386,8 +396,12 @@ div.side-list-side {
     flex-flow: column;
     width: 235px;
     overflow: auto;
-    background: #f0f0f0;
+    background: #9cb866;
     border-right: grey 2px ridge;
+    background-image: url(/images/finance.jpg);
+    background-size: contain;
+    
+
 }
 div.side-list-body {
     display:flex;
@@ -410,10 +424,37 @@ div.side-list-body > div  > div > div.goog-control{
 div.budget-side-list-cont {
     display: flex;
 }
+
+.side-list-side::after {
+    background-image: url(/images/finance.jpg);
+    background-size: cover;
+    position: absolute;
+    top: 0px;
+    right: 0px;
+    bottom: 0px;
+    left: 0px;
+    opacity: 0.75;
+}
+
 div.budget-side-list-cont > .goog-control{
     display: flex;
 }
 
+div.side-list-side    .recoil_table_selected {
+    background-color: #b2d274;
+    box-shadow: 0px 0px 8px 1px #104d0f;
+    border-radius: 2px;
+}
+
+div.side-list-side .budget-budget-list table > tr  td:nth-child(2) {
+    font-size: 8pt;
+    line-height: 9pt;
+    text-align: center;
+}
+
+div.side-list-side .aurora-icon-button button.goog-button {
+    color: #125411;
+}
 div.side-list-side h2.group-header {
     color: #636363;
     font-size: 16.0pt;
@@ -422,8 +463,9 @@ div.side-list-side h2.group-header {
     text-align: left;
     padding-top: 10px;
     padding-left: 5px;
-    border-bottom: aliceblue ridge;
+    border-bottom: #798c4e ridge;
     margin-bottom: 2px;
+    color: #135612;
 }
 
 .small-time {
@@ -459,4 +501,14 @@ div.side-list-side h2.group-header {
     right: calc(50% - 75px);
     top: calc(50% - 75px);
     position: absolute;
+}
+
+
+.goog-combobox input.label-input-label {
+    line-height: 20px;
+}
+
+.goog-combobox-button {
+    line-height: 20px;
+    font-size: 12pt;
 }
