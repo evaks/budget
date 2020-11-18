@@ -26,7 +26,7 @@ budget.widgets.BusinessHours = function(scope) {
     let mess = budget.messages;
     let cd = goog.dom.createDom;
     let siteT = aurora.db.schema.tables.base.site;
-    let highlightedB = frp.createB(/** @type {{start:?{x:number,y:number},end:?{x:number,y:number}}} */({start: null, end: null}));
+    let highlightedB = frp.createB(/** @type {{start:?{x:number,y:number},stop:?{x:number,y:number}}} */({start: null, stop: null}));
 
     let pad = function(v, len) {
         let str = ('0'.repeat(len) + v);
@@ -98,13 +98,13 @@ budget.widgets.BusinessHours = function(scope) {
 
         let width = bottomRight.left + bottomRight.width - topLeft.left;
         let height = bottomRight.top + bottomRight.height - topLeft.top;
-        let dayStartIndex = Math.floor(Math.min(highlighted.start.x, highlighted.end.x) * 7 / width);
-        let dayEndIndex = Math.ceil(Math.max(highlighted.start.x, highlighted.end.x) * 7 / width);
-        let hourStartIndex = Math.round(Math.floor(Math.min(highlighted.start.y, highlighted.end.y) * 24 / height * hourRes) / hourRes * 3600000);
-        let hourEndIndex = Math.round(Math.ceil(Math.max(highlighted.start.y, highlighted.end.y) * 24 / height * hourRes) / hourRes * 3600000);
+        let dayStartIndex = Math.floor(Math.min(highlighted.start.x, highlighted.stop.x) * 7 / width);
+        let dayEndIndex = Math.ceil(Math.max(highlighted.start.x, highlighted.stop.x) * 7 / width);
+        let hourStartIndex = Math.round(Math.floor(Math.min(highlighted.start.y, highlighted.stop.y) * 24 / height * hourRes) / hourRes * 3600000);
+        let hourEndIndex = Math.round(Math.ceil(Math.max(highlighted.start.y, highlighted.stop.y) * 24 / height * hourRes) / hourRes * 3600000);
 
 
-        highlightedB.set({start: null, end: null });
+        highlightedB.set({start: null, stop: null });
         console.log('up day', dayStartIndex, '-', dayEndIndex, 'hour', hourStartIndex, '-', hourEndIndex);
     }, highlightedB, this.siteB_));
 
@@ -113,7 +113,7 @@ budget.widgets.BusinessHours = function(scope) {
             return;
         }
         let pos = calcPos(e);
-        highlightedB.set({start: pos, end: pos });
+        highlightedB.set({start: pos, stop: pos });
 
     }, highlightedB));
 
@@ -121,14 +121,14 @@ budget.widgets.BusinessHours = function(scope) {
 
     goog.events.listen(this.calendarDiv_, goog.events.EventType.MOUSEMOVE, frp.accessTransFunc(function(e) {
         if (!isLeftPressed(e)) {
-            highlightedB.set({start: null, end: null});
+            highlightedB.set({start: null, stop: null});
         }
-        let oldPos = /** @type {{start:?{x:number,y:number},end:?{x:number,y:number}}} */ (goog.object.clone(highlightedB.get()));
+        let oldPos = /** @type {{start:?{x:number,y:number},stop:?{x:number,y:number}}} */ (goog.object.clone(highlightedB.get()));
         if (oldPos.start === null) {
             return;
         }
         let pos = calcPos(e);
-        oldPos.end = pos;
+        oldPos.stop = pos;
         highlightedB.set(oldPos);
     }, highlightedB));
 
@@ -136,6 +136,11 @@ budget.widgets.BusinessHours = function(scope) {
     this.helper_ = new recoil.ui.ComponentWidgetHelper(scope, this.component_, this, this.update_);
     this.highlightedB_ = highlightedB;
     this.helper_.attach(this.siteB_, highlightedB);
+    let resizeObserver = new ResizeObserver(function(e) {
+        me.helper_.forceUpdate();
+    });
+    resizeObserver.observe(this.calendarDiv_);
+    
 };
 
 /**
@@ -151,7 +156,7 @@ budget.widgets.BusinessHours.prototype.update_ = function(helper) {
         if (res) {
             return res;
         }
-        return x.end - y.end;
+        return x.stop - y.stop;
     };
     let cd = goog.dom.createDom;
 
@@ -167,14 +172,19 @@ budget.widgets.BusinessHours.prototype.update_ = function(helper) {
             let minY = me.days_[0].hours[0].getBoundingClientRect().top - calDim.top;
             let minX = me.days_[0].div.getBoundingClientRect().left - calDim.left;
             let div = this.highlightDiv_;
-            div.style.left = (minX + Math.min(range.start.x, range.end.x)) + 'px';
-            div.style.top = (minY + Math.min(range.end.y, range.start.y)) + 'px';
-            div.style.height = Math.abs(range.start.y - range.end.y) + 'px';
-            div.style.width = Math.abs(range.start.x - range.end.x) + 'px';
+            div.style.left = (minX + Math.min(range.start.x, range.stop.x)) + 'px';
+            div.style.top = (minY + Math.min(range.stop.y, range.start.y)) + 'px';
+            div.style.height = Math.abs(range.start.y - range.stop.y) + 'px';
+            div.style.width = Math.abs(range.start.x - range.stop.x) + 'px';
         }
 
         let site = this.siteB_.get();
         let dayUsage = {};
+
+        let calDim = this.calendarDiv_.getBoundingClientRect();
+        let hourDim = me.days_[0].hours[0].getBoundingClientRect();
+        let hourH = hourDim.height;
+        let minY = hourDim.top - calDim.top;
 
         site.forEach(function(row) {
             let reg = row.get(siteT.cols.regular);
@@ -193,12 +203,12 @@ budget.widgets.BusinessHours.prototype.update_ = function(helper) {
             let last = entries[0];
             for (let i = 1; i < entries.length; i++) {
                 let e = entries[i];
-                if (last.end < e.start) {
+                if (last.stop < e.start) {
                     last = e;
                     newEntries.push(e);
                 }
                 else {
-                    last.end = Math.max(last.end, e.end);
+                    last.stop = Math.max(last.stop, e.stop);
                 }
             }
             dayUsage[k] = newEntries;
@@ -207,7 +217,7 @@ budget.widgets.BusinessHours.prototype.update_ = function(helper) {
         for (let i = 0; i < 7; i++) {
             let lookupDay = (i + 1) % 7;
             let avail = dayUsage[lookupDay];
-            let availDivs = goog.dom.getElementByClass('avail', this.days_[i].div);
+            let availDivs = goog.dom.getElementsByClass('avail', this.days_[i].div);
             let availLen = (avail ? avail.length : 0);
             // remove dives that are not needed
             if (availDivs) {
@@ -222,7 +232,12 @@ budget.widgets.BusinessHours.prototype.update_ = function(helper) {
                     curDiv = cd('div', 'avail');
                     this.days_[i].div.appendChild(curDiv);
                 }
-
+                let yStart = (minY + hourH * avail[j].start / 3600000);
+                let yEnd = (minY + hourH * avail[j].stop / 3600000);
+                curDiv.style.top =  yStart + 'px';
+                curDiv.style.height =  (yEnd - yStart ) + 'px';
+                curDiv.style.width = hourDim.width + 'px';
+                
             }
 
         }

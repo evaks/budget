@@ -13,7 +13,7 @@ div.budget-calendar-day {
 
 div.budget-calendar-day .avail {
     position: absolute;
-    background: blue;
+    background: linear-gradient(90deg, #0000ff8c, #1212ec38 10px, #1212ec6b 50%, #1212ec6b calc(100% - 10px), #0000ff8c);
     width: 20px;
     height: 20px;
 }

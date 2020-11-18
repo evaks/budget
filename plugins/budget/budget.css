@@ -1,3 +1,6 @@
+body {
+    /*    background: cadetblue;*/
+}
 .main-header {
     background-image: url(/images/Lower_Hutt_Panorama_at_night.jpg);
     background-repeat: no-repeat;
@@ -13,8 +16,6 @@
     position: relative;
 }
 .content {
-    height: auto;
-    overflow: auto;
     scrollbar-width: thin;
     display: flex;
     flex: 1;
@@ -22,8 +23,8 @@
 
 .flex-display > .goog-control {
     display: flex;
-    flex: 1;
 }
+
 .content-body {
     overflow: auto;
     height: calc(100vh - 360px);
@@ -334,7 +335,6 @@ div.budget-budget-template div.group-header {
 }
 
 
-
 div.budget-budget-template {
     display:flex;
     flex-direction: column;
@@ -388,31 +388,38 @@ tr.budget-total td, td.budget-total {
 
 div.side-list-page {
     display: flex;
-    flex-flow: row;
+    height: calc(100vh - 60px);
+    width: 100vw;
+    overflow-x: hidden;
+    overflow-y: auto;
+/*    flex: 1;
+    min-height: calc(100vh - 80px);
+    height: calc(100vh - 80px);*/
 }
 
 div.side-list-side {
     display:flex;
     flex-flow: column;
-    width: 235px;
-    overflow: auto;
+    flex: 0 0 235px;
+    overflow-y: auto;
     background: #9cb866;
     border-right: grey 2px ridge;
     background-image: url(/images/finance.jpg);
+    padding: 10px;
     background-size: contain;
     
 
 }
 div.side-list-body {
-    display:flex;
     width: calc(100vw - 237px);
+    flex: 1;
     overflow: auto;
+    padding: 10px;
 }
 
 div.side-list-body > div {
     width: 100%;
 }
-
 div.side-list-body > div > div{
     width: 100%;
 }
@@ -420,9 +427,9 @@ div.side-list-body > div > div{
 div.side-list-body > div  > div > div.goog-control{
     width: 100%;
 }
-
 div.budget-side-list-cont {
     display: flex;
+
 }
 
 .side-list-side::after {
@@ -503,6 +510,13 @@ div.side-list-side h2.group-header {
     position: absolute;
 }
 
+div.side-list-side.side-small .side-groups-container{
+    display: none;
+}
+
+div.side-list-side.side-small {
+    flex: 0 0 28px;
+}
 
 .goog-combobox input.label-input-label {
     line-height: 20px;
@@ -511,4 +525,55 @@ div.side-list-side h2.group-header {
 .goog-combobox-button {
     line-height: 20px;
     font-size: 12pt;
+}
+
+div.slide-menu-control {
+    display: flex;
+    justify-content: flex-end;
+}
+
+div.side-bar-control {
+    border: none; 
+    background: none;
+    font-size: 35px;
+    color: #a9a9a9;
+    padding-bottom: 5px;
+}
+
+div.side-bar-control:hover {
+    border: none;
+    background: #c6c6cc;
+    font-size: 35px;
+    color: #5f5757;
+    border-radius: 4px;
+    cursor: pointer;
+    padding-bottom: 5px;
+}
+
+
+div.side-bar-control div {
+    border: none;
+}
+
+/*div.budget-edit-profile {
+    cursor: pointer;
+    color: red;
+}
+*/
+div.budget-edit-profile:hover {
+    cursor: pointer;
+}
+
+div.budget-div:hover div {
+    cursor: pointer;
+}
+
+.page-menu .goog-menuitem {
+    cursor: pointer;
+    padding: 2px 2em 2px 20px;
+    border: 1px solid #ffffff;
+}
+
+.page-menu .goog-menu-button-caption {
+    padding: 0 10px;
 }

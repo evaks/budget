@@ -47,3 +47,33 @@ aurora.messages.PASSWORD_MUST_NOT_BE_BLANK = recoil.ui.message.getParamMsg('Pass
  * @final
  */
 aurora.messages.PASSWORDS_DO_NOT_MATCH = recoil.ui.message.getParamMsg('Passwords do not match');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+aurora.messages.APPOINTMENT = recoil.ui.message.getParamMsg('Appointment');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+aurora.messages.APPOINTMENTS = recoil.ui.message.getParamMsg('Appointments');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+aurora.messages.VIEW_EDIT_PROFILE = recoil.ui.message.getParamMsg('View / Edit Profile');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+aurora.messages.PROFILE = recoil.ui.message.getParamMsg('Profile');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+aurora.messages.BUDGETS = recoil.ui.message.getParamMsg('Budgets');
