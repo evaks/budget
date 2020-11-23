@@ -4,6 +4,9 @@ div.budget-calendar {
     position: relative;
 }
 
+div.budget-calendar:focus {
+    outline-width: 0;
+}
 div.budget-calendar-day {
     width: calc((100vw - 9em) / 7);
     display: flex;
@@ -63,6 +66,14 @@ div.budget-calendar-hour-labels div.budget-calendar-hour {
 div.budget-calendar-highlight {
     position: absolute;
     background: #9cb8664d;
+    pointer-events: none;
+    border: 2px dotted #00000059;
+}
+
+
+div.budget-calendar-highlight.remove-selection {
+    position: absolute;
+    background: #ff00004d;
     pointer-events: none;
     border: 2px dotted #00000059;
 }

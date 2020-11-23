@@ -537,15 +537,15 @@ div.side-bar-control {
     border: none; 
     background: none;
     font-size: 35px;
-    color: #a9a9a9;
+    color: #135612;
     padding-bottom: 5px;
 }
 
 div.side-bar-control:hover {
     border: none;
-    background: #c6c6cc;
+    background: #b2d274;
     font-size: 35px;
-    color: #5f5757;
+    color: #135612;
     border-radius: 4px;
     cursor: pointer;
     padding-bottom: 5px;

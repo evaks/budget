@@ -307,10 +307,21 @@ aurora.db.mysql.Pool.prototype.query = function(query, params, opt_callback) {
  * @param {function(?,?aurora.db.type.InsertDef)} callback (error, results)
  */
 aurora.db.mysql.Pool.prototype.insert = function(table, values, callback) {
+    let hasValues = false;
+    
+    for (let k in values) {
+        hasValues = true;
+        break;
+    }
+    let query = 'INSERT INTO ' + this.escapeId(table) + (hasValues ? ' SET ?values' : ' VALUES ()');
     this.query(
-        'INSERT INTO ' + this.escapeId(table) + ' SET ?values',
+        query,
         {values: values},
         function(error, results, fields) {
+            if (error) {
+                console.log("query error", query);
+            }
+            
             callback(error, /** @type {?aurora.db.type.InsertDef} */ (results));
         }
     );

@@ -25,10 +25,11 @@
 	    "accessFilter": [
 		{"" : "all"}
 	    ],
+	    "initial": [
+		{}
+	    ],
 	    "columns": [
 		{ "name": "id", "type": "id"},
-		{ "name": "start", "type": "datetime"},
-		{ "name": "stop", "type": "datetime"},
 		{ "name": "regular", "type": "owned-list(siteid)",
 		  "table": {
 		      "name": "site_regular_hours",
