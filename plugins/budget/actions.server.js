@@ -67,17 +67,24 @@ budget.actions.register = function(context, reader, inputs, callback) {
                             callback('Username already exists');
                         }
                         else {
-                            reader.insert({}, userT, object, function(err) {
-                                console.log('error', err);
-                                callback(err ? 'Unable to create user' : null);
+                            reader.insert({}, userT, object, function(err, res) {
+                                console.log('error', err, "res", res);
+                                callback(err ? 'Unable to create user' : null, err ? null : res.insertId);
                             });
                         }
 
 
                     });
 
-                }, function(err) {
-                    callback(err, []);
+                }, function(err, res) {
+
+                    if (err) {
+                        aurora.log.createModule('BUDGET-ACTION').warn("failed to create user", username, err);
+                    }
+                    else {
+                        aurora.log.createModule('BUDGET-ACTION').info("created user", username, res);
+                    }
+                    callback(err, res);
                 });
         }, failCb);
     }

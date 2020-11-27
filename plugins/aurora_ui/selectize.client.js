@@ -1350,6 +1350,7 @@ aurora.widgets.Selectize.prototype.open = function() {
     self.isOpen = true;
     // todo self.refreshState();
     goog.style.setStyle(self.dropdown_, {visibility: 'hidden', display: 'block'});
+    console.log("open");
     self.positionDropdown();
     goog.style.setStyle(self.dropdown_, {visibility: 'visible'});
 };
@@ -1383,10 +1384,11 @@ aurora.widgets.Selectize.prototype.positionDropdown = function() {
         var offset = goog.style.getBounds(self.control_);
         offset.top += offset.height;
         goog.style.setWidth(self.dropdown_, offset.width);
-        goog.style.setStyle(self.dropdown_, {
-            top: offset.top,
+        /* doesn't work messes with stuff
+          goog.style.setStyle(self.dropdown_, {
+            top: (offset.top + offset.height) +'px' ,
             left: offset.left
-        });
+        });*/
     });
 };
 

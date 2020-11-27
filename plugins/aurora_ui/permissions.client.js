@@ -18,6 +18,7 @@ aurora.permissions.loggedIn = function(loggedIn) {
 };
 
 
+
 /**
  * @param {string} permission
  * @return {function(!aurora.permissions.Context):boolean}

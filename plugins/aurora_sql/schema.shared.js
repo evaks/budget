@@ -94,6 +94,7 @@ aurora.db.schema.getMeta = function(col) {
     throw 'unable to find meta';
 };
 
+
 /**
  * @param {string} path
  * @return {!Object}
@@ -127,6 +128,31 @@ aurora.db.schema.getMetas = function(col) {
 };
 /**
  * @param {!aurora.db.schema.TableType} tbl
+ * @param {!Array<string>=} opt_path
+ * @param {!Object<string,!Array<string>>=} opt_res
+ * @return {!Object<string,!Array<string>>}
+ */
+aurora.db.schema.makeColKeyMap = function(tbl, opt_path, opt_res) {
+    let res = opt_res || {};
+    let path = [] || opt_path;
+    
+    for (var name in tbl.meta) {
+        var meta = tbl.meta[name];
+        let subPath = goog.array.clone(path);
+        let key = meta.key;
+        let child = aurora.db.schema.getTable(key);
+        subPath.push(name);
+        res[meta.key.getId()] = subPath;
+        if (child) {
+            aurora.db.schema.makeColKeyMap(child, subPath, res);
+        }
+        
+    }
+    return res;
+};
+
+/**
+ * @param {!aurora.db.schema.TableType} tbl
  * @param {function(!recoil.structs.table.ColumnKey,Object,string)} itr argument: column,meta info, col name
  */
 aurora.db.schema.forEachRealCol = function(tbl, itr) {
@@ -135,6 +161,7 @@ aurora.db.schema.forEachRealCol = function(tbl, itr) {
         itr(meta.key, meta, name);
     }
 };
+
 /**
  * gets the table associated with the column i.e. the column is a container
  * @param {!recoil.structs.table.ColumnKey} col

@@ -17,6 +17,7 @@ goog.require('recoil.ui.widgets.table.TableWidget');
  * @implements {recoil.ui.Widget}
  */
 budget.widgets.UserManagement = function(scope, options) {
+    options = options || {};
     let userT = aurora.db.schema.tables.base.user;
     let groupT = aurora.db.schema.tables.base.group;
     let permissionT = aurora.db.schema.tables.base.permission;

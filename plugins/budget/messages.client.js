@@ -163,3 +163,219 @@ budget.messages.LOGGING_IN = recoil.ui.message.getParamMsg('Logging In...');
  * @final
  */
 budget.messages.MUST_SPECIFY = recoil.ui.message.getParamMsg('You must specify the ', ['field']);
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.SERVICE_NAME = recoil.ui.message.getParamMsg('Hutt City Budget and Advocacy Service');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.BUDGET_PROTECTED = recoil.ui.message.getParamMsg('This sheet is Protected.  It will only allow entries to be made in the Entry fields (Grey)');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.THIS_BUDGET_IS_BASED = recoil.ui.message.getParamMsg(' This budget is based');
+
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages._HOUSEHOLD_BUDGET = recoil.ui.message.getParamMsg(['period'], ' household budget');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.ENTER_ONE_OF = recoil.ui.message.getParamMsg('Enter one of');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.NAME = recoil.ui.message.getParamMsg('Name');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.INCOME = recoil.ui.message.getParamMsg('Income');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.DEBTS_PAYABLE = recoil.ui.message.getParamMsg('Debts Payable');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.PAYMENT_PERIOD = recoil.ui.message.getParamMsg('Payment Period');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.$_VALUE = recoil.ui.message.getParamMsg('$ Value');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.ADDITIONAL_DESCRIPTION = recoil.ui.message.getParamMsg('Additional Description');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.ARREARS = recoil.ui.message.getParamMsg('Arrears');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.TOTAL_OWING = recoil.ui.message.getParamMsg('Total Owing');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.CALCULATED_PER = recoil.ui.message.getParamMsg('Calculated value Per ', {'period': function (v) {
+    return v.substring(0, v.length - 2);
+}});
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.A_TOTAL_INCOME = recoil.ui.message.getParamMsg('(A) Total Income');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.B_TOTAL_EXPENSES = recoil.ui.message.getParamMsg('(B) Total Expenses');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.C_TOTAL_DEBTS = recoil.ui.message.getParamMsg('(C) TOTAL DEBTS');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.LESS_DEDUCTIONS = recoil.ui.message.getParamMsg('less deductions');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.ON_INFORMATION = recoil.ui.message.getParamMsg('on information supplied by the client');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.HOUSEHOLD_EXPENSES = recoil.ui.message.getParamMsg('Household Expenses');
+
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.BUDGET_TOTALS = recoil.ui.message.getParamMsg('Budget Totals');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.ENTER_TOTAL_A = recoil.ui.message.getParamMsg('Enter Total A');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.ENTER_TOTAL_B = recoil.ui.message.getParamMsg('Enter Total B');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.ENTER_TOTAL_C = recoil.ui.message.getParamMsg('Enter Total C');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.ADD_TOTALS_B_C = recoil.ui.message.getRichMsg('Add ', {format: 'bold', value: 'Totals B & C'});
+
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.DEDUCT_B_C_FROM_TOTAL_A = recoil.ui.message.getRichMsg('Deduct ', {format: 'bold', value: 'B & C'}, ' from ', {format: 'bold', value: 'Total A'});
+
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.THIS_IS_YOU_SUPLUS_DEFICIT = recoil.ui.message.getParamMsg('This is your SURPLUS/DEFICIT');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.CLIENT_WANTS = recoil.ui.message.getParamMsg('Client Wants');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.PLEASE_NOTE = recoil.ui.message.getParamMsg('Please note');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.TIME_FACTOR  = recoil.ui.message.getParamMsg('Time Factor');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.GOALS_TO_BE_OBTAINED  = recoil.ui.message.getParamMsg('Goals to be obtained');

@@ -200,17 +200,38 @@ aurora.db.Helper.prototype.updateTableError = function(keyInfo, query, options, 
  * @param {!aurora.db.schema.TableType} tbl
  * @param {!recoil.db.Query} query
  * @param {!recoil.db.QueryOptions} options
+ * @param {boolean} all is this a full data from the server
  * @return {?}
  */
-aurora.db.Helper.prototype.filterQuery_ = function(data, tbl, query, options) {
+aurora.db.Helper.prototype.filterQuery_ = function(data, tbl, query, options, all) {
     // filtering count should be done outside this
     var entry = this.findQuery_(tbl, query, options);
+    
     if (data instanceof Array) {
+        let colKeyMap = aurora.db.schema.makeColKeyMap(tbl);
         let res = [];
         for (let i = 0; i < data.length; i++) {
             let pk = data[i][tbl.info.pk.getName()];
-            if (entry && (entry.matches.findFirst(pk) || entry.added.findFirst(pk))) {
-                res.push(data[i]);
+                
+            if (entry) {
+                let matches = entry.matches.findFirst(pk);
+                // maybe we don't need matches at all at least if is a non limited query
+                if (!matches) {
+                    // we also add items that match the query that where not added if the query is
+                    // not limited in length
+                    let options = entry.key.options;
+                    if (!options) {
+                        matches = true;
+                    }
+                    else if (!options.isCount() && options.size != undefined) {
+                        var scope = new recoil.db.QueryScope(aurora.db.Helper.makeTableObjectValue_(tbl, data[i]), undefined, colKeyMap);
+                        matches = entry.key.query.eval(scope);
+                    }
+                }
+
+                if (matches || entry.added.findFirst(pk)) {
+                    res.push(data[i]);
+                }
             }
         }
         return res;
@@ -248,7 +269,7 @@ aurora.db.Helper.prototype.updateTable = function(path, opt_currentErrors) {
         // TODO think about this I think we may make this the primary key
         // and stop using the primary key izer on a table, it will work for
         // individual tables but not for multiple
-        var value = me.filterQuery_(me.db_.get(path), keyInfo, lookupInfo.key.query, lookupInfo.key.options);
+        var value = me.filterQuery_(me.db_.get(path), keyInfo, lookupInfo.key.query, lookupInfo.key.options, false);
         // turn into array note the 2 ways this can be an object 1 it is an object
         // the other is it
         var kInfo = keyInfo.info;
@@ -432,6 +453,21 @@ aurora.db.Helper.makeServerValue_ = function(value, orig, meta, opt_inlist) {
     return value;
 };
 
+/**
+ * @private
+ * @param {aurora.db.schema.TableType} table
+ * @param {?} value
+ * @return {?}
+ */
+aurora.db.Helper.makeTableObjectValue_ = function(table, value) {
+    let res = {};
+    for (var tMeta in table.meta) {
+        var colKey = table.meta[tMeta].key;
+        // item can be null if the toplevel container is not present
+        res[colKey.getName()] = aurora.db.Helper.makeValue_(value[tMeta], table.meta[tMeta]);
+    }
+    return res;
+};
 /**
  * @private
  * @param {?} value
@@ -801,15 +837,14 @@ aurora.db.Helper.prototype.updateEffectedTables = function(changes, currentError
     });
     this.addChangesToIdMap_(idMap, changes, serverResults);
     idMap.inOrderTraverse(function(entry) {
-        console.log('adding pk xxxx', entry.key);
         let pk = entry.key.lastKeys()[0];
         let newPk = new aurora.db.PrimaryKey(entry.id);
+        console.log('adding pk', pk, "newPk", newPk);
         let tbl = aurora.db.schema.getTableByName(entry.key);
         let tblInfo = me.tblMap_.findFirst({key: tbl.key.uniqueId()});
         if (tblInfo) {
             tblInfo.queries.inOrderTraverse(function(q) {
-                q.added.remove(pk);
-                if (!q.added.findFirst(newPk)) {
+                if (q.added.remove(pk) && !q.added.findFirst(newPk)) {
                     q.added.add(newPk);
                 }
             });
@@ -1053,7 +1088,7 @@ aurora.db.Comms.prototype.createChannel_ = function() {
                     let action = me.pendingActions_[obj.id];
                     if (action) {
                         delete me.pendingActions_[obj.id];
-                        action.success({action: null, id: obj.id, output: {value: obj.output, error: obj.error}, enabled: recoil.ui.BoolWithExplanation.TRUE});
+                        action.success({action: null, id: obj.id, output: {value: obj.outputs, error: obj.error}, enabled: recoil.ui.BoolWithExplanation.TRUE});
                     }
                 }
                 else if (obj.command === 'set') {
@@ -1488,7 +1523,7 @@ aurora.db.Comms.prototype.set = function(data, oldData, successFunc, failFunc, i
     var keyInfo = aurora.db.schema.keyMap[id.getData().name];
     let me = this;
     let path = recoil.db.ChangeSet.Path.fromString(keyInfo.info.name);
-    let oldObj = me.helper_.filterQuery_(me.db_.get(path), keyInfo, key, options || new recoil.db.QueryOptions());
+    let oldObj = me.helper_.filterQuery_(me.db_.get(path), keyInfo, key, options || new recoil.db.QueryOptions(), false);
     let newObj = aurora.db.Comms.convertFromTable_(data, oldObj, keyInfo);
 
     // sub pks may have been lost put them back

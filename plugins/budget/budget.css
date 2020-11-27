@@ -316,6 +316,7 @@ button.goog-button {
     background-image: url(/images/button-bg.png);
     width: fit-content;
     width: -moz-fit-content;
+    line-height: 15pt;
 }
 
 .budget-budget-template .field-name {
@@ -555,6 +556,9 @@ div.side-bar-control div {
     border: none;
 }
 
+.budget-export {
+    display: inline-block;
+}
 /*div.budget-edit-profile {
     cursor: pointer;
     color: red;

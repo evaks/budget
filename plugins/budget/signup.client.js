@@ -27,7 +27,9 @@ goog.require('recoil.ui.widgets.TextAreaWidget');
  */
 budget.widgets.SignUp = function(scope, opt_userid) {
     this.scope_ = scope;
-    this.user_id = opt_userid;
+    let createClient =  opt_userid && opt_userid.createClient;
+    let userid = opt_userid && opt_userid.createClient ? undefined : opt_userid;
+    let securityContextB = aurora.permissions.getContext(scope);
     let frp = scope.getFrp();
     let mess = budget.messages;
     let cd = goog.dom.createDom;
@@ -69,7 +71,29 @@ budget.widgets.SignUp = function(scope, opt_userid) {
     }
     let query = new recoil.db.Query();
     let table = /** @type {!recoil.structs.table.Table} */ (aurora.db.Helper.createTable(recoil.db.ChangeSet.Path.fromString(userT.info.path), [data]));
-    let tableB = opt_userid === undefined ? frp.createB(table) : scope.getDb().get(userT.key, query.eq(userT.cols.id, opt_userid));
+
+    let addMentor = function (tableB) {
+        if (!createClient) {
+            return tableB;
+        }
+        
+        return frp.liftBI(function (table, context) {
+            let res = table.createEmpty();
+            table.forEachModify(function (row) {
+                if (aurora.permissions.has('mentor')(context)) {
+                    row.set(userT.cols.mentorid, context.userid);
+                }
+                res.addRow(row);
+                
+            });
+            return res.freeze();
+        }, function (tbl) {
+            tableB.set(tbl);
+        }, tableB, aurora.permissions.getContext(scope));
+    };
+
+    let tableB = userid === undefined ?
+        addMentor(frp.createB(table)) : scope.getDb().get(userT.key, query.eq(userT.cols.id, userid));
     let tableWidget = function(col, options) {
         let div = cd('div', {class: 'goog-inline-block'});
         let keysB = frp.liftB(function(t) {
@@ -164,6 +188,10 @@ budget.widgets.SignUp = function(scope, opt_userid) {
             if (action.output.error) {
                 return '' + action.output.error;
             }
+            else if (createClient) {
+                console.log("action result", action);
+                window.location = '/client?id=' + action.output.value;
+            }
             else {
                 // we don't want them going back to signin page
                 window.location.replace('/account/login');
@@ -194,12 +222,12 @@ budget.widgets.SignUp = function(scope, opt_userid) {
     }));
 
 
-    if (opt_userid === undefined) {
+    if (userid === undefined) {
         loginButton.getComponent().render(login);
     }
     let fields = ['table', {class: 'budget-register'}];
 
-    if (opt_userid === undefined) {
+    if (userid === undefined) {
         fields = fields.concat([
             cd('tr', {}, cd('th', {class: 'group-header', colspan: 4}, mess.REQUIRED.toString())),
             cd('tr', {}, cd('th', {class: 'field-name'}, mess.USERNAME.toString()), cd('td', {colspan: 3}, username.cont)),

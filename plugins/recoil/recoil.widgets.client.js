@@ -47,7 +47,7 @@ aurora.recoil.widgets.inflate = function(scope) {
                             widgetInstances[widget_name] = [];
                         }
 
-                        var args = {};
+                        var args = undefined;
                         if (widget_param != undefined && widget_param.length > 0) {
                             try {args = JSON.parse(widget_param);}
                             catch (e) {console.log('Unable to parse JSON from widget title arguments');console.log(e);}

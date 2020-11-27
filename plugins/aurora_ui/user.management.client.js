@@ -22,6 +22,7 @@ goog.require('recoil.ui.widgets.table.TableWidget');
  */
 aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
     let frp = scope.getFrp();
+    options = options || {};
     var util = new recoil.frp.Util(frp);
     let extraColsB = util.toBehaviour(opt_extraCols || []);
     let extraDataColsB = frp.liftB(function(extraCols) {
