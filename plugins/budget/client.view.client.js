@@ -33,11 +33,11 @@ budget.widgets.ClientView = function(scope) {
     let logic = recoil.frp.logic;
     let html = new recoil.ui.HtmlHelper(scope);
     let showProfileB = logic.equal('profile', screenB);
-    let arrow = cd('span',{},'«');
+    let arrow = cd('span', {},'«');
 
     let collapsedB = recoil.ui.frp.LocalBehaviour.create(frp, '1', 'budget.client.menu.collapsed', false, localStorage);
 
-    html.innerText(arrow, frp.liftB(function (v) { return v ?  '»' : '«';}, collapsedB));
+    html.innerText(arrow, frp.liftB(function(v) { return v ? '»' : '«';}, collapsedB));
     html.show(budgetBodyDiv, logic.equal('budget', screenB));
     html.show(profileBodyDiv, showProfileB);
     html.class(profileDiv, recoil.frp.Chooser.if(showProfileB, 'recoil_table_selected budget-edit-profile', 'budget-edit-profile'));
@@ -48,7 +48,7 @@ budget.widgets.ClientView = function(scope) {
     let sideControlEnable = new goog.ui.ToggleButton('');
     let sideBarControl = cd('div', {class: 'side-bar-control goog-css3-toggle-button'}, arrow);
     sideControlEnable.decorate(sideBarControl);
-    
+
     let profileWidget = new budget.widgets.SignUp(scope, userId);
     profileWidget.getComponent().render(profileBodyDiv);
 
@@ -59,13 +59,13 @@ budget.widgets.ClientView = function(scope) {
            cd('div', {class: 'budget-budget-list'},
               cd('h2', {class: 'group-header'}, aurora.messages.BUDGETS.toString()),
               budgetDiv));
-    
+
     let sidePanel = cd('div', {class: 'side-list-side'},
                        cd('div', {class: 'slide-menu-control'},
                           sideBarControl), sideGroupsContainer);
-    
+
     html.enableClass(sidePanel, 'side-small', collapsedB);
-    
+
     let container = cd('div', {class: 'side-list-page'}, sidePanel,
                        cd('div', {class: 'side-list-body'}, bodyDiv));
 
@@ -89,7 +89,7 @@ budget.widgets.ClientView = function(scope) {
     sideControlEnable.setDispatchTransitionEvents(goog.ui.Component.State.ALL, true);
     goog.events.listen(
         sideControlEnable, goog.ui.Component.EventType.ACTION,
-        frp.accessTransFunc(function(){
+        frp.accessTransFunc(function() {
             collapsedB.set(!collapsedB.get());
         }, collapsedB)
     );

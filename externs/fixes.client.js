@@ -2,7 +2,18 @@ function BigInt(s) {};
 
 /**
  * @constructor
- * @param {function(?)} s
+ */
+function ResizeObserverEntry() {}
+
+/**
+ * @type {?}
+ */
+ResizeObserverEntry.prototype.contentRect = {};
+
+
+/**
+ * @constructor
+ * @param {function(Array<ResizeObserverEntry>,ResizeObserver)} s
  */
 function ResizeObserver(s) {};
 

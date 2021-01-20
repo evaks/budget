@@ -40,20 +40,24 @@
 			  {"name": "stop", "type": "datetime"}
 		      ]
 		  }
-		},
-
-		{ "name": "holidays", "type": "owned-list(siteid)",
-		  "table": {
-		      "name": "site_holidays",
-		      "columns": [
-			  {"name": "id", "type": "id"},
-			  {"name": "start", "type": "datetime"},
-			  {"name": "stop", "type": "datetime"}
-		      ]
-		  }
 		}
 	    ]
 	},
+	{
+	    "name": "site_holidays",
+	    "access": "aurora.db.access.basic([{'site-management':'crud'}, {'': 'r'}])",
+	    "accessFilter": [
+		{"" : "all"}
+	    ],
+	    "columns": [
+		{"name": "id", "type": "id"},
+		{"name": "siteid", "type": "ref(site)"},
+		{"name": "start", "type": "datetime"},
+		{"name": "stop", "type": "datetime"}
+	    ]
+	    
+	},
+	
 	{
 	    "name" : "mentor_availablity",
 	    "indexes": [],

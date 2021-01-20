@@ -74,13 +74,13 @@ budget.widgets.Menu.prototype.makeMenuBar = function() {
 
             }
         });
-        console.log('res', res);
+
         return res;
     }, frp.createB(budget.widgets.Menu.menu), aurora.permissions.getContext(scope));
 
 
     return frp.liftB(function(menuInfo) {
-        console.log('menuinfo', menuInfo);
+
         let res = [];
         menuInfo.forEach(function(item) {
             let menuItems = [];

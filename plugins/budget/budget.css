@@ -581,3 +581,8 @@ div.budget-div:hover div {
 .page-menu .goog-menu-button-caption {
     padding: 0 10px;
 }
+
+.page-menu .goog-menu-vertical {
+    box-shadow: 2px 2px 5px #15151557;
+    border-radius: 4px;    
+}

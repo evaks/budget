@@ -19,13 +19,14 @@ div.budget-calendar-day .avail {
     background: linear-gradient(90deg, #0000ff8c, #1212ec38 10px, #1212ec6b 50%, #1212ec6b calc(100% - 10px), #0000ff8c);
     width: 20px;
     height: 20px;
+    pointer-events: none;
 }
 
 
 div.budget-calendar-hour {
     border-left: 1px solid;
     border-top: 1px solid;
-    height: calc((100vh - 150px) / 24);
+    height: calc((100vh - 200px) / 24);
     border-color: #0d3f0c;
     background: linear-gradient(90deg, #0d3f0c, transparent 3px,transparent calc(100% - 3px),#9cb866);
     user-select: none;
@@ -49,7 +50,7 @@ div.budget-calendar-hour.budget-calendar-bottom {
     user-select: none;
 }
 div.budget-calendar-hour-labels div.budget-calendar-hour:first-child {
-    height: 20px;
+    height: 41px;
 }
 
 div.budget-calendar-hour-labels div.budget-calendar-hour {
@@ -57,7 +58,7 @@ div.budget-calendar-hour-labels div.budget-calendar-hour {
     border-bottom: none;
     border-top: none;
     border-right: none;
-    height: calc((100vh - 150px) / 24 + 1px);
+    height: calc((100vh - 200px) / 24 + 1px);
     margin-right: 2px;
     background: none;
 }
@@ -76,4 +77,55 @@ div.budget-calendar-highlight.remove-selection {
     background: #ff00004d;
     pointer-events: none;
     border: 2px dotted #00000059;
+}
+
+div.budget-date-container {
+    display: flex;
+    flex-direction: column;
+    margin-top: 10px;
+}
+
+div.budget-calendar-date {
+    text-align: center;
+}
+
+
+.budget-context-menu {
+    display: none;
+    position: absolute;
+    z-index: 10;
+    background: #ffffff;
+    border: 1px solid grey;
+    border-radius: 2px;
+}
+
+.budget-context-menu-active {
+    display: block;
+}
+
+.budget-context-menu-items {
+    list-style: none;
+    mergin: 0;
+    padding: 0;
+}
+
+.budget-context-menu-item {}
+
+.budget-context-menu-item-link {}
+
+.budget-holiday {
+    position: absolute;
+    background: #ff000020;
+    display: flex;
+}
+
+.holiday-text {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+/*    border: 2px solid black;*/
+    font-size: calc(15vh - 35px); /*65px;*/
+    transform: rotate(-75deg);
+    width: 100%;
+    color: #ff00004d;
 }
