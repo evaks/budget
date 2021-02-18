@@ -57,7 +57,7 @@ aurora.db.schema.ColumnMeta;
 aurora.db.schema.TableType;
 
 /**
- * @typedef {{key:!recoil.db.BasicType, func:(undefined|function(!aurora.db.access.SecurityContext,?,!Array,function(?,!Array))),inputs:!Array, outputs:!Array}}
+ * @typedef {{key:!recoil.db.BasicType, arrayParams:(undefined|boolean),func:(undefined|function(!aurora.db.access.SecurityContext,?,!Array,function(?,!Array))|function(!aurora.db.access.SecurityContext,?,...)),inputs:!Array, outputs:!Array}}
  */
 aurora.db.schema.ActionType;
 
@@ -135,7 +135,7 @@ aurora.db.schema.getMetas = function(col) {
 aurora.db.schema.makeColKeyMap = function(tbl, opt_path, opt_res) {
     let res = opt_res || {};
     let path = [] || opt_path;
-    
+
     for (var name in tbl.meta) {
         var meta = tbl.meta[name];
         let subPath = goog.array.clone(path);
@@ -146,7 +146,7 @@ aurora.db.schema.makeColKeyMap = function(tbl, opt_path, opt_res) {
         if (child) {
             aurora.db.schema.makeColKeyMap(child, subPath, res);
         }
-        
+
     }
     return res;
 };

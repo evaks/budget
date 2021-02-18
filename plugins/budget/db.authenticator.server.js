@@ -39,7 +39,7 @@ aurora.db.Authenticator.prototype.validate = function(token, cred, data, cb) {
         cb(null);
         return;
     }
-    reader.readObjectByKey({}, userT, [{col: userT.cols.username, value: cred.username}], null, function(err, user) {
+    reader.readObjectByKey({}, userT, [{col: userT.cols.username, value: cred.username}, {col: userT.cols.active, value: true}], null, function(err, user) {
         // hide errors
         let maxLocks = ((config['authentication'] || {})['maxTries'] || 3);
         let locktimeout = ((config['authentication'] || {})['lockoutMins'] || 15) * 60 * 1000;
@@ -109,6 +109,18 @@ aurora.db.Authenticator.prototype.validate = function(token, cred, data, cb) {
 };
 
 /**
+ *  strips out ::ffff: in ipv4 address
+ * @param {string} addr
+ * @return {string}
+ */
+aurora.db.Authenticator.formatIp = function(addr) {
+    if (addr && addr.indexOf('::ffff:') === 0 && addr.indexOf('.') !== -1) {
+        return addr.substring(7);
+    }
+    return addr;
+};
+
+/**
  * @param {aurora.http.RequestState} state
  * @param {function(?{response:function(?, aurora.http.RequestState, function(?))})} callback
  */
@@ -116,11 +128,7 @@ aurora.db.Authenticator.prototype.getCredentials = function(state, callback) {
     var auth = state.request.headers && state.request.headers['authorization'];
     var makeResponse = function(username, password, remember, anon) {
         var request = state.request;
-        var srcAddr = request.headers['x-forwarded-for'] || request.connection.remoteAddress;
-
-        if (srcAddr && srcAddr.indexOf('::ffff:') === 0 && srcAddr.indexOf('.') !== -1) {
-            srcAddr = srcAddr.substring(7);
-        }
+        var srcAddr = aurora.db.Authenticator.formatIp(request.headers['x-forwarded-for'] || request.connection.remoteAddress);
         return {
             remember: remember,
             username: username,
@@ -134,6 +142,7 @@ aurora.db.Authenticator.prototype.getCredentials = function(state, callback) {
                     let ok = username && !message;
                     state.responseHeaders.set('Set-Cookie', [
                         'username=' + encodeURIComponent(ok ? username : '') + '; Path=/; SameSite=Strict;',
+                        'userid=' + encodeURIComponent(ok ? d.userid : '') + '; Path=/; SameSite=Strict;',
                         'permissions=' + encodeURIComponent(JSON.stringify(d.permissions || {})) + '; Path=/; SameSite=Strict;']);
                 }
 
@@ -229,6 +238,22 @@ aurora.db.Authenticator.prototype.getChannel = function(pluginName, channelId, m
     };
 
 
+    let makeServerInfo = function(message, context) {
+        let socket = message.connection.socket;
+        let host = aurora.db.Authenticator.formatIp(socket['localAddress']);
+        let protocol = socket['encrypted'] ? 'https' : 'http';
+        let port = socket['localPort'];
+        if ((port == 80 && protocol === 'http') || (port == 443 && protocol === 'https')) {
+            port = '';
+        }
+        else {
+            port = ':' + port;
+        }
+        let fullContext = goog.object.clone(context);
+        fullContext['@base-url'] = protocol + '://' + host + port + '';
+        return fullContext;
+
+    };
     let cacheAndContinue = function(token, message, context, messageCallback) {
 
         let now = process.hrtime()[0] * 1000;
@@ -236,7 +261,8 @@ aurora.db.Authenticator.prototype.getChannel = function(pluginName, channelId, m
         cachedSessions[token] = cached;
         cachedSessionsExpiry.add(cached);
         updateExpire();
-        messageCallback(message, cached.context);
+
+        messageCallback(message, makeServerInfo(message, cached.context));
     };
 
     let channel = aurora.websocket.getChannel(pluginName, channelId, function(message) {
@@ -246,7 +272,7 @@ aurora.db.Authenticator.prototype.getChannel = function(pluginName, channelId, m
         let cached = cachedSessions[token];
 
         if (cached && cached.expiry < now) {
-            messageCallback(message, cached.context);
+            messageCallback(message, makeServerInfo(message, cached.context));
         }
         else {
             aurora.auth.instance.getSessionData(token, function(data) {

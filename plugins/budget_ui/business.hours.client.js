@@ -126,7 +126,7 @@ budget.widgets.BusinessHours = function(scope) {
 
 //            me.contextMenu_.showMenu(me.contextMenu_, (e.clientX), e.clientY);
             me.contextMenu_.showAt(e.clientX, e.clientY);
-            
+
             let site = me.siteB_.get();
             let holidays = me.holidaysB_.get();
             let holidayUsage = me.createHolidayUsage_(holidays);
@@ -281,7 +281,7 @@ budget.widgets.BusinessHours = function(scope) {
             me.holidaysB_.set(me.updateHolidayUsage_(site, hols, holidayUsage));
 
 
-        }, modTableB, me.siteB_, me.holidaysB_), aurora.messages.MODIFY.toString(), function() {return null;},  aurora.messages.MODIFY_HOLIDAY.toString());
+        }, modTableB, me.siteB_, me.holidaysB_), aurora.messages.MODIFY.toString(), function() {return null;}, aurora.messages.MODIFY_HOLIDAY.toString());
         td.show(true);
 
     }, this.siteB_, this.curDateB_, this.holidaysB_));

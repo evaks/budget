@@ -37,7 +37,7 @@ aurora.db.Coms = function(authenticator) {
         let action = e && e.data && e.data['command'];
         let token = e.token;
         try {
-            let context = {'@userid': secContext.userid};
+            console.log('event', secContext);
 
             if (action === 'get') {
                 me.doGet_(reader, e, secContext);
@@ -61,16 +61,62 @@ aurora.db.Coms = function(authenticator) {
                             me.log_.warn('Reader not initialized', path);
                             return;
                         }
-                        action.func(secContext, reader, e.data['inputs'], function(err, outputs) {
+
+                        let inputs = e.data['inputs'];
+                        let expectedInputs = action.inputs || [];
+                        if (action.arrayParams && expectedInputs.length === 0) {
+                            inputs = [];
+                        }
+
+
+                        let responseHandler = function(err, outputs) {
                             if (err) {
                                 response['error'] = err;
                             }
                             else {
                                 response['outputs'] = outputs;
                             }
-                            console.log('sending response', response);
                             me.channel_.send(response, e.clientId);
-                        });
+                        };
+
+                        if (action.arrayParams) {
+                            if (!(inputs instanceof Array)) {
+                                response['error'] = 'Invalid Parameters';
+                                me.channel_.send(response, e.clientId);
+                                return;
+                            }
+                            action.func(secContext, reader, inputs, responseHandler);
+                        }
+                        else {
+                            if (Object.keys(inputs).length !== expectedInputs.length) {
+                                response['error'] = 'Unexpected number of parameter expected ' + expectedInputs.length + ' got ' + inputs.length;
+                                me.channel_.send(response, e.clientId);
+                                return;
+                            }
+                            let checkType = function(expected, actual) {
+                                if (expected == 'number' || expected === 'string') {
+                                    return typeof(actual) === expected;
+                                }
+                                return true;
+                            };
+                            let args = [];
+
+                            for (let i = 0; i < expectedInputs.length; i++) {
+                                let expected = expectedInputs[i];
+                                if (!inputs.hasOwnProperty(expected.name)) {
+                                    response['error'] = 'Missing parameter ' + expected.name;
+                                    me.channel_.send(response, e.clientId);
+                                    return;
+                                }
+                                if (!checkType(expected.type, inputs[expected.name])) {
+                                    response['error'] = 'Invalid type for parameter ' + expected.name;
+                                    me.channel_.send(response, e.clientId);
+                                    return;
+                                }
+                                args.push(inputs[expected.name]);
+                            }
+                            action.func.apply(null, [secContext, reader].concat(args).concat([responseHandler]));
+                        }
 
                     }
                     else {
@@ -239,7 +285,6 @@ aurora.db.Coms.prototype.doSecurityCheck_ = function(e, secContext, opType, resp
     }
 
     if (!tbl.info.access(secContext, opType)) {
-        console.log('-------------------------- ad');
         response['error-value'] = 'Access Denied';
         me.channel_.send(response, e.clientId);
         return null;

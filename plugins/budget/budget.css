@@ -1,6 +1,9 @@
 body {
     /*    background: cadetblue;*/
 }
+.content-inner th {
+    color: #636363;
+}
 .main-header {
     background-image: url(/images/Lower_Hutt_Panorama_at_night.jpg);
     background-repeat: no-repeat;
@@ -19,6 +22,11 @@ body {
     scrollbar-width: thin;
     display: flex;
     flex: 1;
+}
+.main-widget {
+    overflow: auto;
+    height: calc(100vh - 60px);
+    width: 100vw;
 }
 
 .flex-display > .goog-control {
@@ -199,6 +207,22 @@ div table.recoil-table-pager .page {
     font-weight: bold;
 }
 
+
+.budget-reset-message-error {
+    color: crimson;
+    font-style: italic;
+    text-align: center;
+    font-weight: bold;
+    margin-top: 10px;
+}
+
+.budget-reset-message {
+    font-style: italic;
+    text-align: center;
+    font-weight: bold;
+    margin-top: 10px;
+}
+
 table.budget-login {
     margin-left: auto;
     margin-right: auto;
@@ -324,6 +348,7 @@ button.goog-button {
 }
 
 
+
 div.budget-budget-template div.group-header {
     color: #636363;
     font-size: 16.0pt;
@@ -370,6 +395,9 @@ div.budget-totals  td {
     padding-left: 10px;
 }
 
+.goog-combobox input {
+    height: 16pt;
+}
 div.budget-budget div.budget-subheader {
     color: #636363;
     font-size: 16.0pt;

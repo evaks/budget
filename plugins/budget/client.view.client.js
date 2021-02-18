@@ -24,7 +24,7 @@ budget.widgets.ClientView = function(scope) {
     let budgetDiv = cd('div', {class: 'budget-div'});
     let budgetBodyDiv = cd('div', {class: 'budget-body-div'});
     let profileBodyDiv = cd('div', {class: 'profile-body-div'});
-    let appointmentBodyDiv = cd('div', {}, aurora.messages.APPOINTMENT.toString());
+    let appointmentBodyDiv = cd('div', {});
     let bodyDiv = cd('div', {class: 'body-div'}, budgetBodyDiv, profileBodyDiv, appointmentBodyDiv);
     let profileDiv = cd('div', {class: 'budget-edit-profile'}, aurora.messages.VIEW_EDIT_PROFILE.toString());
     let budgetListWidget = new budget.widgets.BudgetList(scope);
@@ -43,7 +43,8 @@ budget.widgets.ClientView = function(scope) {
     html.class(profileDiv, recoil.frp.Chooser.if(showProfileB, 'recoil_table_selected budget-edit-profile', 'budget-edit-profile'));
     budgetListWidget.getComponent().render(budgetDiv);
     budgetWidget.getComponent().render(budgetBodyDiv);
-    let userId = parseInt(budget.widgets.BudgetList.getSearchParams()['id'][0], 10);
+    let idStr = budget.widgets.BudgetList.getUserId();
+    let userId = budget.widgets.BudgetList.getUserId();
 
     let sideControlEnable = new goog.ui.ToggleButton('');
     let sideBarControl = cd('div', {class: 'side-bar-control goog-css3-toggle-button'}, arrow);

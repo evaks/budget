@@ -10293,7 +10293,9 @@ table.budget-register td {
     padding-top: 5px;
     padding-bottom: 5px;
 }
+
 table.budget-register th {
+    color: #636363;
     padding-top: 5px;
     padding-bottom: 5px;
 }

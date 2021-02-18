@@ -16,6 +16,18 @@ budget.messages.USERNAME = recoil.ui.message.getParamMsg('Username');
  */
 budget.messages.PASSWORD = recoil.ui.message.getParamMsg('Password');
 
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.RESET_PASSWORD = recoil.ui.message.getParamMsg('Reset Password');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.NEW_PASSWORD = recoil.ui.message.getParamMsg('New Password');
+
 
 /**
  * @type {!recoil.ui.message.Message}
@@ -116,6 +128,12 @@ budget.messages.REQUIRED = recoil.ui.message.getParamMsg('Required');
  * @type {!recoil.ui.message.Message}
  * @final
  */
+budget.messages.REQUIRED_FOR_CLIENT_LOGIN = recoil.ui.message.getParamMsg('Required for Client Login');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
 budget.messages.SUGGESTED = recoil.ui.message.getParamMsg('Suggested (if you forget your password)');
 
 
@@ -206,6 +224,12 @@ budget.messages.ENTER_ONE_OF = recoil.ui.message.getParamMsg('Enter one of');
  */
 budget.messages.NAME = recoil.ui.message.getParamMsg('Name');
 
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.AGE = recoil.ui.message.getParamMsg('Age');
+
 
 /**
  * @type {!recoil.ui.message.Message}
@@ -260,7 +284,7 @@ budget.messages.TOTAL_OWING = recoil.ui.message.getParamMsg('Total Owing');
  * @type {!recoil.ui.message.Message}
  * @final
  */
-budget.messages.CALCULATED_PER = recoil.ui.message.getParamMsg('Calculated value Per ', {'period': function (v) {
+budget.messages.CALCULATED_PER = recoil.ui.message.getParamMsg('Calculated value Per ', {'period': function(v) {
     return v.substring(0, v.length - 2);
 }});
 
@@ -371,11 +395,23 @@ budget.messages.PLEASE_NOTE = recoil.ui.message.getParamMsg('Please note');
  * @type {!recoil.ui.message.Message}
  * @final
  */
-budget.messages.TIME_FACTOR  = recoil.ui.message.getParamMsg('Time Factor');
+budget.messages.TIME_FACTOR = recoil.ui.message.getParamMsg('Time Factor');
 
 
 /**
  * @type {!recoil.ui.message.Message}
  * @final
  */
-budget.messages.GOALS_TO_BE_OBTAINED  = recoil.ui.message.getParamMsg('Goals to be obtained');
+budget.messages.GOALS_TO_BE_OBTAINED = recoil.ui.message.getParamMsg('Goals to be obtained');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.CHILDREN = recoil.ui.message.getParamMsg('Children');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.INVALID_EMAIL = recoil.ui.message.getParamMsg('Invalid Email');

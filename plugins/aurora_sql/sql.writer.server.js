@@ -161,7 +161,7 @@ aurora.db.sql.ChangeWriter.prototype.hasPermission_ = function(change, secContex
     let tbl = this.schema_.getTableByName(path);
     while (tbl && path.length() > 0) {
         let allowed = tbl.info.access ? tbl.info.access(secContext, access) : null;
-        console.log('checking access', path.toString(), allowed);
+        console.log('checking access', path.toString(), allowed, tbl.info.access);
         if (allowed != undefined) {
             return allowed;
         }

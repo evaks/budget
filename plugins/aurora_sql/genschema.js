@@ -26,6 +26,7 @@ let typeFactories = {
     'int': {jsType: 'int', sqlType: 'int'},
     'enum': {jsType: 'enum', sqlType: 'int'},
     'datetime': {jsType: 'bigint', sqlType: 'bigint'},
+    'date': {jsType: 'int', sqlType: 'int'},
     'parent': {jsType: 'bigint', sqlType: 'bigint'},
     'boolean': {jsType: 'boolean', sqlType: 'boolean'},
     'ref': {jsType: 'reference', getInfo: function(info) {
@@ -385,6 +386,8 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out) {
             let accessFilter = null;
             for (let i = stack.length - 1; i >= 0 && !access; i--) {
                 access = stack[i].access;
+            }
+            for (let i = stack.length - 1; i >= 0 && !accessFilter; i--) {
                 accessFilter = stack[i].accessFilter;
             }
             if (!access) {
@@ -579,6 +582,9 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out) {
             fs.appendFileSync(out, '\n');
             if (!client) {
                 fs.appendFileSync(out, '    func:' + a.func + ',\n');
+            }
+            if (a.arrayParams) {
+                fs.appendFileSync(out, '    arrayParams: true,\n');
             }
             fs.appendFileSync(out, '    access:' + a.access + ',\n');
             fs.appendFileSync(out, '    key: new recoil.db.BasicType([],{action: true, path:' + stringify(a.path) + '}),\n');
@@ -1156,6 +1162,7 @@ module.exports = {
                     cur.inputs = action.inputs || [];
                     cur.outputs = action.outputs || [];
                     cur.func = action['function'];
+                    cur.arrayParams = action['arrayParams'];
                     cur.access = action.access;
 
                 }

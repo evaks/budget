@@ -283,6 +283,10 @@ aurora.db.Pool.passwordColSize = function() {
 aurora.db.Pool.hashPassword = function(password, callback) {
     const crypto = require('crypto');
     const buffer = require('buffer');
+    if (password === null) {
+        callback(null, null);
+        return;
+    }
     let version = 0;
     for (let k in aurora.db.Pool.passwordVersions) {
         version = Math.max(Number.parseInt(k, 10), version);
@@ -323,6 +327,11 @@ aurora.db.Pool.hashPasswordPromise = function(password) {
  */
 aurora.db.Pool.checkPassword = function(password, hash, callback) {
     const crypto = require('crypto');
+    if (password == null) {
+        // blank passwords are allowed whoever the will never pass
+        callback(false);
+        return;
+    }
     let version = hash.readUInt16BE(0);
     const algInfo = aurora.db.Pool.passwordVersions[version];
     if (algInfo == undefined) {
