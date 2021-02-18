@@ -87,6 +87,7 @@ div.budget-date-container {
 
 div.budget-calendar-date {
     text-align: center;
+    user-select: none;
 }
 
 
@@ -128,4 +129,11 @@ div.budget-calendar-date {
     transform: rotate(-75deg);
     width: 100%;
     color: #ff00004d;
+    user-select: none;
+}
+
+.budget-calendar-spacer {
+//    width: 100px;
+    height: 20px;
+    background: red;
 }

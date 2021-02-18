@@ -35,7 +35,6 @@
 		      "name": "site_regular_hours",
 		      "columns": [
 			  {"name": "id", "type": "id"},
-			  {"name": "day", "type": "int"},
 			  {"name": "start", "type": "datetime"},
 			  {"name": "stop", "type": "datetime"}
 		      ]

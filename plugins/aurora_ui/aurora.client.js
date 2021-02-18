@@ -228,8 +228,13 @@ aurora.Client.typeFactories = {
         return new recoil.ui.widgets.table.SelectColumn(key, name, []);
     }, 'reference': function(key, name) {
         return new recoil.ui.widgets.table.SelectColumn(key, name, []);
+    }, 'date' : function (key, name, meta) {
+        return new recoil.ui.columns.Date2(key, name, meta);
+    },'time' : function (key, name, meta) {
+        return new recoil.ui.columns.Time(key, name, meta);
     },
-
+    
+    
     'object': function(key, name) {
         var col = new recoil.ui.widgets.table.StringColumn(key, name);
         //col.meta_.converter = new wtm.converters.ObjectStringConverter();
