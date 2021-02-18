@@ -49,7 +49,7 @@ budget.widgets.BusinessHours = function(scope) {
 
     this.dateWidget_ = new recoil.ui.widgets.DateWidget2(scope);
     this.timeWidget_ = new recoil.ui.widgets.TimeWidget(scope);
-    
+
     let milliPerDay = budget.widgets.BusinessHours.MILLI_PER_DAY;
 
     let weekdayIze = function() {
@@ -60,12 +60,12 @@ budget.widgets.BusinessHours = function(scope) {
 
     this.curDateB_ = frp.createB(recoil.ui.widgets.DateWidget2.convertDateToLocal(weekdayIze()));
     this.dateWidget_.attachStruct({value: this.curDateB_, min: 19700105, step: 7});
-    
+
     this.siteB_ = scope.getDb().get(siteT.key);
 
-    this.hoursTblB_ = budget.Client.instance.createSubTableB(this.siteB_,  frp.createB(
+    this.hoursTblB_ = budget.Client.instance.createSubTableB(this.siteB_, frp.createB(
 
-        /** @type {Array} */ (null)), siteT.cols.regular);   
+        /** @type {Array} */ (null)), siteT.cols.regular);
     this.holidaysB_ = frp.switchB(frp.liftB(function(date) {
         let query = new recoil.db.Query();
         let startTime = recoil.ui.widgets.DateWidget2.convertLocaleDate(date).getTime();
@@ -79,11 +79,11 @@ budget.widgets.BusinessHours = function(scope) {
 
     }, this.curDateB_));
 
-    
+
     this.yAxis_ = cd('div', 'budget-calendar-hour-labels');
     this.highlightDiv_ = cd('div', 'budget-calendar-highlight');
-    this.calendarDiv_ = cd('div', {class: 'budget-calendar'},  this.yAxis_,  this.highlightDiv_);
-    
+    this.calendarDiv_ = cd('div', {class: 'budget-calendar'}, this.yAxis_, this.highlightDiv_);
+
     goog.dom.setFocusableTabIndex(this.calendarDiv_, true);
     this.yAxis_.appendChild(cd('div', {class: 'budget-calendar-hour'}));
     for (let h = 0; h < 24; h++) {
@@ -131,7 +131,7 @@ budget.widgets.BusinessHours = function(scope) {
             : e.getBrowserEvent().buttons === 1;
     };
 
-    let clearSelection = function () {
+    let clearSelection = function() {
         if (window.getSelection) {
             if (window.getSelection().empty) {  // Chrome
                 window.getSelection().empty();
@@ -142,7 +142,7 @@ budget.widgets.BusinessHours = function(scope) {
             document.selection.empty();
         }
     };
-    
+
     goog.events.listen(document.body, goog.events.EventType.MOUSEUP, frp.accessTransFunc(function(e) {
         let highlighted = highlightedB.get();
         if (highlighted.start === null) {
@@ -150,10 +150,10 @@ budget.widgets.BusinessHours = function(scope) {
         }
         let site = me.siteB_.get();
         let siteC = site.createEmpty();
-        
+
         let topLeft = me.days_[0].hours[0].getBoundingClientRect();
         let bottomRight = me.days_[6].hours[23].getBoundingClientRect();
-        
+
         let width = bottomRight.left + bottomRight.width - topLeft.left;
         let height = bottomRight.top + bottomRight.height - topLeft.top;
         let dayStartIndex = Math.floor(Math.min(highlighted.start.x, highlighted.stop.x) * 7 / width);
@@ -161,7 +161,7 @@ budget.widgets.BusinessHours = function(scope) {
         let hourStartIndex = Math.max(0, Math.round(Math.floor(Math.min(highlighted.start.y, highlighted.stop.y) * 24 / height * HOUR_RES) / HOUR_RES * 3600000));
         let hourEndIndex = Math.round(Math.ceil(Math.max(highlighted.start.y, highlighted.stop.y) * 24 / height * HOUR_RES) / HOUR_RES * 3600000);
 
-        
+
         highlightedB.set({start: null, stop: null, add: true});
         let sq = function(x) {return x * x;};
         let dist = Math.sqrt(sq(highlighted.start.x - highlighted.stop.x) + sq(highlighted.start.y - highlighted.stop.y));
@@ -181,11 +181,11 @@ budget.widgets.BusinessHours = function(scope) {
             let stopTime = start + hourEndIndex;
 
             if (highlighted.add) {
-                
+
 /*                if(stopTime > milliPerDay * (i + 1)) {
                     stopTime = milliPerDay * (i + 1);
                 }
-  */              
+  */
                 dayUsage.push({start: startTime, stop: Math.min(stopTime, milliPerDay * (i + 1))});
             } else {
                 let newUsage = [];
@@ -249,23 +249,23 @@ budget.widgets.BusinessHours = function(scope) {
         if (oldPos.start === null) {
             return;
         }
-        
+
         let pos = me.calcPos_(e);
         oldPos.stop = pos;
         oldPos.add = !e.ctrlKey;
         highlightedB.set(oldPos);
     }, highlightedB);
-    
+
     goog.events.listen(document.body, goog.events.EventType.MOUSEMOVE, handleMove);
     goog.events.listen(this.calendarDiv_, goog.events.EventType.MOUSEMOVE, handleMove);
 
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(this.container_);
     let contentSizeB = frp.createB(/** @type {?{width:number, height:number}} */ (null));
 
-    this.helper_ = new recoil.ui.ComponentWidgetHelper(scope, this.component_, this, this.update_, function () {
-        console.log("XXXX destroyed");
+    this.helper_ = new recoil.ui.ComponentWidgetHelper(scope, this.component_, this, this.update_, function() {
+        console.log('XXXX destroyed');
     });
-    
+
     this.highlightedB_ = highlightedB;
     this.helper_.attach(this.siteB_, highlightedB, this.curDateB_, contentSizeB, this.holidaysB_, this.borderDimsB_, this.hoursTblB_);
     let resizeObserver = new ResizeObserver(frp.accessTransFunc(function(e) {
@@ -277,7 +277,7 @@ budget.widgets.BusinessHours = function(scope) {
             y: parseInt(style.getPropertyValue('border-top-width'), 10) +
                 parseInt(style.getPropertyValue('border-bottom-width'), 10)
         }));
-            
+
 
     }, contentSizeB, me.borderDimsB_));
     resizeObserver.observe(this.calendarDiv_);
@@ -298,8 +298,8 @@ budget.widgets.BusinessHours.prototype.calcPos_ = function(e) {
     let minX = this.days_[0].div.getBoundingClientRect().left;
     let maxX = xRightBounds.left + xRightBounds.width;
     return {
-        x: Math.max(0, Math.min(e.clientX,maxX) - minX),
-        y: Math.min(maxY ,Math.max(0, Math.min(maxY,e.clientY) - minY))};
+        x: Math.max(0, Math.min(e.clientX, maxX) - minX),
+        y: Math.min(maxY, Math.max(0, Math.min(maxY, e.clientY) - minY))};
 };
 
 /**
@@ -333,7 +333,7 @@ budget.widgets.BusinessHours.prototype.doRemoveHolidayFunc_ = function(menuInfo)
         let holidayUsage = me.createHolidayUsage_(holidays);
 
         let selectedStopTime = selDate + budget.widgets.BusinessHours.MILLI_PER_DAY;
-        
+
         let res = me.removeDateRange_(holidayUsage, selDate, selectedStopTime);
         me.holidaysB_.set(me.updateHolidayUsage_(me.siteB_.get(), holidays, res));
     }, this.siteB_, this.curDateB_, this.holidaysB_);
@@ -356,7 +356,7 @@ budget.widgets.BusinessHours.prototype.doMakeHolidayFunc_ = function(menuInfo) {
         let milliPerDay = budget.widgets.BusinessHours.MILLI_PER_DAY;
         let holidays = me.createHolidayUsage_(hols);
         let selectDate = me.getSelectionDate_(menuInfo, me.curDateB_.get());
-        
+
         holidays.push({start: selectDate, stop: selectDate + milliPerDay});
         me.mergeDayUsage_(holidays, true);
         me.holidaysB_.set(me.updateHolidayUsage_(site, hols, holidays));
@@ -374,7 +374,7 @@ budget.widgets.BusinessHours.prototype.doMakeHolidayFunc_ = function(menuInfo) {
  * @param {number} stop
  * @param {number} selectedIndex
  * @param {string} title
- * @return 
+ * @return
  */
 budget.widgets.BusinessHours.prototype.makeDateDialog_ = function(tblB, start, stop, selectedIndex, title) {
     let me = this;
@@ -385,11 +385,11 @@ budget.widgets.BusinessHours.prototype.makeDateDialog_ = function(tblB, start, s
     let site = me.siteB_.get();
     let holidayUsage = me.createHolidayUsage_(hols);
     let holidaysT = aurora.db.schema.tables.base.site_holidays;
-    
+
     let td = new aurora.widgets.TableDialog(scope, modTableB, frp.createCallback(function(e) {
         let res = me.holidaysB_.get().unfreeze();
         let modTable = modTableB.get();
-        
+
         modTable.forEach(function(row) {
             let origStartTime = recoil.ui.widgets.DateWidget2.convertLocaleDate(start).getTime();
             let origStopTime = recoil.ui.widgets.DateWidget2.convertLocaleDate(stop).getTime();
@@ -397,17 +397,17 @@ budget.widgets.BusinessHours.prototype.makeDateDialog_ = function(tblB, start, s
             let modStopTime = recoil.ui.widgets.DateWidget2.convertLocaleDate(row.get(holidaysT.cols.stop)).getTime();
             //            let millisPerDay = + 3600000 * 24;
             let millisPerDay = 3600000 * 24;
-            
+
             if (modStopTime < origStopTime || modStartTime > origStartTime) {
                 holidayUsage.splice(selectedIndex, 1);
             }
             holidayUsage.push({start: modStartTime, stop: modStopTime + millisPerDay});
         });
-        
+
         me.mergeDayUsage_(holidayUsage, true);
         me.holidaysB_.set(me.updateHolidayUsage_(site, hols, holidayUsage));
-      
-    }, modTableB, me.siteB_, me.holidaysB_), title, function() {return null;},  title);
+
+    }, modTableB, me.siteB_, me.holidaysB_), title, function() {return null;}, title);
     return td;
 };
 
@@ -421,7 +421,7 @@ budget.widgets.BusinessHours.prototype.doAddHolidaysDialogFunc_ = function(menuI
     let me = this;
     let frp = me.scope_.getFrp();
     let scope = me.scope_;
-    
+
     return frp.accessTransFunc(function(e) {
   /*      let selectInfo = me.getSelectionDate_(menuInfo, me.curDateB_.get());
         let start = recoil.ui.widgets.DateWidget2.convertDateToLocal(new Date(selectInfo));
@@ -433,7 +433,7 @@ budget.widgets.BusinessHours.prototype.doAddHolidaysDialogFunc_ = function(menuI
 
         let siteT = aurora.db.schema.tables.base.site;
         let holidaysT = aurora.db.schema.tables.base.site_holidays;
-        
+
         let hols = me.holidaysB_.get();
         let tbl = hols.createEmpty([]);
         let tblKeys = holidaysT.cols;
@@ -447,11 +447,11 @@ budget.widgets.BusinessHours.prototype.doAddHolidaysDialogFunc_ = function(menuI
         let columns = new recoil.ui.widgets.TableMetaData();
         columns.addColumn(new recoil.ui.columns.Date2(holidaysT.cols.start, budget.messages.START_DATE.toString()));
         columns.addColumn(new recoil.ui.columns.Date2(holidaysT.cols.stop, budget.messages.STOP_DATE.toString()));
-       
+
         let row = new recoil.structs.table.MutableTableRow();
         let startTime = recoil.ui.widgets.DateWidget2.convertDateToLocal(new Date(selectDate));
-        let stopTime = startTime; 
-        
+        let stopTime = startTime;
+
         row.set(tblKeys.siteid, 0);
         row.set(tblKeys.start, startTime);
         row.set(tblKeys.stop, stopTime);
@@ -459,9 +459,9 @@ budget.widgets.BusinessHours.prototype.doAddHolidaysDialogFunc_ = function(menuI
         tbl.addRow(row);
         let modTableB = frp.createB(columns.applyMeta(tbl));
         let td = me.makeDateDialog_(modTableB, startTime, stopTime, selectedIndex, budget.messages.ADD_HOLIDAYS_DIALOG.toString());
-        
+
         td.show(true);
-        
+
     }, this.siteB_, this.curDateB_, this.holidaysB_);
 
 };
@@ -474,10 +474,10 @@ budget.widgets.BusinessHours.prototype.doAddHolidaysDialogFunc_ = function(menuI
  */
 budget.widgets.BusinessHours.prototype.getSelectedIndexInArray = function(arr, selectTime) {
     let foundIndex = null;
-    
+
     for (let i = 0; i < arr.length; i++) {
             let val = arr[i];
-            
+
             if (selectTime === val.start) {
                 foundIndex = i;
             } else if (selectTime > val.start && selectTime < val.stop) {
@@ -485,7 +485,7 @@ budget.widgets.BusinessHours.prototype.getSelectedIndexInArray = function(arr, s
             }
         }
     return foundIndex;
-};  
+};
 
 /**
  * returns a function that will make a modify holiday dialog
@@ -501,7 +501,7 @@ budget.widgets.BusinessHours.prototype.doModifyHolidayDialogFunc_ = function(men
     return frp.accessTransFunc(function(e) {
         let siteT = aurora.db.schema.tables.base.site;
         let holidaysT = aurora.db.schema.tables.base.site_holidays;
-        
+
         let hols = me.holidaysB_.get();
         let site = me.siteB_.get();
         let tbl = hols.createEmpty([]);
@@ -512,25 +512,25 @@ budget.widgets.BusinessHours.prototype.doModifyHolidayDialogFunc_ = function(men
         if (selectedIndex == null) {
             return;
         }
-        
+
         let columns = new recoil.ui.widgets.TableMetaData();
         let startCol = new recoil.ui.columns.Date2(holidaysT.cols.start, budget.messages.START_DATE.toString());
         let stopCol = new recoil.ui.columns.Date2(holidaysT.cols.stop, budget.messages.STOP_DATE.toString());
-        
+
         columns.addColumn(startCol);
         columns.addColumn(stopCol);
-        
+
         let row = new recoil.structs.table.MutableTableRow();
         let startTime = recoil.ui.widgets.DateWidget2.convertDateToLocal(new Date(holidayUsage[selectedIndex].start));
         let stopTime = recoil.ui.widgets.DateWidget2.convertDateToLocal(new Date(holidayUsage[selectedIndex].stop - budget.widgets.BusinessHours.MILLI_PER_DAY));
-        
+
         row.set(tblKeys.siteid, 0);
         row.set(tblKeys.start, startTime);
         row.set(tblKeys.stop, stopTime);
-        
+
         tbl.addRow(row);
         let modTableB = frp.createB(columns.applyMeta(tbl));
-        
+
         let td = me.makeDateDialog_(modTableB, startTime, stopTime, selectedIndex, budget.messages.MODIFY_HOLIDAY.toString());
         td.show(true);
 
@@ -547,7 +547,7 @@ budget.widgets.BusinessHours.prototype.doAddHoursDialogFunc_ = function(menuInfo
     let me = this;
     let frp = me.scope_.getFrp();
     let siteT = aurora.db.schema.tables.base.site;
-    
+
     return frp.accessTransFunc(function(e) {
 
         let site = me.siteB_.get();
@@ -571,11 +571,11 @@ budget.widgets.BusinessHours.prototype.doAddHoursDialogFunc_ = function(menuInfo
         // tbl.addColumnMeta(holidaysT.cols.stop, {type: 'time'});
 
         let businessHoursStart = 9 * 3600000;
-        let start =  businessHoursStart;
+        let start = businessHoursStart;
         let stop = 17 * 3600000;
 
         let row = new recoil.structs.table.MutableTableRow();
-        
+
         row.set(tblKeys.id, 0);
         row.set(tblKeys.start, start);
         row.set(tblKeys.stop, stop);
@@ -583,9 +583,9 @@ budget.widgets.BusinessHours.prototype.doAddHoursDialogFunc_ = function(menuInfo
         tbl.addRow(row);
 
         let memTableB = frp.createB(columns.applyMeta(tbl));
-        let modTableB = frp.liftBI(function (tbl) {
+        let modTableB = frp.liftBI(function(tbl) {
             let res = tbl.createEmpty();
-            tbl.forEachModify(function (row) {
+            tbl.forEachModify(function(row) {
                 row.addCellMeta(tblKeys.stop, {min: row.get(tblKeys.start) + 60000});
                 if (row.get(tblKeys.stop) <= row.get(tblKeys.start)) {
                     row.addCellMeta(tblKeys.stop, {errors: [budget.messages.END_TIME_AFTER_START.toString()]});
@@ -597,28 +597,28 @@ budget.widgets.BusinessHours.prototype.doAddHoursDialogFunc_ = function(menuInfo
                 res.addRow(row);
             });
             return res.freeze();
-        }, function (tbl) {
+        }, function(tbl) {
             memTableB.set(tbl);
         }, memTableB);
 
-        
+
         let td = new aurora.widgets.TableDialog(me.scope_, modTableB, frp.createCallback(function(e) {
             let res = me.holidaysB_.get().unfreeze();
             let hoursTable = modTableB.get();
 
             hoursTable.forEach(function(row) {
-                let newStartTime = budget.widgets.BusinessHours.MILLI_PER_DAY * selDayIndex + row.get(hoursT.cols.start); 
+                let newStartTime = budget.widgets.BusinessHours.MILLI_PER_DAY * selDayIndex + row.get(hoursT.cols.start);
                 let newStopTime = budget.widgets.BusinessHours.MILLI_PER_DAY * selDayIndex + row.get(hoursT.cols.stop);
 
               dayUsage.push({start: newStartTime, stop: newStopTime});
             });
-            
+
             me.mergeDayUsage_(dayUsage, true);
             me.siteB_.set(me.updateDayUsage_(site, dayUsage));
 
         }, modTableB, me.siteB_, me.holidaysB_), budget.messages.ADD.toString(), function(row) {
             return null;
-        },  budget.messages.ADD_HOURS_DIALOG.toString(), undefined, {blockErrors: true});
+        }, budget.messages.ADD_HOURS_DIALOG.toString(), undefined, {blockErrors: true});
         td.show(true);
 
 
@@ -639,13 +639,13 @@ budget.widgets.BusinessHours.prototype.doRemoveHoursFunc_ = function(menuInfo) {
         let site = me.siteB_.get();
         let dayUsage = me.createDayUsage_(site);
         let clickPosMilli = menuInfo.clickPosMilli;
-        
+
         let selectedIndex = null;
 
-        for(let i = 0; i < dayUsage.length; i++) {
+        for (let i = 0; i < dayUsage.length; i++) {
             let day = dayUsage[i];
 
-            if(clickPosMilli >= day.start && clickPosMilli <= day.stop) {
+            if (clickPosMilli >= day.start && clickPosMilli <= day.stop) {
                 selectedIndex = i;
             }
         }
@@ -653,7 +653,7 @@ budget.widgets.BusinessHours.prototype.doRemoveHoursFunc_ = function(menuInfo) {
         let dayStartTime = budget.widgets.BusinessHours.MILLI_PER_DAY * menuInfo.dayIndex;
         let dayEndTime = budget.widgets.BusinessHours.MILLI_PER_DAY * (menuInfo.dayIndex + 1);
 
-        if(selectedIndex !== null) {
+        if (selectedIndex !== null) {
             let res = me.removeDateRange_(dayUsage,
                                           Math.max(dayStartTime, dayUsage[selectedIndex].start),
                                           Math.min(dayEndTime, dayUsage[selectedIndex].stop));
@@ -683,12 +683,12 @@ budget.widgets.BusinessHours.prototype.removeDateRange_ = function(timeRange, st
             if (time.start < startTime) {
                 res.push({start: time.start, stop: startTime});
             }
-            
+
             if (stopTime < time.stop) {
                 res.push({start: stopTime, stop: time.stop});
             }
         }
-        
+
     }
     return res;
 };
@@ -716,7 +716,7 @@ budget.widgets.BusinessHours.prototype.doModifyHoursDialogFunc_ = function(menuI
 
         let selHoursIndexNull = me.getSelectedIndexInArray(dayUsage, menuInfo.clickPosMilli);
 
-        if(selHoursIndexNull === null) {
+        if (selHoursIndexNull === null) {
             return;
         }
         let selHoursIndex = selHoursIndexNull;
@@ -730,14 +730,14 @@ budget.widgets.BusinessHours.prototype.doModifyHoursDialogFunc_ = function(menuI
         // this.timeWidget.attachStruct({value: });
         // columns.add(holidaysT.cols.stop, budget.messages.STOP_DATE.toString());
         // tbl.addColumnMeta(holidaysT.cols.stop, {type: 'time'});
-        
+
         let dayStart = dayUsage[selHoursIndex].start;
-        let dayStop = dayUsage[selHoursIndex].stop; 
+        let dayStop = dayUsage[selHoursIndex].stop;
         let dayStartMillis = dayStart - selDayStartMillis;
         let dayStopMillis = dayStartMillis + (dayStop - dayStart);
-        
+
         let row = new recoil.structs.table.MutableTableRow();
-        
+
         row.set(tblKeys.id, 0);
         row.set(tblKeys.start, dayStartMillis);
         row.set(tblKeys.stop, dayStopMillis);
@@ -745,9 +745,9 @@ budget.widgets.BusinessHours.prototype.doModifyHoursDialogFunc_ = function(menuI
         tbl.addRow(row);
 
         let memTableB = frp.createB(columns.applyMeta(tbl));
-        let modTableB = frp.liftBI(function (tbl) {
+        let modTableB = frp.liftBI(function(tbl) {
             let res = tbl.createEmpty();
-            tbl.forEachModify(function (row) {
+            tbl.forEachModify(function(row) {
                 row.addCellMeta(tblKeys.stop, {min: row.get(tblKeys.start) + 60000});
                 if (row.get(tblKeys.stop) <= row.get(tblKeys.start)) {
                     row.addCellMeta(tblKeys.stop, {errors: [budget.messages.END_TIME_AFTER_START.toString()]});
@@ -759,29 +759,29 @@ budget.widgets.BusinessHours.prototype.doModifyHoursDialogFunc_ = function(menuI
                 res.addRow(row);
             });
             return res.freeze();
-        }, function (tbl) {
+        }, function(tbl) {
             memTableB.set(tbl);
         }, memTableB);
 
-        
+
         let td = new aurora.widgets.TableDialog(me.scope_, modTableB, frp.createCallback(function(e) {
             let res = me.holidaysB_.get().unfreeze();
             let hoursTable = modTableB.get();
 
             hoursTable.forEach(function(row) {
-                let newStartTime = (budget.widgets.BusinessHours.MILLI_PER_DAY * selDayIndex) +  row.get(hoursT.cols.start);
-                let newStopTime = (budget.widgets.BusinessHours.MILLI_PER_DAY * selDayIndex) +  row.get(hoursT.cols.stop);
+                let newStartTime = (budget.widgets.BusinessHours.MILLI_PER_DAY * selDayIndex) + row.get(hoursT.cols.start);
+                let newStopTime = (budget.widgets.BusinessHours.MILLI_PER_DAY * selDayIndex) + row.get(hoursT.cols.stop);
 
                 dayUsage[selHoursIndex].start = newStartTime;
                 dayUsage[selHoursIndex].stop = newStopTime;
             });
-            
+
             me.mergeDayUsage_(dayUsage, true);
             me.siteB_.set(me.updateDayUsage_(site, dayUsage));
 
         }, modTableB, me.siteB_, me.holidaysB_), budget.messages.MODIFY.toString(), function(row) {
             return null;
-        },  budget.messages.MODIFY_HOURS_DIALOG.toString(), undefined, {blockErrors: true});
+        }, budget.messages.MODIFY_HOURS_DIALOG.toString(), undefined, {blockErrors: true});
         td.show(true);
 
     }, this.siteB_, this.curDateB_, this.holidaysB_, this.hoursTblB_);
@@ -818,7 +818,7 @@ budget.widgets.BusinessHours.prototype.setupMenu_ = function() {
 
     goog.events.listen(
         this.calendarDiv_, goog.events.EventType.CONTEXTMENU, frp.accessTransFunc(function(e) {
-            
+
             me.contextMenu_.removeChildren(true);
 
             let site = me.siteB_.get();
@@ -833,14 +833,14 @@ budget.widgets.BusinessHours.prototype.setupMenu_ = function() {
             let hourIndex = Math.max(0, Math.round(Math.floor(Math.min(clickPos.y) * 24 / height * HOUR_RES) / HOUR_RES * 3600000));
 
             let dayIndex = Math.floor(clickPos.x * 7 / width);
-            let milliInDay = Math.max(0, Math.round(clickPos.y * 24 *  3600000 / height));
+            let milliInDay = Math.max(0, Math.round(clickPos.y * 24 * 3600000 / height));
             let clickPosMilli = milliInDay + dayIndex * 24 * 3600000;
             let startOfWeekMilli = recoil.ui.widgets.DateWidget2.convertLocaleDate(me.curDateB_.get()).getTime();
             menuInfo.dayIndex = dayIndex;
             menuInfo.hourIndex = hourIndex;
             menuInfo.clickPosMilli = clickPosMilli;
 
-            if(me.timeInDateRange_(dayUsage, clickPosMilli)) {
+            if (me.timeInDateRange_(dayUsage, clickPosMilli)) {
                 me.contextMenu_.addChild(me.removeHours_, true);
                 me.contextMenu_.addChild(me.modifyHoursDialog_, true);
             } else {
@@ -848,7 +848,7 @@ budget.widgets.BusinessHours.prototype.setupMenu_ = function() {
             }
 
 
-            if(me.timeInDateRange_(holidayUsage, (startOfWeekMilli + clickPosMilli))) {
+            if (me.timeInDateRange_(holidayUsage, (startOfWeekMilli + clickPosMilli))) {
                 me.contextMenu_.addChild(me.removeHoliday_, true);
                 me.contextMenu_.addChild(me.modifyHolidayDialog_, true);
             } else {
@@ -862,16 +862,16 @@ budget.widgets.BusinessHours.prototype.setupMenu_ = function() {
         }, this.siteB_, this.curDateB_, this.holidaysB_));
 
 
-   
+
     goog.events.listen(this.makeHoliday_, goog.ui.Component.EventType.ACTION, this.doMakeHolidayFunc_(menuInfo));
-    
+
     goog.events.listen(this.addHolidaysDialog_, goog.ui.Component.EventType.ACTION, this.doAddHolidaysDialogFunc_(menuInfo));
 
-    goog.events.listen(this.removeHoliday_, goog.ui.Component.EventType.ACTION,this.doRemoveHolidayFunc_(menuInfo));
+    goog.events.listen(this.removeHoliday_, goog.ui.Component.EventType.ACTION, this.doRemoveHolidayFunc_(menuInfo));
 
     goog.events.listen(this.modifyHolidayDialog_, goog.ui.Component.EventType.ACTION, this.doModifyHolidayDialogFunc_(menuInfo));
 
-    
+
 
         goog.events.listen(this.addHoursDialog_, goog.ui.Component.EventType.ACTION, this.doAddHoursDialogFunc_(menuInfo));
 
@@ -938,7 +938,7 @@ budget.widgets.BusinessHours.createWidgetDom = function(tagName, opt_attributes,
  * @return {number}
  */
 budget.widgets.BusinessHours.prototype.getSelectionDate_ = function(menuInfo, curDate) {
-    let me = this;    
+    let me = this;
     let selDate = me.dateWidget_.convertLocaleDate(curDate);
     return selDate.setDate(menuInfo.dayIndex + selDate.getDate());
 
@@ -952,12 +952,12 @@ budget.widgets.BusinessHours.prototype.getSelectionDate_ = function(menuInfo, cu
  */
 budget.widgets.BusinessHours.prototype.timeInDateRange_ = function(timeRange, time) {
 
-    for(let i = 0; i < timeRange.length; i++) {
+    for (let i = 0; i < timeRange.length; i++) {
         let hol = timeRange[i];
-        
-        if(time >= hol.start && time <= hol.stop) {
+
+        if (time >= hol.start && time <= hol.stop) {
             return true;
-        } 
+        }
     }
     return false;
 };
@@ -1180,7 +1180,7 @@ budget.widgets.BusinessHours.prototype.update_ = function(helper) {
             div.style.left = (minX + Math.min(range.start.x, range.stop.x)) + 'px';
             div.style.top = (minY + Math.min(range.stop.y, range.start.y)) + 'px';
             div.style.height = Math.max(0, Math.abs(range.start.y - range.stop.y) - border.y) + 'px';
-            div.style.width = Math.max(Math.abs(range.start.x - range.stop.x) - border.x, 0)  + 'px';
+            div.style.width = Math.max(Math.abs(range.start.x - range.stop.x) - border.x, 0) + 'px';
         }
 
         let site = this.siteB_.get();

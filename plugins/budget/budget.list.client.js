@@ -22,7 +22,7 @@ budget.widgets.BudgetList = function(scope) {
     const entryT = budgetT.entries;
     let PeriodType = aurora.db.schema.getEnum(budgetT.cols.period);
 
-    let userId = parseInt(budget.widgets.BudgetList.getSearchParams()['id'][0], 10);
+    let userId = budget.widgets.BudgetList.getUserId();
     let query = new recoil.db.Query();
 
     let budgetsB = scope.getDb().get(budgetT.key, query.eq(query.val(userId), budgetT.cols.userid));
@@ -81,9 +81,17 @@ budget.widgets.BudgetList = function(scope) {
 
     }, budgetsB, templateB);
 
-    this.widget_.attachStruct(budget.widgets.BudgetTemplate.createMovableSizable(formatedB, false));
+    this.widget_.attachStruct(aurora.widgets.TableWidget.createSizable(formatedB));
 
 
+};
+
+/**
+ * @return {number}
+ */
+budget.widgets.BudgetList.getUserId = function() {
+    let idStr = budget.widgets.BudgetList.getSearchParams()['id'];
+    return parseInt(idStr == undefined ? goog.net.cookies.get('userid') : idStr[0], 10);
 };
 
 /**

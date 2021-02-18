@@ -206,13 +206,13 @@ aurora.db.Helper.prototype.updateTableError = function(keyInfo, query, options, 
 aurora.db.Helper.prototype.filterQuery_ = function(data, tbl, query, options, all) {
     // filtering count should be done outside this
     var entry = this.findQuery_(tbl, query, options);
-    
+
     if (data instanceof Array) {
         let colKeyMap = aurora.db.schema.makeColKeyMap(tbl);
         let res = [];
         for (let i = 0; i < data.length; i++) {
             let pk = data[i][tbl.info.pk.getName()];
-                
+
             if (entry) {
                 let matches = entry.matches.findFirst(pk);
                 // maybe we don't need matches at all at least if is a non limited query
@@ -839,7 +839,7 @@ aurora.db.Helper.prototype.updateEffectedTables = function(changes, currentError
     idMap.inOrderTraverse(function(entry) {
         let pk = entry.key.lastKeys()[0];
         let newPk = new aurora.db.PrimaryKey(entry.id);
-        console.log('adding pk', pk, "newPk", newPk);
+        console.log('adding pk', pk, 'newPk', newPk);
         let tbl = aurora.db.schema.getTableByName(entry.key);
         let tblInfo = me.tblMap_.findFirst({key: tbl.key.uniqueId()});
         if (tblInfo) {

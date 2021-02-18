@@ -103,12 +103,16 @@
 body {
     background-color: white;
 }
-.aurora-icon-button button.goog-button {
+.aurora-icon-button, .aurora-icon-button button.goog-button {
     padding: 0;
     font-size: 14pt;
     color: steelblue;
     background: none;
     outline: none;
+}
+
+th .aurora-icon-button {
+    padding-left: 6px;
 }
 .aurora-icon-button  {
 }

@@ -9,6 +9,7 @@ goog.require('aurora.recoil.frp');
 goog.require('recoil.db.ChangeDb');
 goog.require('recoil.db.ReadWriteDatabase');
 goog.require('recoil.frp.Frp');
+goog.require('recoil.ui.columns.Date2');
 goog.require('recoil.ui.widgets.table.BooleanColumn');
 goog.require('recoil.ui.widgets.table.NumberColumn');
 goog.require('recoil.ui.widgets.table.PasswordColumn');
@@ -16,7 +17,6 @@ goog.require('recoil.ui.widgets.table.SelectColumn');
 goog.require('recoil.ui.widgets.table.StringColumn');
 goog.require('recoil.ui.widgets.table.TextAreaColumn');
 goog.require('recoil.util.Sequence');
-
 /**
  * a base class clients can use implement global client
  * functionality
@@ -228,13 +228,13 @@ aurora.Client.typeFactories = {
         return new recoil.ui.widgets.table.SelectColumn(key, name, []);
     }, 'reference': function(key, name) {
         return new recoil.ui.widgets.table.SelectColumn(key, name, []);
-    }, 'date' : function (key, name, meta) {
+    }, 'date' : function(key, name, meta) {
         return new recoil.ui.columns.Date2(key, name, meta);
-    },'time' : function (key, name, meta) {
+    },'time' : function(key, name, meta) {
         return new recoil.ui.columns.Time(key, name, meta);
     },
-    
-    
+
+
     'object': function(key, name) {
         var col = new recoil.ui.widgets.table.StringColumn(key, name);
         //col.meta_.converter = new wtm.converters.ObjectStringConverter();

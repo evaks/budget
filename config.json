@@ -2,8 +2,19 @@
     "authentication": {
 	"sessionTable" : "aurora.auth.DbSessionTable.factory",
 	"persistantTimeoutMins" : 525600,
+	"logoutURL": "/",
 	"lockoutMins": 5,
-	"maxTries": 3
+	"maxTries": 3,
+	"mail": {
+	    "from": "\"No Reply\" budget-develop@mail.com",
+	    "host": "smtp.mail.com",
+	    "port": 587,
+	    "secure": false,
+	    "auth": {
+		"user": "budget-develop@mail.com",
+		"pass" : "B7sk5sqBHhi3GBr"
+	    }
+	}
 	
     },
     "database": {
@@ -28,7 +39,7 @@
 			"port": 8080,
 			"protocol": "http",
 			"websocket":true,
-			"httpsRedirect1":8443,
+			"httpsRedirect":8443,
 			"strictTransportSecurity":31536000
 		},
 		{

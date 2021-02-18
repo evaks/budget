@@ -26,27 +26,60 @@
 	]}
     },
 	
-    "actions": [{
-	"path": "/account/register",
-	"function": "budget.actions.register",
-	"access": "aurora.db.access.basic([{'': 'r'}])",
-	"inputs": [
-	    {"name":"username", "type":"string"},
-	    {"name":"password", "type":"string"},
-	    {"name":"email", "type":"string"},
-	    {"name":"newClient", "type":"boolean"},
-	    {"name":"firstName", "type":"string"},
-	    {"name":"lastName", "type":"string"},
-	    {"name":"address", "type":"string"},
-	    {"name":"phone", "type":"Phone"},
-	    {"name":"gender", "type":"Gender"},
-	    {"name":"incomeSource", "type":"IncomeSource"},
-	    {"name":"maritalStatus", "type":"MaritalStatus"},
-	    {"name":"housing", "type":"Housing"},
-	    {"name":"ethnicity", "type":"Ethnicity"},
-	    {"name":"countryOfBirth", "type":"CountryOptions"},
-	    {"name":"dateOfBirth", "type":"date"}
-	]}],
+    "actions": [
+	{
+	    "path": "/account/request_reset",
+	    "arrayParams": true,
+	    "function": "budget.actions.requestResetPassword",
+	    "access": "aurora.db.access.basic([{'': 'r'}])",
+	    "inputs": [{"name":"email", "type":"string"}]
+	},
+	{
+	    "path": "/account/do_reset",
+	    "function": "budget.actions.doResetPassword",
+	    "access": "aurora.db.access.basic([{'': 'r'}])",
+	    "inputs": [{"name":"user", "type":"number"}, {"name":"secret", "type": "string"}, {"name":"password", "type": "string"}]
+	},
+
+	{
+	    "path": "/account/register",
+	    "arrayParams": true,
+	    "function": "budget.actions.register",
+	    "access": "aurora.db.access.basic([{'': 'r'}])",
+	    "inputs": [
+		{"name":"username", "type":"string"},
+		{"name":"password", "type":"string"},
+		{"name":"email", "type":"string"},
+		{"name":"newClient", "type":"boolean"},
+		{"name":"firstName", "type":"string"},
+		{"name":"lastName", "type":"string"},
+		{"name":"address", "type":"string"},
+		{"name":"phone", "type":"Phone"},
+		{"name":"gender", "type":"Gender"},
+		{"name":"incomeSource", "type":"IncomeSource"},
+		{"name":"maritalStatus", "type":"MaritalStatus"},
+		{"name":"housing", "type":"Housing"},
+		{"name":"ethnicity", "type":"Ethnicity"},
+		{"name":"countryOfBirth", "type":"CountryOptions"},
+		{"name":"dateOfBirth", "type":"date"},
+		{"name":"children", "type":"list"}
+	    ]},{
+		"path": "/account/checkUsername",
+		"function": "budget.actions.checkUsername",
+		"arrayParams": true,
+		"access": "aurora.db.access.basic([{'': 'r'}])",
+		"inputs": [{"name":"username", "type":"string"}]
+	    },{
+		"path": "/account/suggestUsername",
+		"function": "budget.actions.suggestUsername",
+		"arrayParams": true,
+		"access": "aurora.db.access.basic([{'': 'r'}])",
+		"inputs": [
+		    {"name":"username", "type":"string"},
+		    {"name":"firstName", "type":"string"},
+		    {"name":"lastName", "type":"string"}		
+		]
+	    }],
 
     "tables": [
 	{
@@ -66,7 +99,24 @@
 		{ "name": "maritalStatus", "type": "MaritalStatus", "nullable": true},
 		{ "name": "incomeSource", "type": "IncomeSource", "nullable": true},
 		{ "name": "housing", "type": "Housing", "nullable": true},
-		{ "name": "newClient", "type": "boolean", "nullable": true}
+		{ "name": "newClient", "type": "boolean", "nullable": true},
+		{ "name": "dateOfBirth", "type":"date", "nullable": true},
+		{ "name": "countryOfBirth", "type":"string(100)", "nullable": true},
+		{ "name": "ethnicity", "type":"string(100)", "nullable": true},
+		{ "name": "children", "type": "owned-list(userid)",
+		  "table": {
+		      "name": "user_children",
+		      "access": "aurora.db.access.basic([{'': 'crud'}])",
+		      "columns": [
+			  {"name": "id", "type": "id"},
+			  {"name": "name", "type": "string(50)"},
+			  {"name": "gender", "type": "Gender", "nullable": true},
+			  {"name": "dateOfBirth", "type": "date", "nullable": true}
+			  
+		      ]
+		  }
+		}
+
 	    ]
 
 	},

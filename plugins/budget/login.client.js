@@ -77,8 +77,22 @@ budget.widgets.Login = function(scope) {
                 let obj = xhr.getResponseJson();
                 if (xhr.isSuccess()) {
                     if (obj.status) {
+
+                        let loginLoc = '/';
+                        try {
+                            let perms = JSON.parse(decodeURIComponent(/** @type {string}*/(goog.net.cookies.get('permissions'))));
+                            if (perms['mentor']) {
+                                loginLoc = '/client/manage';
+                            } else if (perms['user-management']) {
+                                loginLoc = '/admin/mentors';
+                            } else if (perms.client) {
+                                loginLoc = '/client';
+                            }
+                            console.log('login response', perms);
+
+                        } catch (e) {}
                         console.log('logged in', obj);
-                        window.location.replace('/');
+                        window.location.replace(loginLoc);
                     }
                     else {
                         console.log('not logged in', obj);
@@ -108,7 +122,7 @@ budget.widgets.Login = function(scope) {
               cd('tr', {}, cd('td', {colspan: 2}, message)),
               cd('tr', {},
                  cd('td', {class: 'login-signup'}, cd('a', {href: '/account/signup'}, mess.SIGNUP.toString())),
-                 cd('td', {class: 'login-forgot'}, cd('a', {href: '/account/forgot'}, mess.FORGOT_PASSWORD.toString())))
+                 cd('td', {class: 'login-forgot'}, cd('a', {href: '/account/reset'}, mess.FORGOT_PASSWORD.toString())))
              ))
     );
     goog.events.listen(container, goog.events.EventType.KEYDOWN, function(e) {

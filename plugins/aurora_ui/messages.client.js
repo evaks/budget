@@ -48,6 +48,13 @@ aurora.messages.PASSWORD_MUST_NOT_BE_BLANK = recoil.ui.message.getParamMsg('Pass
  */
 aurora.messages.PASSWORDS_DO_NOT_MATCH = recoil.ui.message.getParamMsg('Passwords do not match');
 
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+aurora.messages.RESET_PASSWORD = recoil.ui.message.getParamMsg('Reset Password');
+
 /**
  * @type {!recoil.ui.message.Message}
  * @final

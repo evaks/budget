@@ -1,7 +1,7 @@
 goog.provide('budget.widgets.Budget');
 
-
 goog.require('aurora.db.schema.tables.base.user');
+goog.require('aurora.widgets.TableWidget');
 goog.require('budget.messages');
 goog.require('goog.dom');
 goog.require('recoil.frp.logic');
@@ -76,14 +76,19 @@ budget.widgets.Budget = function(scope) {
 
     let loadingContainer = cd('div', {class: 'budget-loading'}, cd('div'));
     let errorContainer = cd('div', {class: 'budget-error'}, 'Error');
-    let container = cd('div', {}, this.readyContainer_, loadingContainer, errorContainer);
+    let notSelectedContainer = cd('div', {class: 'budget-error'}, 'No Budget Selected');
+    let container = cd('div', {}, this.readyContainer_, loadingContainer, errorContainer, notSelectedContainer);
 
-
+    let me = this;
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(container);
     this.helper_ = new recoil.ui.ComponentWidgetHelper(scope, this.component_, this, function(helper) {
         goog.style.setElementShown(loadingContainer, !helper.isGood() && helper.errors().length === 0);
+        let noBudget = helper.isGood() && me.entriesB_.get() === null;
+
         goog.style.setElementShown(errorContainer, !helper.isGood() && helper.errors().length !== 0);
-        goog.style.setElementShown(this.readyContainer_, helper.isGood());
+
+        goog.style.setElementShown(this.readyContainer_, !noBudget && helper.isGood());
+        goog.style.setElementShown(notSelectedContainer, noBudget && helper.isGood());
     });
 };
 
@@ -94,7 +99,7 @@ budget.widgets.Budget = function(scope) {
  * @return {!recoil.frp.Behaviour}
  */
 
-budget.widgets.Budget.prototype.createPrintB_ = function (budgetB, userB) {
+budget.widgets.Budget.prototype.createPrintB_ = function(budgetB, userB) {
     let frp = this.scope_.getFrp();
     let scope = this.scope_;
     let budgetT = aurora.db.schema.tables.base.budget;
@@ -106,20 +111,20 @@ budget.widgets.Budget.prototype.createPrintB_ = function (budgetB, userB) {
     let cd = goog.dom.createDom;
     let me = this;
     let htmlFormatter = {
-        join: function (items) {
+        join: function(items) {
             return cd.apply(null, ['span', {}].concat(items));
         },
         format: function(type, val) {
-            switch(type) {
+            switch (type) {
             case 'bold':
                 return cd('span', {class: 'budget-print-bold'}, val);
             default:
             }
-            
+
             return goog.dom.createTextNode(val);
         }
     };
-    return frp.createCallback(function () {
+    return frp.createCallback(function() {
         var mywindow = window.open(undefined, undefined, 'height=400,width=600');
         mywindow.document.write('<html><head><title>Budget</title><link rel="stylesheet" type="text/css" href="/images/print.css">');
         mywindow.document.write('</head><body ><table  id="budget_table" style="width: 100%; height: 100%;">');
@@ -130,7 +135,7 @@ budget.widgets.Budget.prototype.createPrintB_ = function (budgetB, userB) {
         /***
          * @param {...?} var_args
          */
-        let addRow = function (var_args) {
+        let addRow = function(var_args) {
             let row = cd('tr');
             let next = 0;
             for (let i = 0; i < arguments.length; i++) {
@@ -143,7 +148,7 @@ budget.widgets.Budget.prototype.createPrintB_ = function (budgetB, userB) {
                 if (val instanceof recoil.ui.message.Message) {
                     val = val.toString();
                 }
-                
+
                 if (typeof val === 'number') {
                     isNumber = true;
                     if (arg && arg.total) {
@@ -165,8 +170,8 @@ budget.widgets.Budget.prototype.createPrintB_ = function (budgetB, userB) {
                 if (arg && arg.total) {
                     val = cd('span', {},cd('div', {class: 'budget-print-dollar'}, '$'), val);
                 }
-                let start = arg.start !== undefined? arg.start : next;
-                let span =  arg.span !== undefined? arg.span : 1;
+                let start = arg.start !== undefined ? arg.start : next;
+                let span = arg.span !== undefined ? arg.span : 1;
                 if (arg.skip) {
                     next += arg.skip;
                     continue;
@@ -181,18 +186,18 @@ budget.widgets.Budget.prototype.createPrintB_ = function (budgetB, userB) {
                     el.rowSpan = arg.rows;
                 }
                 if (arg.styles) {
-                    goog.dom.classlist.addAll(el, arg.styles.map(function (v) {return 'budget-print-' + v;}));
+                    goog.dom.classlist.addAll(el, arg.styles.map(function(v) {return 'budget-print-' + v;}));
                 }
                 if (isNumber) {
                     goog.dom.classlist.addAll(el, ['budget-print-number']);
                 }
                 row.appendChild(el);
-                    
-                next+= span;
+
+                next += span;
             }
-            
+
             tbl.appendChild(row);
-            
+
         };
         let bPeriod = 0;
         let entries = [];
@@ -202,41 +207,41 @@ budget.widgets.Budget.prototype.createPrintB_ = function (budgetB, userB) {
         });
 
         let userInfo = me.getUserInfo_(user);
-        
+
         addRow({value: mess.BUDGET_PROTECTED.toString(), span: 6, styles: ['border-thick']},
                {value: cd('span', {}, cd('b', {}, mess.PLEASE_NOTE.toString()), mess.THIS_BUDGET_IS_BASED.toString()), styles: ['border-thick-right', 'border-thick-left', 'border-thick-top'],
                 span: 3, start: 9});
         addRow({value: mess.SERVICE_NAME.toString().toUpperCase() + ' ph: 04 5666357', styles: [], span: 4},
-               {value: mess._HOUSEHOLD_BUDGET.toString({period: periodMeta.enumDisplay.resolve(bPeriod).toString()}).toUpperCase(), start: 5, styles : ['center', 'bold', 'underline']},
-               {value: mess.ON_INFORMATION, styles: ['border-thick-right', 'border-thick-left', 'border-thick-bottom'], start:9, span: 3}
+               {value: mess._HOUSEHOLD_BUDGET.toString({period: periodMeta.enumDisplay.resolve(bPeriod).toString()}).toUpperCase(), start: 5, styles: ['center', 'bold', 'underline']},
+               {value: mess.ON_INFORMATION, styles: ['border-thick-right', 'border-thick-left', 'border-thick-bottom'], start: 9, span: 3}
               );
-        
+
         addRow(mess.NAME.toField(), {value: userInfo.name, styles: ['grey']});
         addRow(mess.ADDRESS.toField(), {value: userInfo.address, rows: 2, styles: ['grey']}, {value: mess.ENTER_ONE_OF.toField(), start: 8});
         addRow('', {skip: 1}, {value: periodMeta.enumDisplay.resolve(periodMeta.enum.weekly), start: 8}, {value: periodMeta.enumDisplay.resolve(bPeriod)});
         addRow(mess.PHONE.toField(), {value: userInfo.phone, styles: ['grey']}, {value: periodMeta.enumDisplay.resolve(periodMeta.enum.fortnightly), start: 8});
         addRow({value: periodMeta.enumDisplay.resolve(periodMeta.enum.monthly), start: 8});
 
-        addRow({value: mess.INCOME.toField().toUpperCase(), styles: ['bold',  'border', 'border-top', 'border-left']},
-               {value: mess.$_VALUE, styles: ['bold',  'border', 'border-top', 'num-col']},
+        addRow({value: mess.INCOME.toField().toUpperCase(), styles: ['bold', 'border', 'border-top', 'border-left']},
+               {value: mess.$_VALUE, styles: ['bold', 'border', 'border-top', 'num-col']},
                {value: mess.PAYMENT_PERIOD, styles: ['bold', 'border', 'border-top']},
-               {value: mess.CALCULATED_PER.resolve({period: periodMeta.enumDisplay.resolve(bPeriod)}), styles: ['bold',  'border', 'border-top', 'num-col']},
+               {value: mess.CALCULATED_PER.resolve({period: periodMeta.enumDisplay.resolve(bPeriod)}), styles: ['bold', 'border', 'border-top', 'num-col']},
                '',
-               {value: mess.DEBTS_PAYABLE.toField().toUpperCase(), styles: ['bold', 'border-left','border', 'border-top']},
+               {value: mess.DEBTS_PAYABLE.toField().toUpperCase(), styles: ['bold', 'border-left', 'border', 'border-top']},
                {value: mess.ADDITIONAL_DESCRIPTION.toField().toUpperCase(), styles: ['bold', 'border', 'border-top']},
                {value: mess.$_VALUE, styles: ['bold', 'border', 'border-top', 'num-col']},
-               {value: mess.PAYMENT_PERIOD, styles: ['bold',  'border', 'border-top']},
-               {value: mess.CALCULATED_PER.resolve({period : periodMeta.enumDisplay.resolve(bPeriod)}), styles: ['bold',  'border', 'border-top']},
-               {value: mess.ARREARS, styles: ['bold',  'border', 'border-top', 'num-col']},
-               {value: mess.TOTAL_OWING, styles: ['bold',  'border', 'border-top', 'num-col']});
-               
+               {value: mess.PAYMENT_PERIOD, styles: ['bold', 'border', 'border-top']},
+               {value: mess.CALCULATED_PER.resolve({period: periodMeta.enumDisplay.resolve(bPeriod)}), styles: ['bold', 'border', 'border-top']},
+               {value: mess.ARREARS, styles: ['bold', 'border', 'border-top', 'num-col']},
+               {value: mess.TOTAL_OWING, styles: ['bold', 'border', 'border-top', 'num-col']});
+
         let totals = {};
         let income = [];
         let debts = [];
         let household = [];
         let totalOwing = 0;
         let totalArrears = 0;
-        
+
         entries.forEach(function(entry) {
             let type = entry[entryT.cols.type.getName()];
             let desc = entry[entryT.cols.description.getName()];
@@ -251,7 +256,7 @@ budget.widgets.Budget.prototype.createPrintB_ = function (budgetB, userB) {
                 arr.push([
                     {value: desc, styles: ['border', 'border-left', 'col-desc']},
                     {value: valNum, styles: ['grey', 'border', 'col-val']},
-                    {value: period, styles:['grey', 'border']}, {value: periodValue/100, styles: ['border']}]);
+                    {value: period, styles: ['grey', 'border']}, {value: periodValue / 100, styles: ['border']}]);
             }
             else if (EntryType.debt === type) {
                 let arrears = entry[entryT.cols.arrears.getName()];
@@ -259,86 +264,86 @@ budget.widgets.Budget.prototype.createPrintB_ = function (budgetB, userB) {
                 let notes = entry[entryT.cols.notes.getName()];
                 let arrearsVal = recoil.util.ExpParser.instance.eval(arrears);
                 let owingVal = recoil.util.ExpParser.instance.eval(owing);
-                
+
                 totalOwing += owingVal ? owingVal * 100 : 0;
                 totalArrears += arrearsVal ? arrearsVal * 100 : 0;
                 debts.push([
-                    {value: desc, start: 5, styles:['border-left', 'col-desc', 'border-bottom']}, {value: notes, styles: ['grey', 'border', 'border-left']},
+                    {value: desc, start: 5, styles: ['border-left', 'col-desc', 'border-bottom']}, {value: notes, styles: ['grey', 'border', 'border-left']},
                     {value: valNum, styles: ['grey', 'border', 'col-val']},
-                    {value: period, styles:['grey', 'border']},
+                    {value: period, styles: ['grey', 'border']},
                     {value: periodValue, styles: ['border']},
-                    {value: arrearsVal, styles:['grey', 'border']},
-                    {value: owingVal, styles:['grey', 'border']}
+                    {value: arrearsVal, styles: ['grey', 'border']},
+                    {value: owingVal, styles: ['grey', 'border']}
                 ]);
-            }        
-                
+            }
+
         });
 
         income.push([
             {value: mess.LESS_DEDUCTIONS, styles: ['border', 'border-left']},
-            {value: '',  styles: ['number', 'grey', 'border']},
-            {value: '', styles:['grey', 'border']}, {value: '', styles: ['number', 'border']}]);
+            {value: '', styles: ['number', 'grey', 'border']},
+            {value: '', styles: ['grey', 'border']}, {value: '', styles: ['number', 'border']}]);
 
-        
+
 
         income.push([
             {value: mess.A_TOTAL_INCOME, styles: ['border-right', 'border-left', 'bold', 'border-thick-top', 'border-double-bottom']},
-            {value: '',  styles: ['border-right', 'border-thick-top','border-double-bottom']},
-            {value: '',  styles: ['border-right', 'border-thick-top','border-double-bottom']},
-            {value: totals[EntryType.income]/100, styles: ['border-right', 'border-thick-top','border-double-bottom']}]);
+            {value: '', styles: ['border-right', 'border-thick-top', 'border-double-bottom']},
+            {value: '', styles: ['border-right', 'border-thick-top', 'border-double-bottom']},
+            {value: totals[EntryType.income] / 100, styles: ['border-right', 'border-thick-top', 'border-double-bottom']}]);
 
         income.push([
-            {value: mess.HOUSEHOLD_EXPENSES.toField().toUpperCase(), styles:['border', 'border-left']},
-            {value: '',  styles: ['border']},
-            {value: '', styles:['border']}, {value: '', styles: ['number', 'border']}]);
+            {value: mess.HOUSEHOLD_EXPENSES.toField().toUpperCase(), styles: ['border', 'border-left']},
+            {value: '', styles: ['border']},
+            {value: '', styles: ['border']}, {value: '', styles: ['number', 'border']}]);
 
 
         household.push([
             {value: mess.B_TOTAL_EXPENSES, styles: ['bold', 'border-thick-top', 'border-double-bottom']},
-            {value: '',  styles: ['border-thick-top','border-double-bottom']},
-            {value: '',  styles: ['border-thick-top','border-double-bottom']},
-            {value: totals[EntryType.household]/100, styles: ['border-thick-top','border-double-bottom']}]);
+            {value: '', styles: ['border-thick-top', 'border-double-bottom']},
+            {value: '', styles: ['border-thick-top', 'border-double-bottom']},
+            {value: totals[EntryType.household] / 100, styles: ['border-thick-top', 'border-double-bottom']}]);
         household.push([]);
 
         household.push([
-            {value: mess.BUDGET_TOTALS.toField(), styles: ['bold','border', 'border-left', 'border-top']},
-            {value: mess.ENTER_TOTAL_A, span: 2,  styles: ['bold','border', , 'border-top']},
-            {value: totals[EntryType.income]/100,  styles: ['border', , 'border-top']}]);
+            {value: mess.BUDGET_TOTALS.toField(), styles: ['bold', 'border', 'border-left', 'border-top']},
+            {value: mess.ENTER_TOTAL_A, span: 2, styles: ['bold', 'border', , 'border-top']},
+            {value: totals[EntryType.income] / 100, styles: ['border', , 'border-top']}]);
 
         household.push([
-            {value: '', styles: ['bold','border', 'border-left']},
-            {value: mess.ENTER_TOTAL_B, styles: ['bold','border']},
-            {value: totals[EntryType.household]/100,  styles: ['border']}]);
+            {value: '', styles: ['bold', 'border', 'border-left']},
+            {value: mess.ENTER_TOTAL_B, styles: ['bold', 'border']},
+            {value: totals[EntryType.household] / 100, styles: ['border']}]);
 
         household.push([
-            {value: '', styles: ['bold','border','border-left']},
-            {value: mess.ENTER_TOTAL_C, styles: ['bold','border']},
-            {value: totals[EntryType.household]/100,  styles: ['border']}, {value: '', styles:['border-bottom']}]);
+            {value: '', styles: ['bold', 'border', 'border-left']},
+            {value: mess.ENTER_TOTAL_C, styles: ['bold', 'border']},
+            {value: totals[EntryType.household] / 100, styles: ['border']}, {value: '', styles: ['border-bottom']}]);
 
         household.push([
-            {value: '', styles: ['bold','border', 'border-left']},
-            {value: mess.ADD_TOTALS_B_C.toRichText(htmlFormatter), styles: [,'border'], span: 2},
-            {value: (totals[EntryType.household] + totals[EntryType.debt])/100,  styles: ['border']}]);
+            {value: '', styles: ['bold', 'border', 'border-left']},
+            {value: mess.ADD_TOTALS_B_C.toRichText(htmlFormatter), styles: [, 'border'], span: 2},
+            {value: (totals[EntryType.household] + totals[EntryType.debt]) / 100, styles: ['border']}]);
 
         household.push([
-            {value: '', styles: ['bold','border', 'border-left']},
+            {value: '', styles: ['bold', 'border', 'border-left']},
             {value: mess.DEDUCT_B_C_FROM_TOTAL_A.toRichText(htmlFormatter), styles: ['border'], span: 2},
-                    {value: (totals[EntryType.income] - totals[EntryType.household] + totals[EntryType.debt])/100,  styles: ['border']}]);
+                    {value: (totals[EntryType.income] - totals[EntryType.household] + totals[EntryType.debt]) / 100, styles: ['border']}]);
 
 
         household.push([]);
         household.push([
             {value: mess.THIS_IS_YOU_SUPLUS_DEFICIT.toField(), styles: ['bold'], span: 3},
-            {value: (totals[EntryType.income] - totals[EntryType.household] + totals[EntryType.debt])/100,  styles: ['border-bottom-dotted'], start: 3}]);
+            {value: (totals[EntryType.income] - totals[EntryType.household] + totals[EntryType.debt]) / 100, styles: ['border-bottom-dotted'], start: 3}]);
         household.push([
             mess.CLIENT_WANTS.toField(),
-            {value: '',  styles: ['border-bottom-dotted'], span: 3}]);
+            {value: '', styles: ['border-bottom-dotted'], span: 3}]);
         household.push([
             mess.PLEASE_NOTE.toField(),
-            {value: '',  styles: ['border-bottom-dotted'], span: 3}]);
-        household.push([{value: '',  styles: ['border-bottom-dotted'], start: 1, span: 3}]);
-        household.push([{value: '',  styles: ['border-bottom-dotted'], start: 1, span: 3}]);
-        household.push([{value: '',  styles: ['border-bottom-dotted'], start: 1, span: 3}]);
+            {value: '', styles: ['border-bottom-dotted'], span: 3}]);
+        household.push([{value: '', styles: ['border-bottom-dotted'], start: 1, span: 3}]);
+        household.push([{value: '', styles: ['border-bottom-dotted'], start: 1, span: 3}]);
+        household.push([{value: '', styles: ['border-bottom-dotted'], start: 1, span: 3}]);
         household.push([{value: mess.TIME_FACTOR, styles: ['border-bottom'], span: 4}]);
 
 
@@ -346,9 +351,9 @@ budget.widgets.Budget.prototype.createPrintB_ = function (budgetB, userB) {
         debts.push([
             {value: mess.C_TOTAL_DEBTS, styles: ['bold'], start: 5},
             {value: '', styles: ['border-right'], start: 8},
-            {value: totals[EntryType.debt]/100,  total: true, styles: ['border-double-bottom','border-right']},
-            {value: totalArrears/100,  total: true, styles: ['border-double-bottom', 'border-right']},
-            {value: totalOwing/100,  total: true, styles: ['border-double-bottom', 'border-right']},
+            {value: totals[EntryType.debt] / 100, total: true, styles: ['border-double-bottom', 'border-right']},
+            {value: totalArrears / 100, total: true, styles: ['border-double-bottom', 'border-right']},
+            {value: totalOwing / 100, total: true, styles: ['border-double-bottom', 'border-right']},
         ]);
 
         debts.push([
@@ -364,14 +369,14 @@ budget.widgets.Budget.prototype.createPrintB_ = function (budgetB, userB) {
 
         let left = income.concat(household);
         let right = debts;
-        
+
         for (let i = 0; i < left.length || i < right.length; i++) {
             let l = left[i] || [];
             let r = right[i] || [];
-            addRow.apply(null, l.concat([{value: '', styles:['mid']}]).concat(r));
+            addRow.apply(null, l.concat([{value: '', styles: ['mid']}]).concat(r));
         }
-            
-        console.log("mywindow", tbl);
+
+        console.log('mywindow', tbl);
         /*
         budget.cell('A1').value(mess.BUDGET_PROTECTED.toString());
         budget.cell('J1').value(rich([{value: '', bold: true}, ' This budget is based']));
@@ -385,10 +390,10 @@ budget.widgets.Budget.prototype.createPrintB_ = function (budgetB, userB) {
  * @param {!recoil.structs.table.TableInterface} user
  * @return {{name:string, phone: string, address: string}}
  */
-budget.widgets.Budget.prototype.getUserInfo_ = function (user) {
+budget.widgets.Budget.prototype.getUserInfo_ = function(user) {
     const userT = aurora.db.schema.tables.base.user;
 
-    let res = {name :'',phone: '', address: ''};
+    let res = {name: '', phone: '', address: ''};
     user.forEach(function(row) {
         res.name = ((row.get(userT.cols.firstName) || '') + ' ' + (row.get(userT.cols.lastName) || '')).trim();
         res.phone = row.get(userT.cols.phone);
@@ -403,7 +408,7 @@ budget.widgets.Budget.prototype.getUserInfo_ = function (user) {
  * @param {!recoil.frp.Behaviour} userB
  * @return {!recoil.frp.Behaviour}
  */
-budget.widgets.Budget.prototype.exportToExcelB_ = function (budgetB, userB) {
+budget.widgets.Budget.prototype.exportToExcelB_ = function(budgetB, userB) {
     let frp = this.scope_.getFrp();
     let scope = this.scope_;
     let budgetT = aurora.db.schema.tables.base.budget;
@@ -438,7 +443,7 @@ budget.widgets.Budget.prototype.exportToExcelB_ = function (budgetB, userB) {
             let income = [];
             let expenses = [];
             let debts = [];
-            
+
             let tbl = budgetB.get();
             let user = userB.get();
             let periods = [];
@@ -474,7 +479,7 @@ budget.widgets.Budget.prototype.exportToExcelB_ = function (budgetB, userB) {
                     }
                     else if (EntryType.household === type) {
                         totalHousehold += Math.round(periodValue === null ? 0 : periodValue);
-                        
+
                         expenses.push([desc, {f: value}, period, {c: periodValue}]);
                     }
                     else if (EntryType.debt === type) {
@@ -484,17 +489,17 @@ budget.widgets.Budget.prototype.exportToExcelB_ = function (budgetB, userB) {
                         let notes = entry[entryT.cols.notes.getName()];
                         let arrearsVal = recoil.util.ExpParser.instance.eval(arrears);
                         let owingVal = recoil.util.ExpParser.instance.eval(owing);
-                        
+
                         totalOwing += owingVal ? owingVal * 100 : 0;
                         totalArrears += arrearsVal ? arrearsVal * 100 : 0;
-                        
-                        
-                        
+
+
+
                         debts.push([desc, notes, {f: value}, period, {c: periodValue}, {f: arrears}, {f: owing}]);
                     }
                 });
             });
-            
+
             let toColIndex = function(col) {
                 let res = String.fromCharCode('A'.charCodeAt(0) + col % 26);
                 col = Math.floor(col / 26);
@@ -595,7 +600,7 @@ budget.widgets.Budget.prototype.exportToExcelB_ = function (budgetB, userB) {
                 });
 
                 budget.cell('A1').value(mess.BUDGET_PROTECTED.toString());
-                budget.cell('J1').value(rich([{value: mess.PLEASE_NOTE.toField()+ '   ', bold: true}, mess.THIS_BUDGET_IS_BASED.toString()]));
+                budget.cell('J1').value(rich([{value: mess.PLEASE_NOTE.toField() + '   ', bold: true}, mess.THIS_BUDGET_IS_BASED.toString()]));
                 budget.cell('A2').value(mess.SERVICE_NAME.toString().toUpperCase() + ' ph: 04 5666357');
                 budget.range('A2:D2').merged(true).style('horizontalAlignment', 'right');
                 budget.cell('F2').formula(
@@ -744,7 +749,7 @@ budget.widgets.Budget.prototype.exportToExcelB_ = function (budgetB, userB) {
                 budget.column('L').width(13);
 
                 wb.outputAsync({ type: undefined }).then(function(blob) {
-                    saveFile(blob, 'budget-' + (name ? name : 'unamed')  + '.xlsx');
+                    saveFile(blob, 'budget-' + (name ? name : 'unamed') + '.xlsx');
                 });
             });
 
@@ -766,16 +771,17 @@ budget.widgets.Budget.prototype.attach = function(idB) {
     totalNames[EntryType.household] = 'Total Expenses (B)';
     totalNames[EntryType.income] = 'Total Income (A)';
     totalNames[EntryType.debt] = 'Total Debts (C)';
-
+    let noneB = frp.createB(null);
     let budgetB = frp.switchB(frp.liftB(function(id) {
+        console.log('switch to id', id);
         if (id.length < 1) {
-            return notReady;
+            return noneB;
         }
         let query = new recoil.db.Query();
         return scope.getDb().get(budgetT.key, query.eq(budgetT.cols.id, query.val(id[0][0].db)));
     }, idB));
     let query = new recoil.db.Query();
-    let userId = parseInt(budget.widgets.BudgetList.getSearchParams()['id'][0], 10);
+    let userId = budget.widgets.BudgetList.getUserId();
     let userB = scope.getDb().get(userT.key, query.eq(userT.cols.id, userId));
 
     let periodMeta = aurora.db.schema.getMeta(budgetT.cols.period);
@@ -783,7 +789,7 @@ budget.widgets.Budget.prototype.attach = function(idB) {
     this.exportWidget_.attachStruct({
         action: this.exportToExcelB_(budgetB, userB),
         text: 'Export'});
-    
+
     this.printWidget_.attachStruct({
         action: this.createPrintB_(budgetB, userB),
         text: 'Print'});
@@ -940,11 +946,11 @@ budget.widgets.Budget.prototype.attach = function(idB) {
                 totalRow.set(CALC, sum / 100);
 
                 totalRow.set(entryT.cols.description, totalNames[type]);
-                totalRow.set(entryT.cols.arrears, arrearsSum/100);
-                totalRow.set(entryT.cols.owing, owingSum/100);
+                totalRow.set(entryT.cols.arrears, arrearsSum / 100);
+                totalRow.set(entryT.cols.owing, owingSum / 100);
                 let nc = new recoil.ui.widgets.table.NumberColumn(CALC, '');
                 totalRow.addCellMeta(entryT.cols.owing, nc.getMeta({step: 0.01}) || {});
-                totalRow.addCellMeta(entryT.cols.arrears, nc.getMeta({step: 0.01})|| {});
+                totalRow.addCellMeta(entryT.cols.arrears, nc.getMeta({step: 0.01}) || {});
 
                 totalRow.addCellMeta(entryT.cols.arrears, {cellDecorator: totalCellDecorator});
                 totalRow.addCellMeta(entryT.cols.period, {visible: false});
@@ -972,9 +978,12 @@ budget.widgets.Budget.prototype.attach = function(idB) {
         if (type === null) {
             return tableB;
         }
-        return aurora.ui.ErrorWidget.createTable(scope, budget.widgets.BudgetTemplate.createMovableSizable(tableB));
+        return aurora.ui.ErrorWidget.createTable(scope, aurora.widgets.TableWidget.createMovableSizable(tableB));
     };
-    let entriesB = budget.Client.instance.createSubTableB(budgetB, frp.createB(/** @type {Array} */(null)), budgetT.cols.entries);
+    let entriesB = recoil.frp.Chooser.if(
+        recoil.frp.logic.equal(null, budgetB), null,
+        budget.Client.instance.createSubTableB(budgetB, frp.createB(/** @type {Array} */(null)), budgetT.cols.entries));
+    this.entriesB_ = entriesB;
     this.helper_.attach(entriesB, userB);
     this.incomeWidget_.attachStruct(partTable(entriesB, EntryType.income));
     this.householdWidget_.attachStruct(partTable(entriesB, EntryType.household));

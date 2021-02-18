@@ -1350,7 +1350,7 @@ aurora.widgets.Selectize.prototype.open = function() {
     self.isOpen = true;
     // todo self.refreshState();
     goog.style.setStyle(self.dropdown_, {visibility: 'hidden', display: 'block'});
-    console.log("open");
+    console.log('open');
     self.positionDropdown();
     goog.style.setStyle(self.dropdown_, {visibility: 'visible'});
 };

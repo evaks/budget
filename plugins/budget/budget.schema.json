@@ -159,7 +159,7 @@
 	    "accessFilter": [
 		{"user-management" : "all"},
 		{"mentor": "budget.filter.budgetMentor"},
-		{"": "aurora.db.access.filter.equal('id','@userid')"}
+		{"": "aurora.db.access.filter.equal('userid','@userid')"}
 		
 	    ],
 	    "columns": [
