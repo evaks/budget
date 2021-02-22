@@ -426,6 +426,10 @@ budget.messages.CHILDREN = recoil.ui.message.getParamMsg('Children');
  * @final
  */
 budget.messages.INVALID_EMAIL = recoil.ui.message.getParamMsg('Invalid Email');
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
 budget.messages.MAKE_HOLIDAY = recoil.ui.message.getParamMsg('Add Holiday');
 
 /**

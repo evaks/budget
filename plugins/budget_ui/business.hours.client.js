@@ -1287,7 +1287,7 @@ budget.widgets.BusinessHours.prototype.update_ = function(helper) {
                     let yStart = (minY + hourH * startOffsetMillis / 3600000);
                     let yEnd = (minY + hourH * endOffsetMillis / 3600000);
 
-                    let curDiv = cd('div', {class: 'budget-holiday'}, cd('div', {class: 'holiday-text'}, aurora.messages.HOLIDAY.toString()));
+                    let curDiv = cd('div', {class: 'budget-holiday'}, cd('div', {class: 'holiday-text'}, budget.messages.HOLIDAY.toString()));
 
                     curDiv.style.top = yStart + 'px';
                     curDiv.style.height = (yEnd - yStart) + 'px';
