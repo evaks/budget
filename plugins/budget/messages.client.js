@@ -404,6 +404,17 @@ budget.messages.TIME_FACTOR = recoil.ui.message.getParamMsg('Time Factor');
  */
 budget.messages.GOALS_TO_BE_OBTAINED = recoil.ui.message.getParamMsg('Goals to be obtained');
 
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.END_TIME_AFTER_START = recoil.ui.message.getParamMsg('The end time must be after the start time');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
 /**
  * @type {!recoil.ui.message.Message}
  * @final
@@ -415,3 +426,89 @@ budget.messages.CHILDREN = recoil.ui.message.getParamMsg('Children');
  * @final
  */
 budget.messages.INVALID_EMAIL = recoil.ui.message.getParamMsg('Invalid Email');
+budget.messages.MAKE_HOLIDAY = recoil.ui.message.getParamMsg('Add Holiday');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.REMOVE_HOLIDAY = recoil.ui.message.getParamMsg('Remove Holiday');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.ADD_HOLIDAYS_DIALOG = recoil.ui.message.getParamMsg('Add Holidays...');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.MODIFY_HOLIDAY_DIALOG = recoil.ui.message.getParamMsg('Modify Holiday...');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.START_DATE = recoil.ui.message.getParamMsg('Start Date');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.STOP_DATE = recoil.ui.message.getParamMsg('Stop Date');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.MODIFY_HOLIDAY = recoil.ui.message.getParamMsg('Modify Holiday');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.MODIFY = recoil.ui.message.getParamMsg('Modify');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.HOLIDAY = recoil.ui.message.getParamMsg('Holiday');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.MODIFY_HOURS_DIALOG = recoil.ui.message.getParamMsg('Modify Business Hours...');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.REMOVE_HOURS = recoil.ui.message.getParamMsg('Remove Business Hours');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.ADD_HOURS_DIALOG = recoil.ui.message.getParamMsg('Add Business Hours...');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.START_TIME = recoil.ui.message.getParamMsg('Start Time:');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.STOP_TIME = recoil.ui.message.getParamMsg('Stop Time:');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.ADD = recoil.ui.message.getParamMsg('Add');
