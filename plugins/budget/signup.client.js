@@ -79,7 +79,7 @@ budget.widgets.SignUp = function(scope, opt_userid) {
             data[col.getName()] = col.getDefault();
         }
         else if (meta.type === 'password') {
-            data[col.getName()] = col.getDefault();
+            data[col.getName()] = '';
         }
         else if (meta.hasOwnProperty('defaultVal')) {
             data[col.getName()] = meta.defaultVal;
@@ -125,7 +125,7 @@ budget.widgets.SignUp = function(scope, opt_userid) {
     }, tableB);
 
     let createValue = function(col) {
-        return recoil.frp.table.TableCell.getValue(frp, /** @type {!recoil.frp.Behaviour<(null|!recoil.structs.table.TableCell)>} */(recoil.frp.table.TableCell.create(frp, tableB, keysB, col)));
+        return recoil.frp.table.TableCell.getValue(frp, /** @type {!recoil.frp.Behaviour<?(!recoil.structs.table.TableCell)>} */(recoil.frp.table.TableCell.create(frp, tableB, keysB, col)));
     };
     let tableWidget = function(col, options) {
         let div = cd('div', {class: 'goog-inline-block'});

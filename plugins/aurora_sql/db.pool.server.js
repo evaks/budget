@@ -23,6 +23,7 @@ aurora.db.type.types = {
     password: 3,
     int: 4, // 32 bit integer
     json: 5,
+    blob: 6,
 
 };
 /**

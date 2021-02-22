@@ -7,9 +7,10 @@ body {
 .main-header {
     background-image: url(/images/Lower_Hutt_Panorama_at_night.jpg);
     background-repeat: no-repeat;
-    background-size: 100vw 300px;
+    background-size: cover;
     display: flex;
-   
+    width: 100vw;
+    height: 300px;
 }
 
 .menu-container {
@@ -55,13 +56,27 @@ body {
     color: #636363;
 }
 .intro-message {
-    color: white;
+    color: #ccc;
     font-size: 32px;
     line-height: 1.6em;
     text-align: center;
     padding: 10px 100px 10px 100px;
 }
-	       
+
+.intro-call a {
+    color: white;
+    font-style: italic;
+    border-bottom: 1px solid;
+}
+.intro-call a i {
+    font-size: 20pt;
+}
+.intro-call {
+    font-size: 32px;
+    line-height: 1.6em;
+    padding: 10px 100px 10px 100px;
+}
+
 img.budget-logo {
     height: 300px;
     /*position: fixed;*/

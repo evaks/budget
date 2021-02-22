@@ -124,7 +124,7 @@ div.budget-calendar-date {
     justify-content: center;
     align-items: center;
 /*    border: 2px solid black;*/
-    font-size: calc(15vh - 35px); /*65px;*/
+    font-size: calc(min(8vw - 10px,15vh - 35px));
     transform: rotate(-75deg);
     width: 100%;
     color: #ff00004d;

@@ -64,7 +64,7 @@ budget.widgets.UserManagement = function(scope, options) {
 
 
         let res = [
-            {key: userT.cols.mentorid, name: 'Mentor', col: mentorCol}
+            {key: userT.cols.mentorid, name: 'Mentor', col: mentorCol, meta: {editable: true}}
         ];
 
         if (options.searchOnly) {

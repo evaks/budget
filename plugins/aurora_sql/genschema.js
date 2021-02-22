@@ -71,6 +71,7 @@ let typeFactories = {
     'text': {jsType: 'text', getInfo: getStringInfo, sqlType: 'varchar'},
 
     'password' : {jsType: 'password', sqlType: 'password'},
+    'file': {jsType: 'file', sqlType: 'blob'},
 
 };
 
@@ -913,7 +914,7 @@ function generateDbInit(def, ns, types, out) {
             let subInserts = [];
             for (let k in row) {
                 if (colMap[k] && colMap[k].table) {
-                    subInserts = subInserts.concat({table: colMap[k].table, values: row[k]});
+                    subInserts = subInserts.concat(row[k].map(function(v) { return {table: colMap[k].table, values: [v]};}));
                     delete row[k];
                 }
                 else if (safeRecGet(passwords, [table, k])) {
@@ -981,7 +982,7 @@ function generateDbInit(def, ns, types, out) {
                 subInserts.forEach(function(info, idx) {
                     fs.appendFileSync(out, padding + '                   todoInserts.push({table:' + stringify(info.table.name) + ', action:');
 
-                    doInserts(idx === 0, info.table.name, info.values, table, depth + 1);
+                    doInserts(true, info.table.name, info.values, table, depth + 1);
                     fs.appendFileSync(out, '});\n');
                 });
                 fs.appendFileSync(out, padding + '                    callback(null);\n');

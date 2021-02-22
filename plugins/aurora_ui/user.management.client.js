@@ -154,6 +154,11 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
                 if (options.searchOnly) {
                     res.addMeta({editable: false});
                 }
+                extraCols.forEach(function(info) {
+                    if (info.hasOwnProperty('meta')) {
+                        res.addColumnMeta(info.key, info.meta);
+                    }
+                });
                 tbl.forEach(function(row) {
                     let mrow = row.unfreeze();
                     mrow.set(resetPasswordCol, null);
@@ -161,6 +166,7 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
                         if (info.hasOwnProperty('value')) {
                             mrow.set(info.key, info.value(row));
                         }
+
                     });
                     res.addRow(mrow);
                 });

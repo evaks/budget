@@ -519,39 +519,30 @@ aurora.db.mysql.Pool.prototype.transaction = function(callback, doneFunc) {
                     doneFunc(err);
                     return;
                 }                 
-                connection.query('SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED', function(err) {
+
+                me.transactionCount_++;
+                
+                callback(me, function(err) {
+                    let args = makeArguments(arguments);
+                    me.transactionCount_--;
                     if (err) {
-                        doneFunc(err);
-                        return;
+                        connection.rollback(function() {
+                            doneFunc(err);
+                        });
                     }
-                    me.transactionCount_++;
-                    
-                    callback(me, function(err) {
-                        console.log("ending transaction", err, me.transactionCount_);
-                        let args = makeArguments(arguments);
-                        me.transactionCount_--;
-                        if (err) {
-                            connection.rollback(function() {
-                                doneFunc(err);
-                            });
-                        }
-                        else {
-                            console.log("comitting", err);
-                            connection.commit(function(err) {
-                                if (err) {
-                                    connection.rollback(function() {
-                                        doneFunc(err);
-                                    });
-                                } else {
+                    else {
+                        connection.commit(function(err) {
+                            if (err) {
+                                connection.rollback(function() {
+                                    doneFunc(err);
+                                });
+                            } else {
                                     doneFunc.apply(null, args);
-                                }
-                            });
-                        }
-                    });
-
-
+                            }
+                        });
+                    }
                 });
-
+            
             });
         }
         else {
@@ -606,6 +597,9 @@ aurora.db.mysql.Pool.prototype.createTable = function(table, fields, indexes, op
 
         if (field.type === aurora.db.type.types.json) {
             return 'JSON';
+        }
+        if (field.type === aurora.db.type.types.blob) {
+            return 'BLOB';
         }
 
         throw 'Unknown type ' + field.type;

@@ -215,6 +215,7 @@ aurora.db.sql.ChangeWriter.prototype.applyChanges = function(changes, secContext
         }
         if (change instanceof recoil.db.ChangeSet.Add && baseParts.length === path.length()) {
             if (!me.checkAdd_(schema, /** @type {!recoil.db.ChangeSet.Add} */ (change))) {
+                me.log_.warn('Invalid Add', path.toString());
                 results[changeIdx] = {error: 'Invalid Add ' + path.toString()};
             }
         }
@@ -224,10 +225,12 @@ aurora.db.sql.ChangeWriter.prototype.applyChanges = function(changes, secContext
             if (isAdd) {
                 if (!me.checkAdd_(schema, /** @type {!recoil.db.ChangeSet.Add} */ (change))) {
                     // remember to check that the path exists upto this add
+                    me.log_.warn('Invalid Add', path.toString());
                     results[changeIdx] = {error: 'Invalid Add ' + path.toString()};
                     continue;
                 }
                 if (!aurora.db.sql.ChangeWriter.validDbPath_(path.parent())) {
+                    me.log_.warn('Invalid Path', path.toString(), 'invalid parent key types');
                     results[changeIdx] = {error: 'Invalid Path ' + path.toString() + ' - invalid parent key types'};
                     continue;
                 }
@@ -247,14 +250,17 @@ aurora.db.sql.ChangeWriter.prototype.applyChanges = function(changes, secContext
                         bases[curBasePath] = {paths: [{path: path, changeIndex: changeIdx}], ids: {}, objs: {}, tbl: tbl};
                     }
                     else if (!tbl || !tbl.info) {
+                        me.log_.warn('Invalid Path', path.toString(), 'no table info');
                         results[changeIdx] = {error: 'Invalid Path ' + path.toString()};
                     }
                     else {
+                        me.log_.warn('Invalid Security for', path.toString());
                         results[changeIdx] = {error: 'Invalid Security for ' + path.toString()};
                     }
                 }
             }
             else {
+                me.log_.warn('Invalid Path', path.toString(), 'invalid db path');
                 results[changeIdx] = {error: 'Invalid Path ' + path.toString()};
             }
         }
@@ -267,6 +273,7 @@ aurora.db.sql.ChangeWriter.prototype.applyChanges = function(changes, secContext
             // this shouldn't happen if the data is valid
             let item = pInfo.path.items()[len - 1];
             if (!item || item.keys().length !== 1) {
+                me.log_.warn('Invalid Path', pInfo.path.toString(), 'invalid number of keys');
                 results[pInfo.changeIndex] = {error: 'Invalid Path ' + pInfo.path.toString()};
                 return;
             }
@@ -318,6 +325,7 @@ aurora.db.sql.ChangeWriter.prototype.applyChanges = function(changes, secContext
             );
         }
         catch (e) {
+            me.log_.error('Unable to get original values');
             base.paths.forEach(function(pInfo) {
                 results[pInfo.changeIndex].error = 'Unable to get original values ' + e;
             });
@@ -408,6 +416,7 @@ aurora.db.sql.ChangeWriter.prototype.applyChanges_ = function(changes, context, 
                 }
                 else {
                     results[changeIdx] = {error: 'Invalid Path ' + change.path().toString() + ' - does not exist'};
+
                 }
             }
             else if (change instanceof recoil.db.ChangeSet.Delete) {
@@ -460,6 +469,7 @@ aurora.db.sql.ChangeWriter.prototype.applyChanges_ = function(changes, context, 
     // in sql changes happen in a transaction basis, if there is 1 error everything errors, put a silent error on all changes
     let error = me.applySilentError(null, results);
     if (error) {
+        me.log_.warn('got silent error', error);
         callback(error);
         return;
     }
@@ -479,11 +489,13 @@ aurora.db.sql.ChangeWriter.prototype.applyChanges_ = function(changes, context, 
     }, function(err) {
         if (err) {
             me.applySilentError(null, results);
+            me.log_.warn('got silent error in password hash', error);
             callback(err);
         }
         else {
             me.applyTransactionChanges_(changeList, context, secContext, function(err) {
                 if (err) {
+                    me.log_.warn('got silent error in apply transaction changes', error);
                     me.applySilentError(err, results);
                 }
                 callback(err);
@@ -499,14 +511,14 @@ aurora.db.sql.ChangeWriter.prototype.applyChanges_ = function(changes, context, 
  * @param {function(?)} callback
  */
 aurora.db.sql.ChangeWriter.prototype.applyTransactionChanges_ = function(changeList, context, secContext, callback) {
-    let reader = this.reader_;
+    let mainReader = this.reader_;
     let me = this;
     let query = new recoil.db.Query();
     let CType = recoil.db.ChangeSet.Change.Type;
     let schema = this.schema_;
     let DelayedRef = aurora.db.sql.ChangeWriter.DelayedRef;
     let addsToCheck = [];
-    reader.transaction(function(reader, callback) {
+    mainReader.transaction(function(reader, callback) {
         me.async_.eachSeries(changeList, function(entry, eachCallback) {
             let makeObject = function(path) {
                 let tbl = schema.getTableByName(path.pathAsString());
@@ -549,10 +561,10 @@ aurora.db.sql.ChangeWriter.prototype.applyTransactionChanges_ = function(changeL
                         }
                         else {
 
-
                             // todo we get no error without an insertid object
                             entry.id.value = BigInt(insertId.insertId);
                             if (isBase) {
+                                console.log('inserted', info.tbl.info.name, info.obj, entry.object, entry.id.value);
                                 let keyNames = entry.key.path.last().keyNames();
                                 let newPath = entry.key.path.setKeys(keyNames, [new aurora.db.PrimaryKey(entry.id.value)]);
                                 addsToCheck.push({tbl: info.tbl, entry: entry, id: entry.id.value});
@@ -595,7 +607,7 @@ aurora.db.sql.ChangeWriter.prototype.applyTransactionChanges_ = function(changeL
             else {
                 me.async_.eachSeries(addsToCheck, function(info, eachCallback) {
                     let securityFilter = info.tbl.info.accessFilter(secContext);
-                    me.reader_.readObjectByKey(
+                    reader.readObjectByKey(
                         context, info.tbl, [{col: info.tbl.info.pk, value: info.id}],
                         securityFilter,
                         function(err) {
@@ -693,9 +705,11 @@ aurora.db.sql.ChangeWriter.prototype.addAdd_ = function(objectPathMap, change, r
             let meta = table.meta[name];
             let val = dep.value();
 
+
             if (meta && meta.type === 'ref') {
                 let table = this.schema_.getTableByName(meta.ref);
                 let pkName = table.info.pk.getName();
+                console.log('adding ref', name, val);
                 if (val != null) {
                     let refPath = recoil.db.ChangeSet.Path.fromString(table.info.path).setKeys(/** @type {!Array<string>} */ (table.info.keys), [val]);
                     entry.needsRefs.push(refPath);
