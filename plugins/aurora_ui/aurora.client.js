@@ -10,6 +10,7 @@ goog.require('recoil.db.ChangeDb');
 goog.require('recoil.db.ReadWriteDatabase');
 goog.require('recoil.frp.Frp');
 goog.require('recoil.ui.columns.Date2');
+goog.require('recoil.ui.columns.DateTime');
 goog.require('recoil.ui.widgets.table.BooleanColumn');
 goog.require('recoil.ui.widgets.table.NumberColumn');
 goog.require('recoil.ui.widgets.table.PasswordColumn');
@@ -232,6 +233,8 @@ aurora.Client.typeFactories = {
         return new recoil.ui.columns.Date2(key, name, meta);
     },'time' : function(key, name, meta) {
         return new recoil.ui.columns.Time(key, name, meta);
+    },'datetime' : function(key, name, meta) {
+        return new recoil.ui.columns.DateTime(key, name, meta);
     },
 
 

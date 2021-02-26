@@ -119,11 +119,11 @@
 		{ "name": "notes", "type": "owned-list(userid)",
 		  "table": {
 		      "name": "user_notes",
-		      "access": "aurora.db.access.basic([{'': 'r'}])",
+		      "access": "aurora.db.access.basic([{'mentor': 'crud'}, {'': 'r'}])",
 		      "columns": [
 			  {"name": "id", "type": "id"},
 			  {"name": "description", "type": "string(1024)"},
-			  {"name": "when", "type": "datetime", "access":"aurora.db.access.basic([{'mentor': 'crud', {'': 'r'}])"}
+			  {"name": "when", "type": "datetime", "access":"aurora.db.access.basic([{'mentor': 'crud'}, {'': 'r'}])"}
 			  
 		      ]
 		  }
@@ -131,13 +131,10 @@
 		{ "name": "documents", "type": "owned-list(userid)",
 		  "table": {
 		      "name": "user_documents",
-		      "access": "aurora.db.access.basic([{'': 'r'}])",
+		      "access": "aurora.db.access.basic([{'': 'cr'}])",
 		      "columns": [
 			  {"name": "id", "type": "id"},
-			  {"name": "name", "type": "string(64)"},
-			  {"name": "file", "type": "file"},
-			  {"name": "when", "type": "datetime", "access":"aurora.db.access.basic([{'mentor': 'crud', {'': 'r'}])"}
-			  
+			  {"name": "file", "type": "file"}
 		      ]
 		  }
 		}

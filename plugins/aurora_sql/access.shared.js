@@ -61,6 +61,15 @@ aurora.db.access.filter.allFilter = function(context) {
     return new recoil.db.Query().True();
 };
 
+
+/**
+ * @param {aurora.db.access.SecurityContext} context
+ * @return {!recoil.db.Query}
+ */
+aurora.db.access.filter.noneFilter = function(context) {
+    return new recoil.db.Query().False();
+};
+
 /**
  * @param {aurora.db.access.SecurityContext} context
  * @return {!recoil.db.Query}

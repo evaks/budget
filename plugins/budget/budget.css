@@ -23,6 +23,10 @@ body {
     scrollbar-width: thin;
     display: flex;
     flex: 1;
+    overflow: auto;
+}
+.content.no-scroll {
+    overflow: hidden;
 }
 .main-widget {
     overflow: auto;
@@ -37,6 +41,14 @@ body {
 .content-body {
     overflow: auto;
     height: calc(100vh - 360px);
+}
+
+.budget-table {
+    margin-left: 10px;
+    margin-right: 10px;
+    max-width: 100vw;
+    width: calc(100vw - 20px);
+    overflow: auto;
 }
 
 .budget-video {
@@ -446,9 +458,8 @@ div.side-list-side {
     flex-flow: column;
     flex: 0 0 235px;
     overflow-y: auto;
-    background: #9cb866;
     border-right: grey 2px ridge;
-    background-image: url(/images/finance.jpg);
+    background-image: linear-gradient(270deg, #0f470e8f, #9cb8664a), url(/images/finance.jpg);
     padding: 10px;
     background-size: contain;
     
@@ -492,9 +503,13 @@ div.budget-side-list-cont > .goog-control{
 }
 
 div.side-list-side    .recoil_table_selected {
-    background-color: #b2d274;
-    box-shadow: 0px 0px 8px 1px #104d0f;
+    background-image: linear-gradient(270deg, #537d39d1, #9ab566b0);
+    box-shadow: 0px 0px 8px 1px #0b330a;
     border-radius: 2px;
+    padding-left: 7px;
+    margin-left: -7px;
+    margin-right: -7px;
+
 }
 
 div.side-list-side .budget-budget-list table > tr  td:nth-child(2) {

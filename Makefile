@@ -49,4 +49,4 @@ endif
 
 .PHONY: install-modules
 install-modules:
-	npm install node-forge mime modern-syslog websocket async mysql moment nodemailer
+	npm install node-forge mime modern-syslog websocket async mysql moment nodemailer multiparty

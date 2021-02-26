@@ -98,6 +98,14 @@ aurora.widgets.TableWidget.createMovableSizable = function(tableB, opt_movable) 
         }
         dropRow = newRow;
     };
+    let emptyHeaderRowDecoratorReadOnly = function() {
+        let td = goog.dom.createDom('td', {class: 'aurora-empty-table'}, 'No Entries');
+        let div = goog.dom.createDom('tr', {}, td);
+        return new recoil.ui.RenderedDecorator(
+            emptyHeaderRowDecoratorReadOnly,
+            div, null);
+    };
+
     let emptyHeaderRowDecorator = function() {
         let td = goog.dom.createDom('td', {class: 'aurora-add-empty-table'}, 'No Entries, Click to Add');
         let div = goog.dom.createDom('tr', {}, td);
@@ -232,19 +240,33 @@ aurora.widgets.TableWidget.createMovableSizable = function(tableB, opt_movable) 
     }, tableB));
 
     return frp.liftBI(function(tbl, decorators) {
+        let tblMeta = tbl.getMeta();
+        let canAdd = tblMeta.canAdd !== false;
+        let canDel = tblMeta.canRemove !== false;
+        let canMove = tblMeta.editable !== false;
 
-        let hasHeaderRow = tbl.getMeta().headerRowDecorator !== null;
+        let hasHeaderRow = tblMeta.headerRowDecorator !== null;
         if (tbl.size() === 0 && !hasHeaderRow) {
             // no way to add if blank make it special
             let res = tbl.createEmpty([], [ADD_COL]);
-            res.addMeta({headerRowDecorator: emptyHeaderRowDecorator});
+            res.addMeta({headerRowDecorator: canAdd ? emptyHeaderRowDecorator : emptyHeaderRowDecoratorReadOnly});
             return res.freeze();
         }
-        let newCols = [DEL_COL];
-        if (!hasHeaderRow) {
+        let newCols = [];
+
+        if (hasHeaderRow) {
+            if (canAdd || canDel) {
+                newCols = [DEL_COL];
+            }
+        }
+        else if (canDel) {
+            // if no header row del column only does delete
+            newCols = [DEL_COL];
+        }
+        if (!hasHeaderRow && canAdd) {
             newCols.push(ADD_COL);
         }
-        if (movable) {
+        if (movable && canMove) {
             newCols.push(MOVE_COL);
         }
         let res = tbl.createEmpty([], newCols);
@@ -256,7 +278,7 @@ aurora.widgets.TableWidget.createMovableSizable = function(tableB, opt_movable) 
         });
 
         res.addColumnMeta(ADD_COL, {position: lastPos + 1, cellWidgetFactory: addFactory});
-        res.addColumnMeta(DEL_COL, {position: lastPos + 2, cellWidgetFactory: delFactory, name: addHeader});
+        res.addColumnMeta(DEL_COL, {position: lastPos + 2, cellWidgetFactory: delFactory, name: canAdd ? addHeader : ''});
         res.addColumnMeta(MOVE_COL, {position: lastPos + 3, cellWidgetFactory: moveFactory});
         let newDecorators = new goog.structs.AvlTree(recoil.util.object.compareKey);
         tbl.forEach(function(row, pks) {
@@ -306,4 +328,17 @@ aurora.widgets.TableWidget.createMovableSizable = function(tableB, opt_movable) 
 
 aurora.widgets.TableWidget.createSizable = function(tableB) {
     return aurora.widgets.TableWidget.createMovableSizable(tableB, false);
+};
+
+/**
+ * @param {!recoil.frp.Behaviour<!recoil.structs.table.Table>} tableB
+ * @return {!recoil.frp.Behaviour<!recoil.structs.table.Table>}
+ */
+
+aurora.widgets.TableWidget.createRotated = function(tableB) {
+
+    var rotate = new recoil.structs.table.Rotate(false);
+    var frp = tableB.frp();
+    return recoil.frp.Inversable.create(
+            frp, rotate, {table: tableB});
 };

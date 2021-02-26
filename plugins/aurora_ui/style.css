@@ -155,6 +155,13 @@ th .aurora-icon-button {
     text-align: center;
     cursor: pointer;
 }
+.aurora-empty-table {
+    align-items: center;
+    font-style: italic;
+    width: 100%;
+    text-align: center;
+}
+
 
 .aurora-add-empty-table:hover {
     color: #8bbfeb;

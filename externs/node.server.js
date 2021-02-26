@@ -3,6 +3,20 @@
  */
 var Buffer = function (arg) {};
 
+/**
+ * @param {number} size
+ * @return {Buffer}
+ */
+Buffer.alloc = function (size) {};
+
+/**
+ * @param {buffer.Buffer} targetBuffer
+ * @param {number=} targetStart
+ * @param {number=} sourceStart
+ * @param {number=} sourceEnd
+ * @return {buffer.Buffer}
+ */
+Buffer.prototype.copy = function(targetBuffer, targetStart, sourceStart, sourceEnd) {};
 
 
 

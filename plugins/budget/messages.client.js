@@ -516,3 +516,17 @@ budget.messages.STOP_TIME = recoil.ui.message.getParamMsg('Stop Time:');
  * @final
  */
 budget.messages.ADD = recoil.ui.message.getParamMsg('Add');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.NOTES = recoil.ui.message.getParamMsg('Notes');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.DOCUMENTS = recoil.ui.message.getParamMsg('Documents');

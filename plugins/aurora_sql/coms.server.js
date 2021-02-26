@@ -17,15 +17,18 @@ aurora.db.Coms = function(authenticator) {
     let me = this;
     this.log_ = aurora.log.createModule('DBCOMS');
     this.async_ = require('async');
+    this.authenticator_ = authenticator;
     /**
      * @type {aurora.db.Reader}
      */
     let reader = null;
+    this.reader_ = null;
     let secName = aurora.db.schema.tables.sec.permissions.info.name;
     let serializer = new aurora.db.Serializer();
 
     aurora.startup.doOnceStarted(function() {
         reader = new aurora.db.sql.Reader(aurora.db.Pool.getDefault());
+        me.reader_ = reader;
         me.writer_ = new aurora.db.sql.ChangeWriter(aurora.db.schema, reader);
     });
 
@@ -37,8 +40,6 @@ aurora.db.Coms = function(authenticator) {
         let action = e && e.data && e.data['command'];
         let token = e.token;
         try {
-            console.log('event', secContext);
-
             if (action === 'get') {
                 me.doGet_(reader, e, secContext);
             }
@@ -141,7 +142,7 @@ aurora.db.Coms = function(authenticator) {
     }, function(token) {
         // what to do if we deregister
     });
-
+    this.setupUpload_();
 
 };
 
@@ -257,6 +258,311 @@ aurora.db.Coms.prototype.doGet_ = function(reader, e, secContext) {
 
 };
 
+/**
+ * @param {!aurora.db.Reader} reader
+ * @param {!Object} context
+ * @param {multiparty.Part} part
+ * @param {function(?, ?number)} done
+ */
+aurora.db.Coms.prototype.insertFileIntoDb_ = function(reader, context, part, done) {
+
+    let log = this.log_;
+    let async = this.async_;
+    console.log('gotFilename', part.filename);
+    let fileT = aurora.db.schema.tables.base.file_storage;
+    reader.insert(
+        context, fileT, {created: new Date().getTime(), user: context.userid, name: part.filename, size: 0, parts: []}, function(err, insertRes) {
+            if (err) {
+                log.error('Unable to insert file', part.filename);
+                part.resume();
+
+                done(err, null);
+                return;
+            }
+            const MAX_BLOCK = 64000;
+            let buffer = Buffer.alloc(MAX_BLOCK);
+            let written = 0;
+            let partError = null;
+            let pos = 1;
+            let size = 0;
+
+            let partInsertQueue = async.queue(function(data, callback) {
+                if (data.done) {
+                    callback();
+                    if (!partError) {
+                        let query = new recoil.db.Query();
+                        reader.updateOneLevel(
+                            context, fileT, {size: size}, query.eq(query.val(insertRes.insertId), query.field(fileT.cols.id)),
+                            function(err) {
+                                partError = err;
+                                done(err, insertRes.insertId);
+                            });
+
+                        }
+                    else {
+                        done(partError, null);
+                    }
+                    return;
+                }
+                size += data.buffer.length;
+                reader.insert(context, fileT.parts, {order: pos++, fileid: insertRes.insertId, data: data.buffer}, function(err) {
+                    if (err) {
+                        console.log('part error', err);
+                    }
+                    partError = partError || err;
+                    callback();
+                });
+            }, 1);
+
+            part.on('end', function() {
+                console.log('part end');
+                if (written > 0) {
+                    let toWrite = Buffer.alloc(written);
+                    buffer.copy(toWrite, 0, 0, written);
+                    partInsertQueue.push({buffer: toWrite});
+                }
+                partInsertQueue.push({done: true});
+            });
+
+            part.on('error', function(err) {});
+
+            part.on('data', function(data) {
+                if (!partError) {
+                    let dataPos = 0;
+                    while (dataPos < data.length) {
+                        let endPos = Math.min(data.length, dataPos + MAX_BLOCK - written);
+                        data.copy(buffer, written, dataPos, endPos);
+                        written += endPos - dataPos;
+                        if (written === MAX_BLOCK) {
+                            partInsertQueue.push({buffer: buffer});
+                            buffer = Buffer.alloc(MAX_BLOCK);
+                            written = 0;
+                        }
+                        dataPos = endPos;
+                    }
+
+                }
+                //console.log('part data', data);
+            });
+        }
+    );
+
+};
+
+/**
+ * converts a url path to a ChangeSet path, this will also validate the
+ * path exists in the schema, if it doesn't returns null
+ * @param {string} path
+ * @return {?{path: !recoil.db.ChangeSet.Path,
+              base:recoil.db.ChangeSet.Path,keyValues:!Array<{col:!recoil.structs.table.ColumnKey,value:?}>,
+              baseTable:!aurora.db.schema.TableType, table:!aurora.db.schema.TableType, fileField:?string}}
+ */
+aurora.db.Coms.prototype.getUrlPathInfo = function(path) {
+    let parts = path.split('/').map(function(p) {return decodeURIComponent(p);});
+    // the last part the path is the keys and should be an array to check
+    let keyParts = [];
+    if (parts.length > 0 && parts[parts.length - 1][0] === '[') {
+        // remove the keys part
+        let last = parts.pop();
+        try {
+            keyParts = JSON.parse(last);
+            if (!(keyParts instanceof Array)) {
+                // invalid path keys must be an array
+                return null;
+            }
+        }
+        catch (e) {
+            // invalid path
+            return null;
+        }
+    }
+    {
+        let path = aurora.db.schema.getTablePath(parts.join('/'), keyParts);
+        if (!path) {
+            return null;
+        }
+        let base = aurora.db.schema.getBasePath(path);
+        if (!base) {
+            return null;
+        }
+        let keyValues = [];
+        let tbl = aurora.db.schema.getTableByName(base);
+        let keys = base.last();
+        for (let i = 0; i < keys.keys().length; i++) {
+            keyValues.push({col: tbl.meta[keys.keyNames()[i]].key, value: keys.keys()[i]});
+        }
+        let insertTable = aurora.db.schema.getTableByName(path);
+
+        let fileField = null;
+
+        for (let k in insertTable.meta) {
+            if (insertTable.meta[k].type == 'file') {
+                fileField = k;
+            }
+        }
+
+        return {
+            path: path,
+            base: base,
+            baseTable: /** @type {!aurora.db.schema.TableType} */ (tbl),
+            table: /** @type {!aurora.db.schema.TableType} */ (insertTable),
+            fileField: fileField,
+            keyValues: keyValues
+        };
+    }
+
+};
+
+/**
+ * @param {!aurora.db.Reader} reader
+ * @param {!Object} context
+ * @param {http.IncomingMessage} request,
+ * @param {http.ServerResponse} response
+ * @param {function(?,Array<number>)} done first param error, last param inserted file ids
+ */
+aurora.db.Coms.prototype.doUpload_ = function (reader, context, request, response, done) {
+    let log = this.log_;
+    let me = this;
+    const multiparty = require('multiparty');
+    var form = new multiparty.Form();
+    var filename = undefined;
+    let partError = null;
+    let insertIds = [];
+    let async = this.async_;
+    let queue = async.queue(function(data, callback) {
+        if (data.part) {
+            console.log("doing part");
+            me.insertFileIntoDb_(reader, context, data.part, function (err, insertId) {
+                if (err) {
+                    partError = partError || err;
+                }
+                else {
+                    insertIds.push(insertId);
+                }
+                callback();
+            });
+
+        }
+        else if (data.done) {
+            console.log("part done", partError, insertIds);
+
+            done(partError, insertIds);
+        }
+    });
+    form.on('part', function(part) {
+        if (!part.filename) {
+            // filename is not defined when this is a field and not a file
+            // so ignore the field's content
+            part.resume();
+        } else {
+            queue.push({part: part});
+        }
+        // handle a "part" error
+    });
+    form.on('error', function(err) {
+        log.error('File upload error,', err);
+        partError = partError || err;
+        queue.push({done: true});
+    });
+    
+    form.on('close', function () {
+        queue.push({done: true});
+    });
+    form.parse(request);
+};
+
+/**
+ * sets up callback for uploads
+ */
+aurora.db.Coms.prototype.setupUpload_ = function () {
+    let log = this.log_;
+    let me = this;
+    const UPLOAD_URL = '/system/upload';
+    const UPLOAD_REGEXP = new RegExp('^' + UPLOAD_URL.replaceAll('/','\\/') + '\\/');
+    let async = this.async_;
+    console.log("upload regexp", '^' + UPLOAD_URL.replaceAll('/','\\/') + '\\/');
+    aurora.http.addMidRequestCallback(
+        UPLOAD_REGEXP,
+        function(state, done) {
+            let response = state.response;
+            let request = state.request;
+            let urlInfo = me.getUrlPathInfo(request.url.substring(UPLOAD_URL.length));
+            if (state.request.method === 'POST' && me.reader_ && urlInfo && urlInfo.fileField) {
+                let reader = me.reader_;
+                console.log("got url", urlInfo.path.toString(), "base", urlInfo.base.toString(), "kvalues", urlInfo.keyValues);
+                // we know we are handing it here maybe or deal with it in the security check
+                let doneCalled = false;
+
+                me.authenticator_.getPermissions(state.token, request.socket, function (context) {
+                    console.log("got context", context);
+                    if (!aurora.db.schema.hasAccess(context, urlInfo.path, 'c')) {
+                        // we don't exist the user has no access
+                        doneCalled = true;
+                        done(undefined);
+                        log.warn("File Upload Access Denied for ", context.userid);
+                        return;
+                    }
+                    // check we have create access on the column we are adding to
+                    reader.transaction(function (reader, transDone) {
+                        // check we can even see the row
+                        reader.readObjectByKey(context, urlInfo.baseTable, urlInfo.keyValues, urlInfo.baseTable.info.accessFilter(context), function (err, object) {
+                            // we know we are dealing with the request now
+                            doneCalled = true;
+                            if (err) {
+                                done(undefined);
+                                return;
+                            }
+                            done(false);
+                            let parentId = object.id;
+                            
+                            console.log("got base object", err, object.id);
+                            me.doUpload_(reader, context, request, response, function (err, fileIds) {
+                                console.log("upload finished", err, fileIds);
+                                if (!err) {
+                                    // insert the row in the referencing table so we can access the file
+                                    let template = {};
+                                    for (var k in urlInfo.table.meta) {
+                                        let meta = urlInfo.table.meta;
+                                        if (meta.defaultVal !== undefined) {
+                                            template[k] = meta.defaultVal;
+                                        }
+                                    }
+                                    template[urlInfo.table.info.parentKey.getName()] = parentId;
+                                    
+                                    async.eachSeries(fileIds, function (id, callback) {
+                                        let obj = goog.object.clone(template);
+                                        obj[urlInfo.fileField] = id;
+                                        reader.insert(context, urlInfo.table, obj, function (err) {
+                                            callback(err);
+                                        });
+                                    }, function (err) {
+                                        console.log("top level done");
+                                        transDone(err);
+                                    });
+                                }
+                                else {
+                                    transDone(err);
+                                }
+                                
+                            });
+                        });
+                    }, function (err) {
+                        if (!doneCalled) {
+                            doneCalled = true;
+                            done(false);
+                        }
+                        console.log("upload response");
+                        response.writeHead(err ? 422 : 200, {'content-type': 'text/plain'});
+                        response.end('{}');
+                    });
+                });
+                return aurora.http.REQUEST_ASYNC;
+            }
+            //
+            return undefined;
+        });
+
+};
 /**
  * @private
  * @param {!aurora.websocket.ChannelMessage} e

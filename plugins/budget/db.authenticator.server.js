@@ -17,6 +17,17 @@ aurora.db.Authenticator = function(reader, allowAnon) {
     this.reader_ = reader;
     this.allowAnon_ = allowAnon;
     this.log_ = aurora.log.createModule('DBAUTH');
+    this.cachedSessionsExpiry_ = new goog.structs.AvlTree(function(x, y) {
+        let res = y.expire - x.expire;
+        if (res) {
+            return res;
+        }
+        return (y.token + '').localeCompare(x.token + '');
+    });
+    this.cachedSessions_ = {};
+    this.cacheTimer_ = null;
+
+
 };
 
 /**
@@ -188,6 +199,116 @@ aurora.db.Authenticator.prototype.unregister = function(token) {
 
 };
 
+/**
+ * @private
+ * appdate the session cache expiry time
+ */
+aurora.db.Authenticator.prototype.updateExpire_ = function() {
+    let me = this;
+    if (me.cacheTimer_) {
+        clearTimeout(me.cacheTimer_);
+        me.cacheTimer_ = null;
+    }
+
+    me.cachedSessionsExpiry_.inOrderTraverse(function(e) {
+        let now = process.hrtime()[0] * 1000;
+        me.cacheTimer_ = setTimeout(function() {
+            let toRemove = [];
+            let now = process.hrtime()[0] * 1000;
+            me.cachedSessionsExpiry_.inOrderTraverse(function() {
+                if (now > e.expire) {
+                    toRemove.push(e);
+                }
+            });
+            toRemove.forEach(function(e) {
+                delete me.cachedSessions_[e.token];
+                me.cachedSessionsExpiry_.remove(e);
+                });
+            me.updateExpire_();
+        }, Math.max(1, e.expire - now));
+        return true;
+    });
+
+};
+
+/**
+ * @param {string} token
+ * @param {?} socket
+ * @param {!aurora.db.access.SecurityContext} context
+ * @param {function(!aurora.db.access.SecurityContext)} callback
+ */
+aurora.db.Authenticator.prototype.cacheAndContinue_ = function(token, socket, context, callback) {
+
+    let now = process.hrtime()[0] * 1000;
+    let cached = {expire: now + 60000, context: context, token: token};
+    this.cachedSessions_[token] = cached;
+    this.cachedSessionsExpiry_.add(cached);
+    this.updateExpire_();
+    callback(this.makeServerInfo_(socket, cached.context));
+};
+
+/**
+ * @param {string} token
+ * @param {?} socket
+ * @param {function(!aurora.db.access.SecurityContext)} callback
+ */
+aurora.db.Authenticator.prototype.getPermissions = function(token, socket, callback) {
+    let me = this;
+    let reader = this.reader_;
+
+    let now = process.hrtime()[0] * 1000;
+
+    let cached = me.cachedSessions_[token];
+
+    if (cached && cached.expiry < now) {
+        callback(me.makeServerInfo_(socket, cached.context));
+    }
+    else {
+        aurora.auth.instance.getSessionData(token, function(data) {
+            let userT = aurora.db.schema.tables.base.user;
+            let groupT = aurora.db.schema.tables.base.group;
+            let permT = aurora.db.schema.tables.base.permission;
+            if (data.userid == null) {
+                me.cacheAndContinue_(token, socket, {userid: null, permissions: {}}, callback);
+                return;
+            }
+
+            let query = new recoil.db.Query();
+            reader.selectReference(userT, [userT.groups.cols.groupid, groupT.permission.cols.permissionid], query.eq(userT.cols.id, query.val(data.userid)), {distinct: true}, function(err, permRows) {
+                let permission = {};
+                if (err) {
+                    me.cacheAndContinue_(token, socket, {userid: data.userid, permissions: {}}, callback);
+                    return;
+                }
+                permRows.forEach(function(row) {
+                    permission[row.name] = true;
+                });
+                me.cacheAndContinue_(token, socket, {userid: data.userid, permissions: permission}, callback);
+            });
+        });
+    }
+};
+
+/**
+ * @private
+ * @param {?} socket
+ * @param {!aurora.db.access.SecurityContext} context
+ * @return {!aurora.db.access.SecurityContext}
+ */
+aurora.db.Authenticator.prototype.makeServerInfo_ = function(socket, context) {
+    let host = aurora.db.Authenticator.formatIp(socket['localAddress']);
+    let protocol = socket['encrypted'] ? 'https' : 'http';
+    let port = socket['localPort'];
+    if ((port == 80 && protocol === 'http') || (port == 443 && protocol === 'https')) {
+        port = '';
+    }
+    else {
+        port = ':' + port;
+    }
+    let fullContext = goog.object.clone(context);
+    fullContext['@base-url'] = protocol + '://' + host + port + '';
+    return /** @type {!aurora.db.access.SecurityContext} */ (fullContext);
+};
 
 /**
  * like aurora.websocket.Server.getChannel however will also add permissions to the channel
@@ -199,115 +320,11 @@ aurora.db.Authenticator.prototype.unregister = function(token) {
  * @return {!aurora.websocket.Channel}
  */
 aurora.db.Authenticator.prototype.getChannel = function(pluginName, channelId, messageCallback, opt_clientCloseCallback) {
-    let reader = this.reader_;
-    let cachedSessionsExpiry = new goog.structs.AvlTree(function(x, y) {
-        let res = y.expire - x.expire;
-        if (res) {
-            return res;
-        }
-        return (y.token + '').localeCompare(x.token + '');
-    });
-    let cachedSessions = {};
-    let cacheTimer = null;
 
-    let updateExpire = function() {
-        if (cacheTimer) {
-            clearTimeout(cacheTimer);
-            cacheTimer = null;
-        }
-
-        cachedSessionsExpiry.inOrderTraverse(function(e) {
-            let now = process.hrtime()[0] * 1000;
-            cacheTimer = setTimeout(function() {
-                let toRemove = [];
-                let now = process.hrtime()[0] * 1000;
-                cachedSessionsExpiry.inOrderTraverse(function() {
-                    if (now > e.expire) {
-                        toRemove.push(e);
-                    }
-                });
-                toRemove.forEach(function(e) {
-                    delete cachedSessions[e.token];
-                    cachedSessionsExpiry.remove(e);
-                });
-                updateExpire();
-            }, Math.max(1, e.expire - now));
-            return true;
-        });
-
-    };
-
-
-    let makeServerInfo = function(message, context) {
-        let socket = message.connection.socket;
-        let host = aurora.db.Authenticator.formatIp(socket['localAddress']);
-        let protocol = socket['encrypted'] ? 'https' : 'http';
-        let port = socket['localPort'];
-        if ((port == 80 && protocol === 'http') || (port == 443 && protocol === 'https')) {
-            port = '';
-        }
-        else {
-            port = ':' + port;
-        }
-        let fullContext = goog.object.clone(context);
-        fullContext['@base-url'] = protocol + '://' + host + port + '';
-        return fullContext;
-
-    };
-    let cacheAndContinue = function(token, message, context, messageCallback) {
-
-        let now = process.hrtime()[0] * 1000;
-        let cached = {expire: now + 60000, context: context, token: token};
-        cachedSessions[token] = cached;
-        cachedSessionsExpiry.add(cached);
-        updateExpire();
-
-        messageCallback(message, makeServerInfo(message, cached.context));
-    };
-
+    let me = this;
     let channel = aurora.websocket.getChannel(pluginName, channelId, function(message) {
         let token = message.token;
-        let now = process.hrtime()[0] * 1000;
-
-        let cached = cachedSessions[token];
-
-        if (cached && cached.expiry < now) {
-            messageCallback(message, makeServerInfo(message, cached.context));
-        }
-        else {
-            aurora.auth.instance.getSessionData(token, function(data) {
-                let userT = aurora.db.schema.tables.base.user;
-                let groupT = aurora.db.schema.tables.base.group;
-                let permT = aurora.db.schema.tables.base.permission;
-                if (data.userid == null) {
-                    cacheAndContinue(token, message, {userid: null, permissions: {}}, messageCallback);
-                    return;
-                }
-
-                let query = new recoil.db.Query();
-                reader.selectReference(userT, [userT.groups.cols.groupid, groupT.permission.cols.permissionid], query.eq(userT.cols.id, query.val(data.userid)), {distinct: true}, function(err, permRows) {
-                    let permission = {};
-                    if (err) {
-                        cacheAndContinue(token, message, {userid: data.userid, permissions: {}}, messageCallback);
-                        return;
-                    }
-                    permRows.forEach(function(row) {
-                        permission[row.name] = true;
-                    });
-                    cacheAndContinue(token, message, {userid: data.userid, permissions: permission}, messageCallback);
-                });
-            });
-        }
-
-
-        // todo remove getting permissions at login we need to do it every read at least cache it and do it no less than once per minute
-
-        //    reader.readObjectByKey(userT, [{col: userT.cols.username, value: cred.username}], null, function(err, user) {
-
-
-
-
-
+        me.getPermissions(token, message.connection.socket, function(context) {messageCallback(message, context);});
     }, opt_clientCloseCallback);
     return channel;
 };
