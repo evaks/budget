@@ -25,7 +25,7 @@ goog.require('recoil.structs.table.ColumnKey');
  *          getTable:function(!recoil.structs.table.ColumnKey):?aurora.db.schema.TableType,
  *          getParentTable:function(!recoil.structs.table.ColumnKey):?aurora.db.schema.TableType,
  *          getTableByName:function((string|!recoil.db.ChangeSet.Path)):?aurora.db.schema.TableType,
- *          getMetaByPath:function(string):Object,
+ *          getMetaByPath:function((string|!recoil.db.ChangeSet.Path)):Object,
  *          keyMap:!Object<string,aurora.db.schema.TableType>,
  *          }}
  */
@@ -97,10 +97,13 @@ aurora.db.schema.getMeta = function(col) {
 
 
 /**
- * @param {string} path
+ * @param {string|!recoil.db.ChangeSet.Path} path
  * @return {!Object}
  */
 aurora.db.schema.getMetaByPath = function(path) {
+    if (path instanceof recoil.db.ChangeSet.Path) {
+        path = path.pathAsString();
+    }
     let parts = path.split('/');
     let last = parts.pop();
 
@@ -219,7 +222,6 @@ aurora.db.schema.hasAccess = function(context, path, access) {
 
     while (tbl && path.size() > 0) {
         if (tbl.info.access) {
-            console.log('found table access', tbl.info, access);
             return tbl.info.access(context, access);
         }
         let meta = tbl.meta[path.last().name];
@@ -250,7 +252,6 @@ aurora.db.schema.getBasePath = function(path) {
     tbl = aurora.db.schema.getTableByName(parent);
     while (tbl && parent.size() > 0) {
         path = parent;
-        console.log('next path ', path.toString());
         parent = parent.parent();
         tbl = aurora.db.schema.getTableByName(parent);
     }
@@ -263,16 +264,17 @@ aurora.db.schema.getBasePath = function(path) {
  * or keys are missing then returns null
  * @param {string} path
  * @param {!Array} inKeys
+ * @param {boolean=} opt_item if true will assume the last value has a key
  * @return {recoil.db.ChangeSet.Path}
  */
-aurora.db.schema.getTablePath = function(path, inKeys) {
+aurora.db.schema.getTablePath = function(path, inKeys, opt_item) {
     let tbl = aurora.db.schema.getTableByName(path);
     if (!tbl) {
         return null;
     }
     let keys = goog.array.clone(inKeys);
     let parts = path.split('/');
-    let items = [new recoil.db.ChangeSet.PathItem(parts.pop(), [], [])];
+    let items = opt_item ? [] : [new recoil.db.ChangeSet.PathItem(parts.pop(), [], [])];
     tbl = aurora.db.schema.getTableByName(parts.join('/'));
     while (tbl && tbl.info) {
         let partKeys = [];
@@ -298,6 +300,7 @@ aurora.db.schema.getTablePath = function(path, inKeys) {
         }
     }
     items.reverse();
+
     // don't allow too may keys
     if (keys.length !== 0) {
         return null;

@@ -500,7 +500,7 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out) {
     });
     let skipCol = false;
 
-    let writeMeta = function(name, data, fullTableName, tableName, parentCol) {
+    let writeMeta = function(name, data, fullTableName, tableName, parentCol, accessOverride) {
         let typeInfo = getColType(data, types);
         fs.appendFileSync(out, '   ' + toStr(name) + ': {\n');
 
@@ -516,7 +516,10 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out) {
         if (typeInfo.type === 'id') {
             fs.appendFileSync(out, ',\n       primary: true');
         }
-        if (typeInfo.access) {
+        if (accessOverride) {
+            fs.appendFileSync(out, ',\n       access: ' + accessOverride);
+        }
+        else if (typeInfo.access) {
             fs.appendFileSync(out, ',\n       access: ' + typeInfo.access);
         }
         if (typeInfo.type === 'enum') {
@@ -594,7 +597,11 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out) {
             fs.appendFileSync(out, '// file meta\n');
             forEachFileCol(function(colInfo) {
                 fs.appendFileSync(out, '    },\n');
-                writeMeta(colInfo.name, colInfo, fullTableName, tableName, parentCol);
+                let accessOveride = undefined;
+                if (colInfo.name === 'created') {
+                    accessOveride = 'aurora.db.access.basic([{\'\': \'r\'}])';
+                }
+                writeMeta(colInfo.name, colInfo, fullTableName, tableName, parentCol, accessOveride);
             });
         }
 
@@ -797,6 +804,12 @@ function makeForeignKeys(def, types) {
                     let tableKeys = foreignKeys[tableName] = foreignKeys[tableName] || {};
                     let colKeys = tableKeys[data.name] = tableKeys[data.name] || {};
                     colKeys.table = typeInfo.table;
+                    colKeys.col = getPkColumn(tableDefs[colKeys.table]);
+                }
+                else if (typeInfo.type === 'file') {
+                    let tableKeys = foreignKeys[tableName] = foreignKeys[tableName] || {};
+                    let colKeys = tableKeys[data.name] = tableKeys[data.name] || {};
+                    colKeys.table = 'file_storage';
                     colKeys.col = getPkColumn(tableDefs[colKeys.table]);
                 }
             }

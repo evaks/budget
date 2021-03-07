@@ -17,7 +17,9 @@ body {
     margin-right: 10px;
     float: right;
     display: inline;
-    position: relative;
+    position: absolute;
+    top: 0;
+    right: 0;
 }
 .content {
     scrollbar-width: thin;
@@ -42,7 +44,11 @@ body {
     overflow: auto;
     height: calc(100vh - 360px);
 }
+.budget-documents label {
 
+    margin-left: 7px;
+    margin-bottom: 10px;
+}
 .budget-table {
     margin-left: 10px;
     margin-right: 10px;
@@ -98,6 +104,7 @@ img.budget-logo {
 
 .page-menu {
     line-height: 50px;
+    max-height: 50px;
     color: white;
     background: linear-gradient(50deg, rgb(19 90 18) 0%,  rgb(11 53 10) 75%, rgb(41 41 41) 95%, #204220 100%);
     border-bottom: 3px solid #204220;
@@ -301,8 +308,12 @@ table {
     border-spacing: 0;
 }
 
+button.goog-button:hover {
+    background-image: linear-gradient(30deg, #1b7f19, #90ae61,#1b7f19);
+}
+
 button.goog-button {
-    background-image: linear-gradient(30deg, #039BE5, #5bcaff,#039BE5);
+    background-image: linear-gradient(30deg, #0e420d, #90ae61,#0e420d);
     height: 25px;
     text-align: center;
     line-height: 10px;
@@ -502,6 +513,48 @@ div.budget-side-list-cont > .goog-control{
     display: flex;
 }
 
+div.not-logged-in {
+    margin: auto;
+    font-size: x-large;
+    font-weight: bold;
+    color: green;
+}
+.budget-file-upload-progresses .close-div {
+    display: inline-block;
+    background-image: linear-gradient(0, #000000ad, transparent);
+    vertical-align: top;
+    border: 1px solid;
+    line-height: 30px;
+    margin-top: 2px;
+    width: 20px;
+    text-align: center;
+    font-weight: bold;
+    border-radius: 3px;
+    margin-left: -2px;
+    cursor: pointer;
+}
+
+.budget-file-upload-progresses .close-div:hover {
+    background-image: linear-gradient(0, #00000059, transparent);
+}
+.budget-file-upload-progresses .error .progress-bar-thumb {
+    background-image: repeating-linear-gradient( 
+	45deg
+	, transparent, transparent 10px, rgba(204,204,204,0.2) 10px, rgba(204,204,204,0.2) 20px ), linear-gradient( to bottom, #c00, rgba(0, 0, 0, .3) );
+}
+
+.budget-file-upload-progresses .error .progress-bar-text {
+    color: white;
+    font-weight: bold;
+}
+
+.budget-file-upload-progresses .close-div:after {
+    content: "x";
+}
+
+.budget-file-upload-progresses .goog-control {
+    display: inline-block;
+}
 div.side-list-side    .recoil_table_selected {
     background-image: linear-gradient(270deg, #537d39d1, #9ab566b0);
     box-shadow: 0px 0px 8px 1px #0b330a;
@@ -547,6 +600,25 @@ div.side-list-side h2.group-header {
     height: 100%;
 }
 
+.custom-file-upload{
+    padding: 3px;
+    font-size: 20pt;
+    display: block;
+    border: 1px solid;
+    width: 30px;
+    text-align: center;
+    border-radius: 3px;
+    background-image: linear-gradient(30deg, #0e420d, #90ae61,#0e420d);
+    cursor: pointer;
+}
+
+.custom-file-upload:hover {
+    background-image: linear-gradient(30deg, #1b7f19, #90ae61,#1b7f19);
+
+}
+.custom-file-upload input {
+    display: none;
+}
 .budget-loading > div {
     width: 130px;
     height: 130px;
@@ -643,4 +715,9 @@ div.budget-div:hover div {
 .page-menu .goog-menu-vertical {
     box-shadow: 2px 2px 5px #15151557;
     border-radius: 4px;    
+}
+
+
+.side-list-side .aurora-add-empty-table {
+    color:white;
 }

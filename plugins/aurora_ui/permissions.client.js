@@ -13,6 +13,9 @@ aurora.permissions.Context;
  */
 aurora.permissions.loggedIn = function(loggedIn) {
     return function(context) {
+        if (context.allowAll) {
+            return true;
+        }
         return (context.userid != null) === loggedIn;
     };
 };
@@ -39,6 +42,9 @@ aurora.permissions.has = function(permission) {
  */
 aurora.permissions.hasAny = function(permissions) {
     return function(context) {
+        if (context.allowAll) {
+            return true;
+        }
         if (context.userid == null) {
             return false;
         }
@@ -65,6 +71,9 @@ aurora.permissions.hasAny = function(permissions) {
  */
 aurora.permissions.hasAll = function(permissions) {
     return function(context) {
+        if (context.allowAll) {
+            return true;
+        }
         if (context.userid == null) {
             return false;
         }

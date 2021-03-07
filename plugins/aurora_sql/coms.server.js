@@ -7,7 +7,122 @@ goog.require('aurora.db.sql.ChangeWriter');
 goog.require('aurora.log');
 
 goog.require('recoil.db.Query');
+goog.require('recoil.structs.MultiKeyMap');
 
+/**
+ * @constructor
+ */
+aurora.db.Notify = function() {
+    this.map_ = new recoil.structs.MultiKeyMap([{col: 'query', compare: recoil.util.object.compareKey},'path', 'client']);
+    this.contexts_ = {};
+};
+
+/**
+ * @param {string} clientid
+ * @param {!aurora.db.access.SecurityContext} context
+ */
+aurora.db.Notify.prototype.updateClientContext = function(clientid, context) {
+    this.contexts_[clientid] = context;
+};
+
+/**
+ * @param {string} clientid
+ * @param {Object} key
+ * @param {aurora.db.schema.TableType} table
+ * @param {recoil.db.Query} query
+ * @return {!aurora.db.Notify.ObjectMap}
+ */
+aurora.db.Notify.prototype.addQuery = function(clientid, key, table, query) {
+
+
+
+    let entry = {query: {key: key, query: query}, client: clientid};
+    this.map_.add(entry);
+    let objectMap = new aurora.db.Notify.ObjectMap(table, this.map_, entry);
+    this.map_.add(entry);
+    return objectMap;
+
+};
+
+/**
+ * @param {string} clientid
+ * @param {?} key
+ */
+aurora.db.Notify.prototype.removeQuery = function(clientid, key) {
+    let entry = {query: {key: key}, client: clientid};
+    this.map_.removeIntersection(['query', 'client'], entry);
+};
+
+/**
+ * @param {string} clientid
+ */
+aurora.db.Notify.prototype.removeClient = function(clientid) {
+    this.map_.removeIntersection(['client'], {client: clientid});
+    delete this.contexts_[clientid];
+};
+
+
+/**
+ * @param {recoil.db.ChangeSet.Path} path
+ * @param {function(!aurora.db.access.SecurityContext, string, !recoil.db.ChangeSet.Path, !recoil.db.ChangeSet.Path, ?, recoil.db.Query)} callback
+ */
+aurora.db.Notify.prototype.forEachEffected = function(path, callback) {
+    // to get the root path find the first path with a key
+    let items = path.items();
+    let rootItems = [];
+    for (let i = 0; i < items.length; i++) {
+        rootItems.push(items[i]);
+        if (items[i].keys().length > 0) {
+            break;
+        }
+
+    }
+    let rootPath = new recoil.db.ChangeSet.Path(rootItems);
+    let found = this.map_.get(['path'], {path: rootPath});
+    let me = this;
+    found.forEach(function(entry) {
+        let context = me.contexts_[entry.client];
+        if (context) {
+            callback(context, entry.client, rootPath, entry.path, entry.query.key, entry.query.query);
+        }
+    });
+};
+
+/**
+ * prints for debugging
+ */
+aurora.db.Notify.prototype.print = function() {
+    this.map_.print();
+};
+/**
+ * @constructor
+ * @param {aurora.db.schema.TableType} table
+ * @param {!recoil.structs.MultiKeyMap} map
+ * @param {{client:string,query:{key:?,query:?}}} entry
+ */
+aurora.db.Notify.ObjectMap = function(table, map, entry) {
+    this.basePath_ = recoil.db.ChangeSet.Path.fromString(table.info.path);
+    this.table_ = table;
+    this.map_ = map;
+    this.entry_ = entry;
+};
+
+
+/**
+ * @param {?} object
+ */
+aurora.db.Notify.ObjectMap.prototype.addObject = function(object) {
+    let keys = this.table_.info.keys;
+    if (keys) {
+
+        let path = this.basePath_.setKeys(keys, keys.map(function(k) {return object[k];}));
+        let pathEntry = goog.object.clone(this.entry_);
+        pathEntry.path = path;
+        let pathClients = this.map_.add(pathEntry);
+    }
+
+
+};
 
 /**
  * @constructor
@@ -25,6 +140,8 @@ aurora.db.Coms = function(authenticator) {
     this.reader_ = null;
     let secName = aurora.db.schema.tables.sec.permissions.info.name;
     let serializer = new aurora.db.Serializer();
+    // root path -> client
+    this.notifies_ = new aurora.db.Notify();
 
     aurora.startup.doOnceStarted(function() {
         reader = new aurora.db.sql.Reader(aurora.db.Pool.getDefault());
@@ -39,6 +156,7 @@ aurora.db.Coms = function(authenticator) {
     this.channel_ = authenticator.getChannel(aurora.db.shared.PLUGIN_ID, aurora.db.shared.DATA, function(e, secContext) {
         let action = e && e.data && e.data['command'];
         let token = e.token;
+        me.notifies_.updateClientContext(e.clientId, secContext);
         try {
             if (action === 'get') {
                 me.doGet_(reader, e, secContext);
@@ -130,6 +248,14 @@ aurora.db.Coms = function(authenticator) {
                 }
 
             }
+            else if (action === 'stop') {
+                let name = e.data['name'];
+                let queryIn = e.data['query'];
+                let optionsIn = e.data['options'];
+
+                var query = {name: name, query: queryIn, options: optionsIn};
+                me.notifies_.removeQuery(e.clientId, query);
+            }
             else {
             // todo check permission filters
                 me.log_.error('got unknown command', action);
@@ -139,11 +265,179 @@ aurora.db.Coms = function(authenticator) {
             me.log_.error('Error processing request', e);
         }
 
-    }, function(token) {
-        // what to do if we deregister
+    }, function(token, clientid) {
+        me.notifies_.removeClient(clientid);
     });
     this.setupUpload_();
+    this.setupDownload_();
 
+};
+
+/**
+ * @param {Object} object
+ * @param {!recoil.db.ChangeSet.Path} basePath
+ * @param {!recoil.db.ChangeSet.Path} path
+ * @return {?}
+ */
+aurora.db.Coms.getSubObject_ = function(object, basePath, path) {
+    let pathItems = path.items();
+    let idx = basePath.size();
+    let keysEqual = function(pItem, object) {
+        let names = pItem.keyNames();
+        let vals = pItem.keys();
+        for (let i = 0; i < names.length; i++) {
+            let name = names[i];
+            if (!recoil.util.isEqual(object[name], vals[i])) {
+                return false;
+            }
+        }
+        return true;
+
+    };
+    if (idx > pathItems.length) {
+        return null;
+    }
+    let getItemInList = function(item, object, path) {
+
+
+        let tblT = aurora.db.schema.getTableByName(path);
+        if (tblT) {
+            if (!object) {
+                return null;
+            }
+            let found = null;
+            if (object instanceof Array) {
+                for (var j = 0; j < object.length; j++) {
+                    if (keysEqual(item, object[j])) {
+                        found = object[j];
+                        break;
+                    }
+                }
+            }
+            else if (object instanceof Object) {
+                if (keysEqual(item, object)) {
+                    found = object;
+                }
+            }
+            if (!found) {
+                return null;
+            }
+            return found;
+        }
+        return object;
+    };
+    // if the first element contains keys but the base path does traverse item to find the correct one
+    if (basePath.last().keys().length === 0 && pathItems[idx - 1].keys().length > 0) {
+        object = getItemInList(pathItems[idx - 1], object, basePath);
+    }
+    let curPath = basePath;
+    for (var pathIndex = idx; object && pathIndex < pathItems.length; pathIndex++) {
+        let item = pathItems[pathIndex];
+        curPath = curPath.append(item);
+        // for changes like sets we may not find a table
+        if (item.keys().length > 0) {
+            object = getItemInList(item, object[item.name()], curPath);
+        }
+        else {
+            object = object[item.name()];
+        }
+
+    }
+    return object;
+
+};
+/**
+ * @private
+ * @param {recoil.db.ChangeSet.Change} change
+ */
+aurora.db.Coms.prototype.notifyListeners_ = function(change) {
+    let reader = this.reader_;
+    if (!reader) {
+        return;
+    }
+    let async = this.async_;
+    let sendClients = {};
+
+    let me = this;
+    let readObjectQueue = async.queue(function(data, callback) {
+        if (data.done) {
+
+            for (let clientId in sendClients) {
+                let info = sendClients[clientId];
+                me.doGetHelper_(clientId, reader, info.context, info.key.name, info.key.query, info.key.options);
+            }
+            return;
+        }
+
+        let baseTable = aurora.db.schema.getTableByName(data.basePath);
+        if (!baseTable && baseTable.info.accessFilterFunc) {
+            return;
+        }
+
+
+        let accessFilter = baseTable.info.accessFilter(data.context);
+
+        // we have to re-read for security reasons
+        // we may need to add the path to the notifies
+        let query = data.query;
+        // todo we should really merge this with the other options since something like a limit would mean we shouldn't get
+        // the value although the limit wouldn't work since we lookup by key anyway just send it or perhaps not they are just
+        // global lookups so shouldn't really matter
+        let pathItems = change.path().items();
+        let onlyPath = new recoil.db.QueryOptions({columnFilters: {prefix: change.path().toStringArray()}});
+        reader.readObjects(
+            data.context, baseTable, query.and(query, query.eq(query.field(baseTable.info.pk), query.val(data.basePath.last().keys()[0]))),
+            accessFilter,
+            function(err, results) {
+                if (!err) {
+                    // check if path exists in the results to see if path exists in objects if so we need to the update
+
+                    for (var i = 0; i < results.length; i++) {
+                        let object = aurora.db.Coms.getSubObject_(results[i], recoil.db.ChangeSet.Path.fromString(baseTable.info.path), change.path());
+                        if (object != null) {
+                            let secureChange = change.filter(function(path) {
+                                try {
+                                    let meta = aurora.db.schema.getMetaByPath(path.pathAsString());
+                                    if (meta.type === 'password') {
+                                        return false;
+                                    }
+                                }
+                                catch (e) {
+                                    // if the path doesn't exist then it is a internally made up path like file attributes so
+                                    // for now its ok check the parent
+                                    return aurora.db.schema.hasAccess(data.context, path.parent(), 'r');
+                                }
+
+                                return aurora.db.schema.hasAccess(data.context, path, 'r');
+                            });
+                            if (secureChange) {
+                                // it would be great just to send the change that the client was interested in but
+                                // for now will just resend the query that the change effected its simpler and safer
+                                // and will do for now, it deals with things like queries that filter limit options
+                                sendClients[data.clientid] = {change: secureChange, key: data.key, context: data.context};
+                            }
+
+                            break;
+                        }
+                    }
+
+                }
+
+                callback();
+            }, onlyPath);
+    });
+
+    // todo currently we add a top level item or update an item so it now matches this will not update
+    // notify interested queries
+    this.notifies_.forEachEffected(change.path(), function(context, clientid, basePath, path, key, query) {
+        // if the client doesn't have access to read the field don't send
+        if (!aurora.db.schema.hasAccess(context, change.path(), 'r')) {
+            return;
+        }
+        readObjectQueue.push({context, clientid, basePath, path, key, query});
+
+    });
+    readObjectQueue.push({done: true});
 };
 
 /**
@@ -158,7 +452,6 @@ aurora.db.Coms.prototype.doChanges_ = function(reader, e, secContext) {
     let changes = recoil.db.ChangeSet.Change.deserializeList(e.data['list'], schema, new aurora.db.Coms.ValSerializer());
     let me = this;
     this.writer_.applyChanges(changes, secContext, function(result) {
-        console.log('setting got result', result);
         me.channel_.send({'command': 'set', 'id': e.data['id'], 'results': result}, e.clientId);
 
     });
@@ -200,24 +493,38 @@ aurora.db.Coms.traverseObject_ = function(tbl, obj, callback) {
  * @param {!aurora.db.access.SecurityContext} secContext
  */
 aurora.db.Coms.prototype.doGet_ = function(reader, e, secContext) {
-    let secName = aurora.db.schema.tables.sec.permissions.info.name;
-    let me = this;
     let name = e.data['name'];
     let queryIn = e.data['query'];
     let optionsIn = e.data['options'];
+    this.doGetHelper_(e.clientId, reader, secContext, name, queryIn, optionsIn);
+};
+
+/**
+ * @private
+ * @param {string} clientId
+ * @param {aurora.db.Reader} reader
+ * @param {!aurora.db.access.SecurityContext} secContext
+ * @param {string} name
+ * @param {?} queryIn
+ * @param {?} optionsIn
+ */
+aurora.db.Coms.prototype.doGetHelper_ = function(clientId, reader, secContext, name, queryIn, optionsIn) {
+    let secName = aurora.db.schema.tables.sec.permissions.info.name;
+    let me = this;
     let response = {'command': 'full', 'name': name, 'query': queryIn, 'options': optionsIn, 'value': null};
     let serializer = new aurora.db.Serializer;
     let context = {'@userid': secContext.userid};
+
     let start = new Date().getTime();
     if (name === secName) {
         // this is special every one can request what permissions they have
-        me.channel_.send({'command': 'full', 'name': name, 'query': queryIn, 'options': optionsIn, 'value': secContext}, e.clientId);
+        me.channel_.send({'command': 'full', 'name': name, 'query': queryIn, 'options': optionsIn, 'value': secContext}, clientId);
         return;
     }
     if (!reader) {
         return;
     }
-    let secInfo = me.doSecurityCheck_(e, secContext, 'r', response);
+    let secInfo = me.doSecurityCheck_(clientId, name, secContext, 'r', response);
     if (secInfo) {
         let query = recoil.db.Query.deserialize(queryIn, serializer);
         let options = recoil.db.QueryOptions.deserialize(optionsIn);
@@ -231,7 +538,11 @@ aurora.db.Coms.prototype.doGet_ = function(reader, e, secContext) {
                 }
                 else {
                     if (options && !options.isCount()) {
+                        let notifyQuery = me.notifies_.addQuery(clientId, {name: name, query: queryIn, options: optionsIn}, secInfo.table, query);
                         data.forEach(function(dataItem) {
+                            notifyQuery.addObject(dataItem);
+
+
                             aurora.db.Coms.traverseObject_(secInfo.table, dataItem, function(tbl, parent, value, colName, colMeta) {
                                 if (colMeta.type === 'password') {
                                     parent[colName] = null;
@@ -252,7 +563,7 @@ aurora.db.Coms.prototype.doGet_ = function(reader, e, secContext) {
                     me.log_.info('performance', queryIn, optionsIn, (new Date().getTime() - start) / 1000);
                     me.log_.debug('read data', queryIn, optionsIn, data, (new Date().getTime() - start) / 1000);
                 }
-                me.channel_.send(response, e.clientId);
+                me.channel_.send(response, clientId);
             }, options);
     }
 
@@ -262,16 +573,16 @@ aurora.db.Coms.prototype.doGet_ = function(reader, e, secContext) {
  * @param {!aurora.db.Reader} reader
  * @param {!Object} context
  * @param {multiparty.Part} part
- * @param {function(?, ?number)} done
+ * @param {function(?, Object)} done
  */
 aurora.db.Coms.prototype.insertFileIntoDb_ = function(reader, context, part, done) {
 
     let log = this.log_;
     let async = this.async_;
-    console.log('gotFilename', part.filename);
     let fileT = aurora.db.schema.tables.base.file_storage;
+    let fileObject = {created: new Date().getTime(), user: context.userid, name: part.filename, size: 0, parts: []};
     reader.insert(
-        context, fileT, {created: new Date().getTime(), user: context.userid, name: part.filename, size: 0, parts: []}, function(err, insertRes) {
+        context, fileT, fileObject, function(err, insertRes) {
             if (err) {
                 log.error('Unable to insert file', part.filename);
                 part.resume();
@@ -291,11 +602,15 @@ aurora.db.Coms.prototype.insertFileIntoDb_ = function(reader, context, part, don
                     callback();
                     if (!partError) {
                         let query = new recoil.db.Query();
+                        fileObject.size = size;
                         reader.updateOneLevel(
                             context, fileT, {size: size}, query.eq(query.val(insertRes.insertId), query.field(fileT.cols.id)),
                             function(err) {
                                 partError = err;
-                                done(err, insertRes.insertId);
+                                if (!err) {
+                                    fileObject.id = insertRes.insertId + '';
+                                }
+                                done(err, fileObject);
                             });
 
                         }
@@ -315,7 +630,6 @@ aurora.db.Coms.prototype.insertFileIntoDb_ = function(reader, context, part, don
             }, 1);
 
             part.on('end', function() {
-                console.log('part end');
                 if (written > 0) {
                     let toWrite = Buffer.alloc(written);
                     buffer.copy(toWrite, 0, 0, written);
@@ -353,11 +667,12 @@ aurora.db.Coms.prototype.insertFileIntoDb_ = function(reader, context, part, don
  * converts a url path to a ChangeSet path, this will also validate the
  * path exists in the schema, if it doesn't returns null
  * @param {string} path
+ * @param {boolean=} opt_item if true will assume the last value has a key
  * @return {?{path: !recoil.db.ChangeSet.Path,
               base:recoil.db.ChangeSet.Path,keyValues:!Array<{col:!recoil.structs.table.ColumnKey,value:?}>,
-              baseTable:!aurora.db.schema.TableType, table:!aurora.db.schema.TableType, fileField:?string}}
+              baseTable:!aurora.db.schema.TableType, table:!aurora.db.schema.TableType, parentTable: !aurora.db.schema.TableType, fileField:?string}}
  */
-aurora.db.Coms.prototype.getUrlPathInfo = function(path) {
+aurora.db.Coms.prototype.getUrlPathInfo = function(path, opt_item) {
     let parts = path.split('/').map(function(p) {return decodeURIComponent(p);});
     // the last part the path is the keys and should be an array to check
     let keyParts = [];
@@ -365,11 +680,8 @@ aurora.db.Coms.prototype.getUrlPathInfo = function(path) {
         // remove the keys part
         let last = parts.pop();
         try {
-            keyParts = JSON.parse(last);
-            if (!(keyParts instanceof Array)) {
-                // invalid path keys must be an array
-                return null;
-            }
+            last = last.substring(1, last.length - 1);
+            keyParts = last.split(',').map(function(v) { return BigInt(v);});
         }
         catch (e) {
             // invalid path
@@ -377,7 +689,9 @@ aurora.db.Coms.prototype.getUrlPathInfo = function(path) {
         }
     }
     {
-        let path = aurora.db.schema.getTablePath(parts.join('/'), keyParts);
+        let path = aurora.db.schema.getTablePath(parts.join('/'), keyParts, opt_item);
+
+
         if (!path) {
             return null;
         }
@@ -392,6 +706,7 @@ aurora.db.Coms.prototype.getUrlPathInfo = function(path) {
             keyValues.push({col: tbl.meta[keys.keyNames()[i]].key, value: keys.keys()[i]});
         }
         let insertTable = aurora.db.schema.getTableByName(path);
+        let parentTable = aurora.db.schema.getTableByName(path.parent());
 
         let fileField = null;
 
@@ -405,6 +720,7 @@ aurora.db.Coms.prototype.getUrlPathInfo = function(path) {
             path: path,
             base: base,
             baseTable: /** @type {!aurora.db.schema.TableType} */ (tbl),
+            parentTable: /** @type {!aurora.db.schema.TableType} */ (parentTable),
             table: /** @type {!aurora.db.schema.TableType} */ (insertTable),
             fileField: fileField,
             keyValues: keyValues
@@ -418,7 +734,7 @@ aurora.db.Coms.prototype.getUrlPathInfo = function(path) {
  * @param {!Object} context
  * @param {http.IncomingMessage} request,
  * @param {http.ServerResponse} response
- * @param {function(?,Array<number>)} done first param error, last param inserted file ids
+ * @param {function(?,Array<Object>)} done first param error, last param inserted file ids
  */
 aurora.db.Coms.prototype.doUpload_ = function (reader, context, request, response, done) {
     let log = this.log_;
@@ -427,26 +743,23 @@ aurora.db.Coms.prototype.doUpload_ = function (reader, context, request, respons
     var form = new multiparty.Form();
     var filename = undefined;
     let partError = null;
-    let insertIds = [];
+    let insertedList = [];
     let async = this.async_;
     let queue = async.queue(function(data, callback) {
         if (data.part) {
-            console.log("doing part");
-            me.insertFileIntoDb_(reader, context, data.part, function (err, insertId) {
+            me.insertFileIntoDb_(reader, context, data.part, function (err, inserted) {
                 if (err) {
                     partError = partError || err;
                 }
                 else {
-                    insertIds.push(insertId);
+                    insertedList.push(inserted);
                 }
                 callback();
             });
 
         }
         else if (data.done) {
-            console.log("part done", partError, insertIds);
-
-            done(partError, insertIds);
+            done(partError, insertedList);
         }
     });
     form.on('part', function(part) {
@@ -472,6 +785,101 @@ aurora.db.Coms.prototype.doUpload_ = function (reader, context, request, respons
 };
 
 /**
+ * follows the path down the object to find the element
+ * @param {Object} object
+ * @param {recoil.db.ChangeSet.Path} basePath
+ * @param {recoil.db.ChangeSet.Path} path
+ * @return {?}
+ */
+
+aurora.db.Coms.prototype.findElement = function (object, basePath, path) {
+    if (!basePath || !path) {
+        return null;
+    }
+    return aurora.db.Coms.getSubObject_(object, basePath, path);
+};
+
+/**
+ * sets up callback for uploads
+ */
+aurora.db.Coms.prototype.setupDownload_ = function () {
+    const mime = require('mime');
+    let log = this.log_;
+    let me = this;
+    const DOWNLOAD_URL = '/system/download';
+    const DOWNLOAD_REGEXP = new RegExp('^' + DOWNLOAD_URL.replaceAll('/','\\/') + '\\/');
+    let async = this.async_;
+    aurora.http.addMidRequestCallback(
+        DOWNLOAD_REGEXP,
+        function(state, done) {
+            let response = state.response;
+            let request = state.request;
+            let urlInfo = me.getUrlPathInfo(request.url.substring(DOWNLOAD_URL.length), true);
+            if (state.request.method === 'GET' && me.reader_ && urlInfo && urlInfo.fileField) {
+                let reader = me.reader_;
+                // we know we are handing it here maybe or deal with it in the security check
+                let doneCalled = false;
+
+                me.authenticator_.getPermissions(state.token, request.socket, function (context) {
+                    if (!aurora.db.schema.hasAccess(context, urlInfo.path, 'r')) {
+                        // we don't exist the user has no access
+                        done(undefined);
+                        log.warn("File Download Access Denied for ", context.userid);
+                        return;
+                    }
+                    reader.readObjectByKey(context, urlInfo.baseTable, urlInfo.keyValues, urlInfo.baseTable.info.accessFilter(context), function (err, object) {
+                        let fileInfo = me.findElement(object, urlInfo.base, urlInfo.path);
+                        console.log("about to do read", fileInfo);
+                        if (err || !fileInfo) {
+                            done(undefined);
+                            return;
+                        }
+                        done(false);
+                        
+                        let fileT = aurora.db.schema.tables.base.file_storage;
+
+                        let fileId = fileInfo[urlInfo.fileField];
+
+                        let request = state.request;
+                        let headers = state.responseHeaders;
+
+                        console.log("name", fileInfo.name);
+                        
+                        headers.set('Content-Length', fileInfo.size);
+                        headers.set('Content-Type', mime.getType(fileInfo.name));
+                        headers.set('Accept-Ranges', 'bytes');
+                        headers.set('Cache-Control', 'no-cache, must-revalidate');
+                        headers.set('Content-Disposition', 'attachment; filename=' + JSON.stringify(fileInfo.name));
+                        
+                        headers.set('Last-Modified', new Date(fileInfo.created).toGMTString());
+                        response.writeHead(200, headers.toClient());
+                        
+                        // now read the parts but we need to read it piecewize otherwize it may be too big
+                        let query = new recoil.db.Query();
+                        console.log("about to do read");
+                        reader.readLevel(context, fileT.parts, query.eq(fileT.parts.info.parentKey, query.val(fileId)), null, function (part, cb) {
+                            console.log("got part", part);
+                            response.write(part.data);
+                            cb();
+                        }, function (err) {
+                            if (err) {
+                                me.log_.error('error reading file', err);
+
+                            }
+                            console.log("done");
+                            response.end();
+                        });
+                        
+                    });
+                                            
+                });
+                return aurora.http.REQUEST_ASYNC;
+            }
+            //
+            return undefined;
+        });
+};
+/**
  * sets up callback for uploads
  */
 aurora.db.Coms.prototype.setupUpload_ = function () {
@@ -480,7 +888,6 @@ aurora.db.Coms.prototype.setupUpload_ = function () {
     const UPLOAD_URL = '/system/upload';
     const UPLOAD_REGEXP = new RegExp('^' + UPLOAD_URL.replaceAll('/','\\/') + '\\/');
     let async = this.async_;
-    console.log("upload regexp", '^' + UPLOAD_URL.replaceAll('/','\\/') + '\\/');
     aurora.http.addMidRequestCallback(
         UPLOAD_REGEXP,
         function(state, done) {
@@ -489,12 +896,10 @@ aurora.db.Coms.prototype.setupUpload_ = function () {
             let urlInfo = me.getUrlPathInfo(request.url.substring(UPLOAD_URL.length));
             if (state.request.method === 'POST' && me.reader_ && urlInfo && urlInfo.fileField) {
                 let reader = me.reader_;
-                console.log("got url", urlInfo.path.toString(), "base", urlInfo.base.toString(), "kvalues", urlInfo.keyValues);
                 // we know we are handing it here maybe or deal with it in the security check
                 let doneCalled = false;
 
                 me.authenticator_.getPermissions(state.token, request.socket, function (context) {
-                    console.log("got context", context);
                     if (!aurora.db.schema.hasAccess(context, urlInfo.path, 'c')) {
                         // we don't exist the user has no access
                         doneCalled = true;
@@ -502,22 +907,24 @@ aurora.db.Coms.prototype.setupUpload_ = function () {
                         log.warn("File Upload Access Denied for ", context.userid);
                         return;
                     }
+                    let notifies = [];
                     // check we have create access on the column we are adding to
                     reader.transaction(function (reader, transDone) {
                         // check we can even see the row
                         reader.readObjectByKey(context, urlInfo.baseTable, urlInfo.keyValues, urlInfo.baseTable.info.accessFilter(context), function (err, object) {
                             // we know we are dealing with the request now
                             doneCalled = true;
-                            if (err) {
+                            let insertEl = me.findElement(object, urlInfo.base, urlInfo.path.parent());
+                            if (err || !insertEl) {
                                 done(undefined);
                                 return;
                             }
                             done(false);
-                            let parentId = object.id;
+                            console.log("insert el", insertEl, urlInfo.path.toString(), urlInfo.table.info.parentKey.getName());
+                                
+                            let parentId = insertEl[urlInfo.parentTable.info.pk.getName()];
                             
-                            console.log("got base object", err, object.id);
-                            me.doUpload_(reader, context, request, response, function (err, fileIds) {
-                                console.log("upload finished", err, fileIds);
+                            me.doUpload_(reader, context, request, response, function (err, inserted) {
                                 if (!err) {
                                     // insert the row in the referencing table so we can access the file
                                     let template = {};
@@ -529,14 +936,17 @@ aurora.db.Coms.prototype.setupUpload_ = function () {
                                     }
                                     template[urlInfo.table.info.parentKey.getName()] = parentId;
                                     
-                                    async.eachSeries(fileIds, function (id, callback) {
-                                        let obj = goog.object.clone(template);
-                                        obj[urlInfo.fileField] = id;
-                                        reader.insert(context, urlInfo.table, obj, function (err) {
+                                    async.eachSeries(inserted, function (insertedObj, callback) {
+                                        let obj = Object.assign({}, insertedObj, template);
+                                        obj[urlInfo.fileField] = insertedObj.id;
+                                        reader.insert(context, urlInfo.table, obj, function (err, insertRes) {
+                                            if (!err) {
+                                                obj[urlInfo.table.info.pk.getName()] = insertRes.insertId + '';
+                                                notifies.push(obj);
+                                            }
                                             callback(err);
                                         });
                                     }, function (err) {
-                                        console.log("top level done");
                                         transDone(err);
                                     });
                                 }
@@ -551,9 +961,22 @@ aurora.db.Coms.prototype.setupUpload_ = function () {
                             doneCalled = true;
                             done(false);
                         }
-                        console.log("upload response");
                         response.writeHead(err ? 422 : 200, {'content-type': 'text/plain'});
                         response.end('{}');
+                        if (!err) {
+                            notifies.forEach(function (obj) {
+                                let table = urlInfo.table;
+                                let path = urlInfo.path.setKeys([table.info.pk.getName()], [BigInt(obj[table.info.pk.getName()])]);
+                                let fields = [];
+                                //urlInfo.table.
+                                for (let name in obj) {
+                                    if (name !==  table.info.pk.getName() && name != 'parts') {
+                                        fields.push(new recoil.db.ChangeSet.Set(path.appendName(name), null, obj[name]));
+                                    }
+                                }
+                                me.notifyListeners_(new recoil.db.ChangeSet.Add(path, fields));
+                            });
+                        }
                     });
                 });
                 return aurora.http.REQUEST_ASYNC;
@@ -565,34 +988,34 @@ aurora.db.Coms.prototype.setupUpload_ = function () {
 };
 /**
  * @private
- * @param {!aurora.websocket.ChannelMessage} e
+ * @param {string} clientId
+ * @param {string} name
  * @param {!aurora.db.access.SecurityContext} secContext
  * @param {string} opType one of c - create, r -read, u - update, d - delete
  * @param {Object} response
  *
  * @return {?{table:!aurora.db.schema.TableType,accessFilter:!recoil.db.Query}}
  */
-aurora.db.Coms.prototype.doSecurityCheck_ = function(e, secContext, opType, response) {
-    let name = e.data['name'];
+aurora.db.Coms.prototype.doSecurityCheck_ = function(clientId, name, secContext, opType, response) {
     let me = this;
 
     let tbl = aurora.db.schema.getTableByName(name);
     if (!tbl) {
         response['error-value'] = 'Unable to find object ' + name;
-        me.channel_.send(response, e.clientId);
+        me.channel_.send(response, clientId);
         return null;
     }
     let accessFunc = tbl.info.access;
     let accessFilterFunc = tbl.info.accessFilter;
     if (!accessFunc || !accessFilterFunc) {
         response['error-value'] = 'Access control not specified on ' + name;
-        me.channel_.send(response, e.clientId);
+        me.channel_.send(response, clientId);
         return null;
     }
 
     if (!tbl.info.access(secContext, opType)) {
         response['error-value'] = 'Access Denied';
-        me.channel_.send(response, e.clientId);
+        me.channel_.send(response, clientId);
         return null;
     }
 

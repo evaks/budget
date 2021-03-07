@@ -127,6 +127,65 @@ aurora.db.sql.ChangeWriter.prototype.getBasePath_ = function(path) {
 
 /**
  * @private
+ * @param {?aurora.db.schema.TableType} table
+ * @return {?string}
+ */
+aurora.db.sql.ChangeWriter.prototype.hasFile_ = function(table) {
+    return aurora.db.sql.ChangeWriter.hasFile_(table);
+};
+/**
+ * @private
+ * @param {?aurora.db.schema.TableType} table
+ * @return {?string}
+ */
+aurora.db.sql.ChangeWriter.hasFile_ = function(table) {
+    if (table) {
+        for (let k in table.meta) {
+            if (table.meta[k].type === 'file') {
+                return k;
+            }
+        }
+    }
+    return null;
+};
+
+/**
+ * gets the meta of a path but also handles files
+ * @param {!recoil.db.ChangeSet.Path} path
+ * @return {{meta: Object, fileField:?string}}
+ */
+aurora.db.sql.ChangeWriter.prototype.getFileMetaByPath = function(path) {
+    return aurora.db.sql.ChangeWriter.getFileMetaByPath(this.schema_, path);
+};
+/**
+ * gets the meta of a path but also handles files
+ * @param {!aurora.db.SchemaType} schema
+ * @param {!recoil.db.ChangeSet.Path} path
+ * @return {{meta: Object, fileField:?string}}
+ */
+aurora.db.sql.ChangeWriter.getFileMetaByPath = function(schema, path) {
+    let field = null;
+    let meta = null;
+    try {
+        meta = schema.getMetaByPath(path);
+    }
+    catch (e) {
+        // this could be a filename
+        if (path.last().name() === 'name') {
+            let parentTable = schema.getTableByName(path.parent());
+            console.log('getting file info');
+            field = aurora.db.sql.ChangeWriter.hasFile_(parentTable);
+            if (field) {
+                meta = schema.getMetaByPath(path.parent().appendName(field));
+            }
+        }
+
+    }
+    return {meta: meta, fileField: field};
+};
+
+/**
+ * @private
  * @param {!recoil.db.ChangeSet.Change} change
  * @param {!aurora.db.access.SecurityContext} secContext
  * @return {boolean}
@@ -137,9 +196,16 @@ aurora.db.sql.ChangeWriter.prototype.hasPermission_ = function(change, secContex
 
     if (change instanceof recoil.db.ChangeSet.Set) {
         access = 'u';
-        let meta = this.schema_.getMetaByPath(path.pathAsString());
+        let meta = null;
+        let isFile = false;
+        let fileMeta = this.getFileMetaByPath(path);
+        meta = fileMeta.meta;
+        isFile = fileMeta.fileField;
         if (!meta) {
             return false; // field doesn't exist so no access
+        }
+        if (meta.type === 'file' && !isFile) {
+            return false;
         }
 
         let allowed = meta.access ? meta.access(secContext, access) : null;
@@ -161,7 +227,6 @@ aurora.db.sql.ChangeWriter.prototype.hasPermission_ = function(change, secContex
     let tbl = this.schema_.getTableByName(path);
     while (tbl && path.length() > 0) {
         let allowed = tbl.info.access ? tbl.info.access(secContext, access) : null;
-        console.log('checking access', path.toString(), allowed, tbl.info.access);
         if (allowed != undefined) {
             return allowed;
         }
@@ -192,6 +257,7 @@ aurora.db.sql.ChangeWriter.prototype.applyChanges = function(changes, secContext
     // get the base paths of each change we need this in order to determine security
     // we trust nothing from the client
     for (let changeIdx = 0; changeIdx < changes.length; changeIdx++) {
+
         results.push({error: null});
         // first we need to get the base object ids so we can do a security check
         let change = changes[changeIdx];
@@ -318,6 +384,7 @@ aurora.db.sql.ChangeWriter.prototype.applyChanges = function(changes, secContext
                             let pk = obj[tbl.info.pk.getName()];
                             base.objs[pk] = obj;
                         }
+
                     }
 
                     callback(null);
@@ -526,6 +593,7 @@ aurora.db.sql.ChangeWriter.prototype.applyTransactionChanges_ = function(changeL
                     let obj = {};
                     let idName = tbl.info.pk.getName();
                     let parentName = tbl.info.parentKey ? tbl.info.parentKey.getName() : null;
+                    let fileUpdate = null;
                     for (let k in entry.object) {
                         if (k === parentName) {
                             if (entry.parentId) {
@@ -544,7 +612,7 @@ aurora.db.sql.ChangeWriter.prototype.applyTransactionChanges_ = function(changeL
                     if (entry.parentId && parentName) {
                         obj[parentName] = entry.parentId.value;
                     }
-                    return {tbl: tbl, obj: obj};
+                    return {tbl: tbl, obj: obj, fileUpdate: fileUpdate};
                 }
                 return null;
             };
@@ -564,7 +632,6 @@ aurora.db.sql.ChangeWriter.prototype.applyTransactionChanges_ = function(changeL
                             // todo we get no error without an insertid object
                             entry.id.value = BigInt(insertId.insertId);
                             if (isBase) {
-                                console.log('inserted', info.tbl.info.name, info.obj, entry.object, entry.id.value);
                                 let keyNames = entry.key.path.last().keyNames();
                                 let newPath = entry.key.path.setKeys(keyNames, [new aurora.db.PrimaryKey(entry.id.value)]);
                                 addsToCheck.push({tbl: info.tbl, entry: entry, id: entry.id.value});
@@ -580,9 +647,65 @@ aurora.db.sql.ChangeWriter.prototype.applyTransactionChanges_ = function(changeL
                 let path = entry.key.path;
                 let tbl = schema.getTableByName(path.pathAsString());
                 if (tbl) {
-                    reader.deleteOneLevel(context, tbl, query.eq(tbl.info.pk, query.val(path.lastKeys()[0].db)), null, function(err) {
-                        eachCallback(err);
-                    });
+                    // files are special we need to delete them automatically
+
+                    let fileCol = null;
+                    for (let col in tbl.meta) {
+                        if (tbl.meta[col].type === 'file') {
+                            fileCol = col;
+                            break;
+                        }
+                    }
+
+                    let doDelete = function(callback) {
+                        let pkQuery = query.eq(tbl.info.pk, query.val(path.lastKeys()[0].db));
+                        reader.deleteOneLevel(context, tbl, pkQuery, null, function(err) {
+                            callback(err);
+                        });
+                    };
+
+                    if (fileCol) {
+                        let deleteFileData = function(obj) {
+                            return function(err) {
+                                if (err) {
+                                    eachCallback(err);
+                                }
+                                else {
+                                    let fileT = aurora.db.schema.tables.base.file_storage;
+                                    let filePartT = fileT.parts;
+                                    let fileId = obj[fileCol];
+                                    console.log('deleting file', fileId);
+                                    reader.deleteOneLevel(context, filePartT, query.eq(filePartT.info.parentKey, query.val(fileId)), null, function(err) {
+                                        if (err) {
+                                            eachCallback(err);
+                                        }
+                                        else {
+                                            reader.deleteOneLevel(context, fileT, query.eq(fileT.info.pk, query.val(fileId)), null, function(err) {
+                                                eachCallback(err);
+                                            });
+                                        }
+                                    });
+                                }
+                            };
+                        };
+                        reader.readObjectByKey(
+                            context, tbl, [{col: tbl.info.pk, value: path.lastKeys()[0].db}],
+                            null, function(err, obj) {
+                                if (err) {
+                                    eachCallback(err);
+                                }
+                                else {
+                                    doDelete(deleteFileData(obj));
+                                }
+
+                            });
+
+                        // we need to get the file id
+                    }
+                    else {
+                        doDelete(eachCallback);
+                    }
+
                     return;
                 }
                 eachCallback('Unable to find table for ' + path.pathAsString());
@@ -590,6 +713,7 @@ aurora.db.sql.ChangeWriter.prototype.applyTransactionChanges_ = function(changeL
             }
             else if (entry.key.type === CType.SET) {
                 let info = makeObject(entry.key.parent);
+                console.log('made set object', info);
                 if (info) {
                 // this is a set
                     reader.updateOneLevel(context, info.tbl, info.obj, query.eq(info.tbl.info.pk, entry.key.parent.last().keys()[0].db), function(err) {
@@ -641,6 +765,15 @@ aurora.db.sql.ChangeWriter.prototype.applyTransactionChanges_ = function(changeL
  */
 aurora.db.sql.ChangeWriter.prototype.addSet_ = function(objectPathMap, change, result, parentId, obj) {
     let CType = recoil.db.ChangeSet.Change.Type;
+    let fileMeta = this.getFileMetaByPath(change.path());
+    if (fileMeta.fileField) {
+        let storageT = aurora.db.schema.tables.base.file_storage;
+        let changeParent = change.path().parent();
+        let actualPath = recoil.db.ChangeSet.Path.fromString(aurora.db.schema.tables.base.file_storage.info.path);
+        let parentItem = new recoil.db.ChangeSet.PathItem(actualPath.last().name(), [storageT.info.pk.getName()], [new aurora.db.PrimaryKey(obj[fileMeta.fileField])]);
+        actualPath = actualPath.parent().append(parentItem).appendName(change.path().last().name());
+        change = new recoil.db.ChangeSet.Set(actualPath, change.orig(), change.value());
+    }
     let entry = objectPathMap.safeFind(
         {key: {
             path: change.path(),
@@ -649,8 +782,8 @@ aurora.db.sql.ChangeWriter.prototype.addSet_ = function(objectPathMap, change, r
             type: CType.SET,
         }, value: null, parentId: parentId, needsRefs: [], hasRefs: [], result: result}
     );
-    let meta = this.schema_.getMetaByPath(change.path().pathAsString());
 
+    let meta = fileMeta.meta;
     if (meta && meta.type === 'ref') {
         // this doesn't support references to objects inside objects
         let table = this.schema_.getTableByName(meta.ref);
@@ -762,6 +895,7 @@ aurora.db.sql.ChangeWriter.prototype.addDelete_ = function(objectPathMap, change
         let meta = table.meta[field];
         let val = object[field];
         result.children.push({error: null});
+
         if (meta.type === 'ref') {
             let table = this.schema_.getTableByName(meta.ref);
             if (val) {
@@ -841,6 +975,7 @@ aurora.db.sql.ChangeWriter.optimizeChanges_ = function(changeMap, schema, passwo
             changeList.push(curEntry);
         }
         else if (CType.SET === key.type) {
+            let fileMeta = aurora.db.sql.ChangeWriter.getFileMetaByPath(schema, entry.key.path);
             let oldSet = setEntries.findFirst({key: entry.key.parent});
             let curEntry = oldSet ? oldSet.entry : null;
             if (!curEntry) {
@@ -879,6 +1014,7 @@ aurora.db.sql.ChangeWriter.optimizeChanges_ = function(changeMap, schema, passwo
 
             curEntry.results.push(entry.result);
             curEntry.object[key.last.name()] = ref != null ? ref : entry.value.value();
+
             let meta = schema.getMetaByPath(entry.key.path.pathAsString());
             let isPassword = meta && meta.type === 'password';
             if (isPassword) {
@@ -886,10 +1022,11 @@ aurora.db.sql.ChangeWriter.optimizeChanges_ = function(changeMap, schema, passwo
                     let val = entry.value.value();
                     if (typeof(val) === 'string') {
                         passwords.push({obj: curEntry.object, field: key.last.name(), value: val, result: entry.result});
-                    }
+                        }
                 }
             }
         }
+
 
 
     });
@@ -1070,6 +1207,16 @@ aurora.db.sql.ChangeWriter.prototype.getPath_ = function(base, path) {
     for (let i = itemIdx + 1; i < items.length && curObj; i++) {
         let meta = curTbl.meta[items[i].name()];
         if (!meta) {
+            if (i == items.length - 1 && items[i].name() === 'name') {
+                let fileField = this.hasFile_(curTbl);
+                if (fileField) {
+                    let res = {};
+                    res[aurora.db.schema.tables.base.file_storage.info.pk.getName()] = curObj[fileField];
+                    console.log('get path', items[i].name(), res);
+                    return res;
+                }
+
+            }
             return null;
         }
         curObj = curObj[items[i].name()];

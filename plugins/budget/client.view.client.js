@@ -29,6 +29,7 @@ budget.widgets.ClientView = function(scope) {
     let appointmentBodyDiv = cd('div', {});
     let mess = budget.messages;
     let bodyDiv = cd('div', {class: 'body-div'}, budgetBodyDiv, profileBodyDiv, notesBodyDiv, documentsBodyDiv, appointmentBodyDiv);
+    let notLoggedInDiv = cd('div', {class: 'not-logged-in'}, mess.NOT_LOGGED_IN.toString());
     let profileDiv = cd('div', {class: 'budget-edit-profile'}, aurora.messages.VIEW_EDIT_PROFILE.toString());
     let notesDiv = cd('div', {class: 'budget-edit-profile'}, mess.NOTES.toString());
     let documentsDiv = cd('div', {class: 'budget-edit-profile'}, mess.DOCUMENTS.toString());
@@ -41,7 +42,7 @@ budget.widgets.ClientView = function(scope) {
     let showNotesB = logic.equal('notes', screenB);
     let showDocumentsB = logic.equal('documents', screenB);
     let arrow = cd('span', {},'«');
-
+    let secContextB = aurora.permissions.getContext(scope);
     let collapsedB = recoil.ui.frp.LocalBehaviour.create(frp, '1', 'budget.client.menu.collapsed', false, localStorage);
 
     html.innerText(arrow, frp.liftB(function(v) { return v ? '»' : '«';}, collapsedB));
@@ -82,9 +83,10 @@ budget.widgets.ClientView = function(scope) {
                           sideBarControl), sideGroupsContainer);
 
     html.enableClass(sidePanel, 'side-small', collapsedB);
+    let contentPanel = cd('div', {class: 'side-list-body'}, bodyDiv);
 
     let container = cd('div', {class: 'side-list-page'}, sidePanel,
-                       cd('div', {class: 'side-list-body'}, bodyDiv));
+                       contentPanel, notLoggedInDiv);
 
     let selectedBugdetB = budgetListWidget.createSelected();
     budgetWidget.attach(selectedBugdetB);
@@ -94,8 +96,13 @@ budget.widgets.ClientView = function(scope) {
         if (val && val.length > 0) {
             screenB.set('budget');
         }
+        let hasPerm = secContextB.good() && aurora.permissions.loggedIn(true)(secContextB.get());
+        goog.style.setElementShown(sidePanel, hasPerm);
+        goog.style.setElementShown(contentPanel, hasPerm);
+        goog.style.setElementShown(notLoggedInDiv, secContextB.good() && !hasPerm);
+
     });
-    helper.attach(selectedBugdetB, screenB);
+    helper.attach(selectedBugdetB, screenB, secContextB);
 
     let setScreen = function(screen) {
         return frp.accessTransFunc(function() {

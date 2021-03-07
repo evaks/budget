@@ -3,6 +3,7 @@ goog.provide('aurora.db.Reader');
 goog.require('aurora.db.Pool');
 goog.require('aurora.db.Schema');
 
+goog.require('aurora.db.schema.tables.base.file_storage');
 /**
  * @interface
  * abstraction to allow to read objects from a database
@@ -16,8 +17,9 @@ aurora.db.Reader = function() {};
  * @param {!Array<{col:!recoil.structs.table.ColumnKey,value:?}>} keys
  * @param {?recoil.db.Query} securityFilter
  * @param {function(?,Object)} callback
+ * @param {recoil.db.QueryOptions=} opt_options
  */
-aurora.db.Reader.prototype.readObjectByKey = function(context, table, keys, securityFilter, callback) {};
+aurora.db.Reader.prototype.readObjectByKey = function(context, table, keys, securityFilter, callback, opt_options) {};
 
 
 

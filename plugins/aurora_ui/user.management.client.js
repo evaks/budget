@@ -89,7 +89,7 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
             var changePasswordCol = new recoil.ui.widgets.table.PasswordColumn(userT.cols.password, 'Password');
             var confirmPasswordCol = new recoil.ui.widgets.table.PasswordColumn(confirmPasswordCK, 'Confirm');
             mTable.addColumnMeta(userT.cols.username, {displayLength: 15});
-            mTable.addColumnMeta(userT.cols.password, {displayLength: 15, autocomplete: false});
+            mTable.addColumnMeta(userT.cols.password, {displayLength: 15, autocomplete: false, editable: true});
             mTable.addColumnMeta(confirmPasswordCK, {displayLength: 15, autocomplete: false});
             columns.add(userT.cols.username, 'User Name');
             columns.addColumn(changePasswordCol);

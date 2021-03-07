@@ -224,6 +224,26 @@ budget.messages.ENTER_ONE_OF = recoil.ui.message.getParamMsg('Enter one of');
  */
 budget.messages.NAME = recoil.ui.message.getParamMsg('Name');
 
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.CREATED = recoil.ui.message.getParamMsg('Created');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.UPLOAD_FAILED = recoil.ui.message.getParamMsg('Upload Failed');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.NOT_LOGGED_IN = recoil.ui.message.getParamMsg('Not Logged In');
+
 /**
  * @type {!recoil.ui.message.Message}
  * @final

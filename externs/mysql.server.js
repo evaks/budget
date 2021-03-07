@@ -11,6 +11,16 @@ mysql.Results;
  */
 mysql.Fields;
 
+/**
+ * @constructor
+ */
+mysql.Query = function () {};
+
+/**
+ * @param {string} type
+ * @param {?} cb
+ */
+mysql.Query.prototype.on = function (type, cb) {};
 
 /**
  * @constructor
@@ -31,9 +41,13 @@ mysql.Connection.prototype.commit = function (callback) {};
 
 /**
  * @param {string} sql
- * @param {...(?|function(?, mysql.Results, mysql.Fields))} var_args
+ * @param {...(?|function(?, mysql.Results, mysql.Fields):mysql.Query)} var_args
  */
 mysql.Connection.prototype.query = function (sql, var_args) {};
+
+mysql.Connection.prototype.pause = function () {};
+
+mysql.Connection.prototype.resume = function () {};
 
 /**
  * @constructor
@@ -46,7 +60,7 @@ mysql.Pool.prototype.getConnection = function (callback) {};
 
 /**
  * @param {string} sql
- * @param {...(?|function(?, mysql.Results, mysql.Fields))} var_args
+ * @param {...(?|function(?, mysql.Results, mysql.Fields): mysql.Query)} var_args
  */
 mysql.Pool.prototype.query = function (sql, var_args) {};
 

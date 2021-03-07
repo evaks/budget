@@ -131,7 +131,7 @@
 		{ "name": "documents", "type": "owned-list(userid)",
 		  "table": {
 		      "name": "user_documents",
-		      "access": "aurora.db.access.basic([{'': 'cr'}])",
+		      "access": "aurora.db.access.basic([{'mentor': 'crud'}, {'': 'cr'}])",
 		      "columns": [
 			  {"name": "id", "type": "id"},
 			  {"name": "file", "type": "file"}
