@@ -629,3 +629,25 @@ div.budget-div:hover div {
     box-shadow: 2px 2px 5px #15151557;
     border-radius: 4px;    
 }
+
+.budget-contact {
+    width: 100%;
+}
+
+.address-item {
+    margin-bottom: 10px;
+    color: #636363   ;
+}
+
+.address-item .label {
+    font-weight: bold;
+    width: 120px;
+    vertical-align: top;
+}
+.office-hours {
+    width: 100%;
+}
+
+.budget-contact {
+    border-spacing: 0 10px;
+}

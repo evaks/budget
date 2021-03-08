@@ -84,4 +84,3 @@ aurora.messages.PROFILE = recoil.ui.message.getParamMsg('Profile');
  * @final
  */
 aurora.messages.BUDGETS = recoil.ui.message.getParamMsg('Budgets');
-

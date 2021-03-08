@@ -516,3 +516,28 @@ budget.messages.STOP_TIME = recoil.ui.message.getParamMsg('Stop Time:');
  * @final
  */
 budget.messages.ADD = recoil.ui.message.getParamMsg('Add');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.X_TO_Y = recoil.ui.message.getParamMsg(['x'], ' to ', ['y']);
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.X_COMMA_Y = recoil.ui.message.getParamMsg(['first'], ', ', ['second']);
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.PM = recoil.ui.message.getParamMsg('PM');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.AM = recoil.ui.message.getParamMsg('AM');

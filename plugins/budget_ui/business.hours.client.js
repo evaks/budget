@@ -90,7 +90,7 @@ budget.widgets.BusinessHours = function(scope) {
         let hour = cd('div', {class: 'budget-calendar-hour'}, pad(h, 2) + ':00');
         this.yAxis_.appendChild(hour);
     }
-
+    this.contextB_ = aurora.permissions.getContext(scope);
     this.setupMenu_();
     this.days_ = [];
     this.dateDivs_ = [];
@@ -120,10 +120,21 @@ budget.widgets.BusinessHours = function(scope) {
         this.days_.push({div: day, hours: hours});
     }
 
+    let holidaysLegend = cd('div', {class: 'legend-item'}, cd('div', {class: 'legend-key holidays'}), cd('div', {class: 'legend-name'}, 'Holidays'));
+
+    let hoursLegend = cd('div', {class: 'legend-item'}, cd('div', {class: 'legend-key hours'}), cd('div', {class: 'legend-name'}, 'Hours'));
+
+    this.legendDiv_ = cd('div', {class: 'budget-legend'}, holidaysLegend, hoursLegend);
+
+    let dateDiv = cd('div', 'budget-date');
+    this.dateWidget_.getComponent().render(dateDiv);
+    this.calendarHeader_ = cd('div', {class: 'budget-calendar-header'}, dateDiv, this.legendDiv_);
+//    this.dateWidget_.getComponent().render(this.calendarHeader_);
 
     this.loadingContainer_ = cd('div', {class: 'budget-loading'}, cd('div'));
     this.errorContainer_ = cd('div', {class: 'budget-error'}, 'Error');
-    this.container_ = budget.widgets.BusinessHours.createWidgetDom('div', {}, this.dateWidget_, this.calendarDiv_, this.loadingContainer_, this.errorContainer_);
+
+    this.container_ = budget.widgets.BusinessHours.createWidgetDom('div', {}, this.calendarHeader_, this.calendarDiv_, this.loadingContainer_, this.errorContainer_);
 
     let isLeftPressed = function(e) {
         return e.getBrowserEvent().buttons === undefined
@@ -241,7 +252,6 @@ budget.widgets.BusinessHours = function(scope) {
         }, highlightedB));
 
     let handleMove = frp.accessTransFunc(function(e) {
-
         if (!isLeftPressed(e)) {
             highlightedB.set({start: null, stop: null, add: true});
         }
@@ -256,18 +266,19 @@ budget.widgets.BusinessHours = function(scope) {
         highlightedB.set(oldPos);
     }, highlightedB);
 
-    goog.events.listen(document.body, goog.events.EventType.MOUSEMOVE, handleMove);
+    let bodyMoveListener = goog.events.listen(document.body, goog.events.EventType.MOUSEMOVE, handleMove);
     goog.events.listen(this.calendarDiv_, goog.events.EventType.MOUSEMOVE, handleMove);
+
 
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(this.container_);
     let contentSizeB = frp.createB(/** @type {?{width:number, height:number}} */ (null));
 
     this.helper_ = new recoil.ui.ComponentWidgetHelper(scope, this.component_, this, this.update_, function() {
-        console.log('XXXX destroyed');
+        goog.events.unlistenByKey(bodyMoveListener);
     });
 
     this.highlightedB_ = highlightedB;
-    this.helper_.attach(this.siteB_, highlightedB, this.curDateB_, contentSizeB, this.holidaysB_, this.borderDimsB_, this.hoursTblB_);
+    this.helper_.attach(this.siteB_, highlightedB, this.curDateB_, contentSizeB, this.holidaysB_, this.borderDimsB_, this.hoursTblB_, this.contextB_);
     let resizeObserver = new ResizeObserver(frp.accessTransFunc(function(e) {
         contentSizeB.set({width: Math.round(e[0].contentRect.width), height: Math.round(e[0].contentRect.height)});
         let style = getComputedStyle(me.highlightDiv_);
@@ -372,7 +383,7 @@ budget.widgets.BusinessHours.prototype.doMakeHolidayFunc_ = function(menuInfo) {
  * @param {!recoil.frp.Behaviour<!recoil.structs.table.Table>} tblB
  * @param {number} start
  * @param {number} stop
- * @param {number} selectedIndex
+ * @param {?number} selectedIndex
  * @param {string} title
  * @return
  */
@@ -398,7 +409,8 @@ budget.widgets.BusinessHours.prototype.makeDateDialog_ = function(tblB, start, s
             //            let millisPerDay = + 3600000 * 24;
             let millisPerDay = 3600000 * 24;
 
-            if (modStopTime < origStopTime || modStartTime > origStartTime) {
+            if (selectedIndex !== null && (modStopTime < origStopTime || modStartTime > origStartTime)) {
+
                 holidayUsage.splice(selectedIndex, 1);
             }
             holidayUsage.push({start: modStartTime, stop: modStopTime + millisPerDay});
@@ -441,9 +453,6 @@ budget.widgets.BusinessHours.prototype.doAddHolidaysDialogFunc_ = function(menuI
         let holidayUsage = me.createHolidayUsage_(hols);
         let selectedIndex = me.getSelectedIndexInArray(holidayUsage, selectDate);
 
-        if (selectedIndex == null) {
-            return;
-        }
         let columns = new recoil.ui.widgets.TableMetaData();
         columns.addColumn(new recoil.ui.columns.Date2(holidaysT.cols.start, budget.messages.START_DATE.toString()));
         columns.addColumn(new recoil.ui.columns.Date2(holidaysT.cols.stop, budget.messages.STOP_DATE.toString()));
@@ -821,45 +830,49 @@ budget.widgets.BusinessHours.prototype.setupMenu_ = function() {
 
             me.contextMenu_.removeChildren(true);
 
-            let site = me.siteB_.get();
-            let dayUsage = me.createDayUsage_(site);
-            let holidays = me.holidaysB_.get();
-            let holidayUsage = me.createHolidayUsage_(holidays);
-            let topLeft = me.days_[0].hours[0].getBoundingClientRect();
-            let bottomRight = me.days_[6].hours[23].getBoundingClientRect();
-            let height = bottomRight.top + bottomRight.height - topLeft.top;
-            let width = bottomRight.left + bottomRight.width - topLeft.left;
-            let clickPos = me.calcPos_(e);
-            let hourIndex = Math.max(0, Math.round(Math.floor(Math.min(clickPos.y) * 24 / height * HOUR_RES) / HOUR_RES * 3600000));
+            let context = me.contextB_.get();
+            if (aurora.permissions.has('site-management')(context)) {
 
-            let dayIndex = Math.floor(clickPos.x * 7 / width);
-            let milliInDay = Math.max(0, Math.round(clickPos.y * 24 * 3600000 / height));
-            let clickPosMilli = milliInDay + dayIndex * 24 * 3600000;
-            let startOfWeekMilli = recoil.ui.widgets.DateWidget2.convertLocaleDate(me.curDateB_.get()).getTime();
-            menuInfo.dayIndex = dayIndex;
-            menuInfo.hourIndex = hourIndex;
-            menuInfo.clickPosMilli = clickPosMilli;
+                let site = me.siteB_.get();
+                let dayUsage = me.createDayUsage_(site);
+                let holidays = me.holidaysB_.get();
+                let holidayUsage = me.createHolidayUsage_(holidays);
+                let topLeft = me.days_[0].hours[0].getBoundingClientRect();
+                let bottomRight = me.days_[6].hours[23].getBoundingClientRect();
+                let height = bottomRight.top + bottomRight.height - topLeft.top;
+                let width = bottomRight.left + bottomRight.width - topLeft.left;
+                let clickPos = me.calcPos_(e);
+                let hourIndex = Math.max(0, Math.round(Math.floor(Math.min(clickPos.y) * 24 / height * HOUR_RES) / HOUR_RES * 3600000));
 
-            if (me.timeInDateRange_(dayUsage, clickPosMilli)) {
-                me.contextMenu_.addChild(me.removeHours_, true);
-                me.contextMenu_.addChild(me.modifyHoursDialog_, true);
-            } else {
-                me.contextMenu_.addChild(me.addHoursDialog_, true);
+                let dayIndex = Math.floor(clickPos.x * 7 / width);
+                let milliInDay = Math.max(0, Math.round(clickPos.y * 24 * 3600000 / height));
+                let clickPosMilli = milliInDay + dayIndex * 24 * 3600000;
+                let startOfWeekMilli = recoil.ui.widgets.DateWidget2.convertLocaleDate(me.curDateB_.get()).getTime();
+                menuInfo.dayIndex = dayIndex;
+                menuInfo.hourIndex = hourIndex;
+                menuInfo.clickPosMilli = clickPosMilli;
+
+                if (me.timeInDateRange_(dayUsage, clickPosMilli)) {
+                    me.contextMenu_.addChild(me.removeHours_, true);
+                    me.contextMenu_.addChild(me.modifyHoursDialog_, true);
+                } else {
+                    me.contextMenu_.addChild(me.addHoursDialog_, true);
+                }
+
+
+                if (me.timeInDateRange_(holidayUsage, (startOfWeekMilli + clickPosMilli))) {
+                    me.contextMenu_.addChild(me.removeHoliday_, true);
+                    me.contextMenu_.addChild(me.modifyHolidayDialog_, true);
+                } else {
+                    me.contextMenu_.addChild(me.makeHoliday_, true);
+                    me.contextMenu_.addChild(me.addHolidaysDialog_, true);
+                }
+
+                me.contextMenu_.showAt(e.clientX, e.clientY);
+                e.preventDefault();
+                e.stopPropagation();
             }
-
-
-            if (me.timeInDateRange_(holidayUsage, (startOfWeekMilli + clickPosMilli))) {
-                me.contextMenu_.addChild(me.removeHoliday_, true);
-                me.contextMenu_.addChild(me.modifyHolidayDialog_, true);
-            } else {
-                me.contextMenu_.addChild(me.makeHoliday_, true);
-                me.contextMenu_.addChild(me.addHolidaysDialog_, true);
-            }
-
-            me.contextMenu_.showAt(e.clientX, e.clientY);
-            e.preventDefault();
-            e.stopPropagation();
-        }, this.siteB_, this.curDateB_, this.holidaysB_));
+        }, this.siteB_, this.curDateB_, this.holidaysB_, this.contextB_));
 
 
 
@@ -870,7 +883,6 @@ budget.widgets.BusinessHours.prototype.setupMenu_ = function() {
     goog.events.listen(this.removeHoliday_, goog.ui.Component.EventType.ACTION, this.doRemoveHolidayFunc_(menuInfo));
 
     goog.events.listen(this.modifyHolidayDialog_, goog.ui.Component.EventType.ACTION, this.doModifyHolidayDialogFunc_(menuInfo));
-
 
 
         goog.events.listen(this.addHoursDialog_, goog.ui.Component.EventType.ACTION, this.doAddHoursDialogFunc_(menuInfo));
@@ -923,7 +935,7 @@ budget.widgets.BusinessHours.createWidgetDom = function(tagName, opt_attributes,
             outArgs.push(div);
         } else {
             outArgs.push(arg);
-        }
+         }
     }
 
 
@@ -1287,7 +1299,7 @@ budget.widgets.BusinessHours.prototype.update_ = function(helper) {
                     let yStart = (minY + hourH * startOffsetMillis / 3600000);
                     let yEnd = (minY + hourH * endOffsetMillis / 3600000);
 
-                    let curDiv = cd('div', {class: 'budget-holiday'}, cd('div', {class: 'holiday-text'}, budget.messages.HOLIDAY.toString()));
+                    let curDiv = cd('div', {class: 'budget-holiday'});
 
                     curDiv.style.top = yStart + 'px';
                     curDiv.style.height = (yEnd - yStart) + 'px';
@@ -1297,9 +1309,8 @@ budget.widgets.BusinessHours.prototype.update_ = function(helper) {
 
                 }
             }
-
-
         }
+
     }
 };
 /**

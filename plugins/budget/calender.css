@@ -116,24 +116,51 @@ div.budget-calendar-date {
 
 .budget-holiday {
     position: absolute;
-    background: #ff000020;
+    background: #d0a50820; /*#ff000020;*/
     display: flex;
-}
-
-.holiday-text {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-/*    border: 2px solid black;*/
-    font-size: calc(min(8vw - 10px,15vh - 35px));
-    transform: rotate(-75deg);
-    width: 100%;
-    color: #ff00004d;
-    user-select: none;
 }
 
 .budget-calendar-spacer {
 //    width: 100px;
     height: 20px;
     background: red;
+}
+
+
+.budget-legend {
+    display: flex;
+    width: 400px;
+    height: 28px;
+    align-items: center;
+    padding-left: 20px;
+}
+
+.budget-calendar-header {
+    display: flex;
+ /*   border: 1px solid blue;*/
+}
+
+.legend-item {
+    display: flex;
+    flex-direction: row;
+    padding-right: 10px;
+}
+
+.legend-key {
+    width: 16px;
+    height: 16px;
+    border: 1px solid;
+}
+
+.legend-name {
+    padding-left: 5px;
+}
+
+.hours {
+    /* background: linear-gradient(90deg, #0000ff8c, #1212ec38 10px, #1212ec6b 50%, #1212ec6b calc(100% - 10px), #0000ff8c);*/
+    background: #9d9df7;
+}
+
+.holidays {
+    background: #d0a50820;
 }
