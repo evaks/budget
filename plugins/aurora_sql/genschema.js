@@ -71,7 +71,8 @@ let typeFactories = {
     'text': {jsType: 'text', getInfo: getStringInfo, sqlType: 'varchar'},
 
     'password' : {jsType: 'password', sqlType: 'password'},
-    'file': {jsType: 'file', sqlType: 'blob'},
+    'file': {jsType: 'file', sqlType: 'bigint'},
+    'blob': {jsType: 'buffer', sqlType: 'blob'}
 
 };
 
@@ -156,7 +157,7 @@ function getColType(data, types) {
     }
 
     let info = (factory.getInfo || nullFunc)(typeInfo);
-    return Object.assign({}, typeInfo, {raw: data.type}, factory, info, {info: info});
+    return Object.assign({}, typeInfo, {raw: data.type, access: data.access}, factory, info, {info: info});
 
 }
 
@@ -173,11 +174,17 @@ let refTypes = {
     'ref': 1
 };
 
+const predefinedFilters = {
+    'all' : 'aurora.db.access.filter.allFilter',
+    'none': 'aurora.db.access.filter.noneFilter'
+};
 function processAccessFilter(out, accessFilter, depth) {
     if (typeof(accessFilter) === 'string') {
-        if (accessFilter === 'all') {
-            fs.appendFileSync(out, 'aurora.db.access.filter.allFilter');
+        if (predefinedFilters[accessFilter]) {
+
+            fs.appendFileSync(out, predefinedFilters[accessFilter]);
         }
+
         else {
             fs.appendFileSync(out, accessFilter);
         }
@@ -298,6 +305,7 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out) {
     let prefix = 'aurora.db.schema.tables.' + ns;
     let actionNames = {};
 
+
     traverse(def, {
         startTable: function(name, data, stack, fullName) {
             provides.push(prefix + '.' + fullName);
@@ -328,7 +336,27 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out) {
 
     fs.appendFileSync(out, '\n');
 
+    // get the files schema this is special
+    let fileColumns = null;
+    def.tables.forEach(function(entry) {
+        if (entry.name === 'file_storage') {
+            fileColumns = entry.columns;
+        }
+    });
 
+    let forEachFileCol = function(cb) {
+        if (!client) {
+            return;
+        }
+        fileColumns.forEach(function(colInfo) {
+            if (colInfo.name === 'id' || colInfo.name === 'parts') {
+                return;
+            }
+
+            cb(colInfo);
+
+        });
+    };
     traverse(def, {
         startTable: function(name, data, stack) {
             fs.appendFileSync(out, '/**\n * @struct\n * @const\n */\n');
@@ -343,6 +371,14 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out) {
             colMap[prefix + '.' + fullTableName + '.cols.' + jsEscape(name)] = prefix + '.' + fullTableName;
             if (data.type === 'id') {
                 fs.appendFileSync(out, '   ' + jsEscape(name) + ': aurora.db.createId(' + toStr(name) + '),\n');
+            }
+            else if (client && data.type == 'file') {
+                fs.appendFileSync(out, '   ' + jsEscape(name) + ': new recoil.structs.table.ColumnKey(' + toStr(name) + '),\n');
+                forEachFileCol(function(colInfo) {
+                    colMap[prefix + '.' + fullTableName + '.cols.' + jsEscape(colInfo.name)] = prefix + '.' + fullTableName;
+                    fs.appendFileSync(out, '   ' + jsEscape(colInfo.name) + ': new recoil.structs.table.ColumnKey(' + toStr(colInfo.name) + '),\n');
+                });
+
             }
             else {
                 fs.appendFileSync(out, '   ' + jsEscape(name) + ': new recoil.structs.table.ColumnKey(' + toStr(name) + '),\n');
@@ -463,99 +499,119 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out) {
 
     });
     let skipCol = false;
+
+    let writeMeta = function(name, data, fullTableName, tableName, parentCol, accessOverride) {
+        let typeInfo = getColType(data, types);
+        fs.appendFileSync(out, '   ' + toStr(name) + ': {\n');
+
+        fs.appendFileSync(out, '       key: ' + prefix + '.' + fullTableName + '.cols.' + jsEscape(name));
+        fs.appendFileSync(out, ',\n       type: ' + toStr(client && typeInfo.type == 'file' ? 'bigint' : typeInfo.type));
+
+        let isRef = typeInfo.type === 'ref';
+
+        if (isRef) {
+            fs.appendFileSync(out, ',\n       ref: ' + stringify(tablePathMap[typeInfo.table]));
+        }
+
+        if (typeInfo.type === 'id') {
+            fs.appendFileSync(out, ',\n       primary: true');
+        }
+        if (accessOverride) {
+            fs.appendFileSync(out, ',\n       access: ' + accessOverride);
+        }
+        else if (typeInfo.access) {
+            fs.appendFileSync(out, ',\n       access: ' + typeInfo.access);
+        }
+        if (typeInfo.type === 'enum') {
+            fs.appendFileSync(out, ',\n       list: [');
+            if (data.nullable === true) {
+                fs.appendFileSync(out, 'null,');
+
+            }
+            fs.appendFileSync(out, data.enum.map(x => x.id).join(','));
+            fs.appendFileSync(out, ']');
+            fs.appendFileSync(out, ',\n       enum: {');
+            let hasInfo = false;
+            data.enum.forEach(function(e, idx) {
+                if (idx !== 0) {
+                        fs.appendFileSync(out, ',');
+                }
+                hasInfo = hasInfo || e.info;
+                fs.appendFileSync(out, '\n            ' + jsEscape(e.name.toLowerCase()) + ': ' + e.id);
+            });
+            fs.appendFileSync(out, '\n       }');
+            if (hasInfo) {
+                fs.appendFileSync(out, ',\n       enumInfo: {');
+                let first = true;
+                data.enum.forEach(function(e, idx) {
+                    if (e.info) {
+                        if (!first) {
+                            fs.appendFileSync(out, ',');
+                            }
+                        first = false;
+                        fs.appendFileSync(out, '\n            \'' + e.id + '\': ' + stringify(e.info));
+                    }
+                });
+                fs.appendFileSync(out, '\n       }');
+            }
+            if (client) {
+                fs.appendFileSync(out, ',\n       enumDisplay: new recoil.ui.message.BasicMessageEnum ({');
+                data.enum.forEach(function(e, idx) {
+                    if (idx !== 0) {
+                        fs.appendFileSync(out, ',');
+                        }
+                    fs.appendFileSync(out, '\n            \'' + e.id + '\':recoil.ui.message.getParamMsg(' + stringify(e.display || e.name) + ')');
+                });
+                fs.appendFileSync(out, '}, {key: \'val\', msg: recoil.ui.messages.UNKNOWN_VAL})');
+                fs.appendFileSync(out, ',\n       renderer: recoil.ui.renderers.MapRenderer ({' + data.enum.map(x => stringify(x.name) + ':' + x.id) + '}');
+                if (data.nullable === true) {
+                    if (data.null) {
+                        fs.appendFileSync(out, ', recoil.ui.message.toMessage(' + stringify(data.null) + ')');
+                    }
+                    else {
+                        fs.appendFileSync(out, ', recoil.ui.messages.NOT_SPECIFIED');
+                    }
+                }
+                fs.appendFileSync(out, ')');
+            }
+
+        }
+
+        if (data.default !== undefined) {
+            fs.appendFileSync(out, ',\n       defaultVal: ' + stringify(data.default));
+        }
+        else if (data.nullable === true) {
+            fs.appendFileSync(out, ',\n       defaultVal: null');
+        }
+
+        for (let k in typeInfo.info) {
+            if (isRef && client && k === 'table') {
+                continue;
+            }
+
+            fs.appendFileSync(out, ',\n       ' + k + ': ' + JSON.stringify(typeInfo.info[k]));
+        }
+        fs.appendFileSync(out, '\n');
+
+        if (client && data.type == 'file') {
+            fs.appendFileSync(out, '// file meta\n');
+            forEachFileCol(function(colInfo) {
+                fs.appendFileSync(out, '    },\n');
+                let accessOveride = undefined;
+                if (colInfo.name === 'created') {
+                    accessOveride = 'aurora.db.access.basic([{\'\': \'r\'}])';
+                }
+                writeMeta(colInfo.name, colInfo, fullTableName, tableName, parentCol, accessOveride);
+            });
+        }
+
+    };
     traverse(def, {
         startTable: function(name, data, stack, tName) {
             fs.appendFileSync(out, '/**\n * @const\n */\n');
             fs.appendFileSync(out, prefix + '.' + tName + '.meta = {\n');
         },
-        startCol: function(name, data, fullTableName, tableName, parentCol) {
-            let typeInfo = getColType(data, types);
-            fs.appendFileSync(out, '   ' + toStr(name) + ': {\n');
-
-            fs.appendFileSync(out, '       key: ' + prefix + '.' + fullTableName + '.cols.' + jsEscape(name));
-            fs.appendFileSync(out, ',\n       type: ' + toStr(typeInfo.type));
-
-            let isRef = typeInfo.type === 'ref';
-
-            if (isRef) {
-                fs.appendFileSync(out, ',\n       ref: ' + stringify(tablePathMap[typeInfo.table]));
-            }
-
-            if (typeInfo.type === 'id') {
-                fs.appendFileSync(out, ',\n       primary: true');
-            }
-            if (typeInfo.type === 'enum') {
-                fs.appendFileSync(out, ',\n       list: [');
-                if (data.nullable === true) {
-                    fs.appendFileSync(out, 'null,');
-
-                }
-                fs.appendFileSync(out, data.enum.map(x => x.id).join(','));
-                fs.appendFileSync(out, ']');
-                fs.appendFileSync(out, ',\n       enum: {');
-                let hasInfo = false;
-                data.enum.forEach(function(e, idx) {
-                    if (idx !== 0) {
-                        fs.appendFileSync(out, ',');
-                    }
-                    hasInfo = hasInfo || e.info;
-                    fs.appendFileSync(out, '\n            ' + jsEscape(e.name.toLowerCase()) + ': ' + e.id);
-                });
-                fs.appendFileSync(out, '\n       }');
-                if (hasInfo) {
-                    fs.appendFileSync(out, ',\n       enumInfo: {');
-                    let first = true;
-                    data.enum.forEach(function(e, idx) {
-                        if (e.info) {
-                            if (!first) {
-                                fs.appendFileSync(out, ',');
-                            }
-                            first = false;
-                            fs.appendFileSync(out, '\n            \'' + e.id + '\': ' + stringify(e.info));
-                        }
-                    });
-                    fs.appendFileSync(out, '\n       }');
-                }
-                if (client) {
-                    fs.appendFileSync(out, ',\n       enumDisplay: new recoil.ui.message.BasicMessageEnum ({');
-                    data.enum.forEach(function(e, idx) {
-                        if (idx !== 0) {
-                            fs.appendFileSync(out, ',');
-                        }
-                        fs.appendFileSync(out, '\n            \'' + e.id + '\':recoil.ui.message.getParamMsg(' + stringify(e.display || e.name) + ')');
-                    });
-                    fs.appendFileSync(out, '}, {key: \'val\', msg: recoil.ui.messages.UNKNOWN_VAL})');
-                    fs.appendFileSync(out, ',\n       renderer: recoil.ui.renderers.MapRenderer ({' + data.enum.map(x => stringify(x.name) + ':' + x.id) + '}');
-                    if (data.nullable === true) {
-                        if (data.null) {
-                            fs.appendFileSync(out, ', recoil.ui.message.toMessage(' + stringify(data.null) + ')');
-                        }
-                        else {
-                            fs.appendFileSync(out, ', recoil.ui.messages.NOT_SPECIFIED');
-                        }
-                    }
-                    fs.appendFileSync(out, ')');
-                }
-
-            }
-
-            if (data.default !== undefined) {
-                fs.appendFileSync(out, ',\n       defaultVal: ' + stringify(data.default));
-            }
-            else if (data.nullable === true) {
-                fs.appendFileSync(out, ',\n       defaultVal: null');
-            }
-
-            for (let k in typeInfo.info) {
-                if (isRef && client && k === 'table') {
-                    continue;
-                }
-
-                fs.appendFileSync(out, ',\n       ' + k + ': ' + JSON.stringify(typeInfo.info[k]));
-            }
-            fs.appendFileSync(out, '\n');
-
-        },
+        startCol: writeMeta,
 
         endCol: function(name, data) {
             if (!skipCol) {
@@ -748,6 +804,12 @@ function makeForeignKeys(def, types) {
                     let tableKeys = foreignKeys[tableName] = foreignKeys[tableName] || {};
                     let colKeys = tableKeys[data.name] = tableKeys[data.name] || {};
                     colKeys.table = typeInfo.table;
+                    colKeys.col = getPkColumn(tableDefs[colKeys.table]);
+                }
+                else if (typeInfo.type === 'file') {
+                    let tableKeys = foreignKeys[tableName] = foreignKeys[tableName] || {};
+                    let colKeys = tableKeys[data.name] = tableKeys[data.name] || {};
+                    colKeys.table = 'file_storage';
                     colKeys.col = getPkColumn(tableDefs[colKeys.table]);
                 }
             }

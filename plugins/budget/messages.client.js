@@ -224,6 +224,26 @@ budget.messages.ENTER_ONE_OF = recoil.ui.message.getParamMsg('Enter one of');
  */
 budget.messages.NAME = recoil.ui.message.getParamMsg('Name');
 
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.CREATED = recoil.ui.message.getParamMsg('Created');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.UPLOAD_FAILED = recoil.ui.message.getParamMsg('Upload Failed');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.NOT_LOGGED_IN = recoil.ui.message.getParamMsg('Not Logged In');
+
 /**
  * @type {!recoil.ui.message.Message}
  * @final
@@ -528,8 +548,20 @@ budget.messages.X_TO_Y = recoil.ui.message.getParamMsg(['x'], ' to ', ['y']);
  * @type {!recoil.ui.message.Message}
  * @final
  */
+budget.messages.NOTES = recoil.ui.message.getParamMsg('Notes');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
 budget.messages.X_COMMA_Y = recoil.ui.message.getParamMsg(['first'], ', ', ['second']);
 
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.DOCUMENTS = recoil.ui.message.getParamMsg('Documents');
 /**
  * @type {!recoil.ui.message.Message}
  * @final

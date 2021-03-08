@@ -62,10 +62,10 @@ const makeTable = function (keyMap, path, object, hasParent, colMap) {
             meta[k].ref = '/' + info.table;
         }
         if (info.type === 'list') {
-            meta[k].list = true;
+            meta[k].isList = true;
         }
         if (info.type === 'object') {
-            meta[k].object = true;
+            meta[k].isObject = true;
         }
         cols[k] = key;
         if (info.children) {
@@ -271,6 +271,21 @@ let makeReader = function (schema) {
 
         },
 
+        readObjectByKey: function (context, table, keys, secFilter, callback) {
+            let query = new recoil.db.Query().True();
+            keys.forEach(function (info) {
+                query = query.and(query.field(info.col).eq(query.val(info.value)));
+            });
+            reader.readObjects(context, table, query, secFilter, function (err, obj) {
+                if (err) {
+                    callback(err, null);
+                }
+                else {
+                    callback(err, obj[0]);
+                }
+            });
+        },
+
         readObjects: function (context, table, query, secFilter, callback) {
             let objects = db[table.info.table] || {};
             if (secFilter) {
@@ -283,9 +298,7 @@ let makeReader = function (schema) {
                     if (query.eval(new QueryScope(objects[key], table, schema))) {
                         res.push(objects[key]);
                     }
-                    else {
-                        console.log("notfound", objects[key], "exp", query.expr_.x_);
-                    }
+
                 }
                 callback(null, res);
             }, 1);

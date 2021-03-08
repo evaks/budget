@@ -25,7 +25,7 @@ goog.require('recoil.structs.table.ColumnKey');
  *          getTable:function(!recoil.structs.table.ColumnKey):?aurora.db.schema.TableType,
  *          getParentTable:function(!recoil.structs.table.ColumnKey):?aurora.db.schema.TableType,
  *          getTableByName:function((string|!recoil.db.ChangeSet.Path)):?aurora.db.schema.TableType,
- *          getMetaByPath:function(string):Object,
+ *          getMetaByPath:function((string|!recoil.db.ChangeSet.Path)):Object,
  *          keyMap:!Object<string,aurora.db.schema.TableType>,
  *          }}
  */
@@ -35,6 +35,7 @@ aurora.db.SchemaType;
  *            pk:!recoil.structs.table.ColumnKey,
  *            parentKey:(!recoil.structs.table.ColumnKey|undefined),
  *            autoPk:(boolean|undefined),
+ *            access:(function(!aurora.db.access.SecurityContext,string):boolean|undefined),
  *            accessFilter:(function(!aurora.db.access.SecurityContext):!recoil.db.Query|undefined),
  *            unique:!Array<!Array<!recoil.structs.table.ColumnKey>>,
  *      keys:(!Array<string>|undefined),name:string,config:(boolean|undefined),autokey:(undefined|boolean)}}
@@ -96,10 +97,13 @@ aurora.db.schema.getMeta = function(col) {
 
 
 /**
- * @param {string} path
+ * @param {string|!recoil.db.ChangeSet.Path} path
  * @return {!Object}
  */
 aurora.db.schema.getMetaByPath = function(path) {
+    if (path instanceof recoil.db.ChangeSet.Path) {
+        path = path.pathAsString();
+    }
     let parts = path.split('/');
     let last = parts.pop();
 
@@ -182,6 +186,127 @@ aurora.db.schema.getTableByName = function(name) {
         return aurora.db.schema.keyMap[name] || null;
     }
     return aurora.db.schema.keyMap[name.pathAsString()] || null;
+};
+
+/**
+ * @param {!aurora.db.access.SecurityContext} context
+ * @param {!recoil.db.ChangeSet.Path} path
+ * @param {string} access the type of access you want one of c,r,u,d
+ * @return {boolean}
+ */
+aurora.db.schema.hasAccess = function(context, path, access) {
+    let tbl = aurora.db.schema.getTableByName(path);
+    if (tbl === null) {
+        if (path.size() == 0) {
+            return false;
+        }
+        // you can't create or delete a leaf
+        if (access === 'c' || access == 'd') {
+            return false;
+        }
+        // could be just a column with no subtable so check the parent
+        tbl = aurora.db.schema.getTableByName(path.parent());
+        if (tbl === null) {
+            return false;
+        }
+        let meta = tbl.meta[path.last().name()];
+        if (!meta) {
+            return false;
+        }
+        if (meta.access) {
+            return meta.access(context, access);
+        }
+        path = path.parent();
+    }
+
+
+    while (tbl && path.size() > 0) {
+        if (tbl.info.access) {
+            return tbl.info.access(context, access);
+        }
+        let meta = tbl.meta[path.last().name];
+        if (meta.access) {
+            return meta.access(context, access);
+        }
+        path = path.parent();
+        tbl = aurora.db.schema.getTableByName(path);
+        // we are no longer deleting or adding we are updating
+        if (access === 'c' || access == 'd') {
+            access = 'u';
+        }
+    }
+    return false;
+
+};
+
+/**
+ * @param {!recoil.db.ChangeSet.Path} path
+ * @return {recoil.db.ChangeSet.Path}
+ */
+aurora.db.schema.getBasePath = function(path) {
+    let tbl = aurora.db.schema.getTableByName(path);
+    if (tbl == null || path.size() === 0) {
+        return null;
+    }
+    let parent = path.parent();
+    tbl = aurora.db.schema.getTableByName(parent);
+    while (tbl && parent.size() > 0) {
+        path = parent;
+        parent = parent.parent();
+        tbl = aurora.db.schema.getTableByName(parent);
+    }
+
+    return path;
+};
+
+/**
+ * makes a path to a table, filling in the keys, if the table doesn't exist
+ * or keys are missing then returns null
+ * @param {string} path
+ * @param {!Array} inKeys
+ * @param {boolean=} opt_item if true will assume the last value has a key
+ * @return {recoil.db.ChangeSet.Path}
+ */
+aurora.db.schema.getTablePath = function(path, inKeys, opt_item) {
+    let tbl = aurora.db.schema.getTableByName(path);
+    if (!tbl) {
+        return null;
+    }
+    let keys = goog.array.clone(inKeys);
+    let parts = path.split('/');
+    let items = opt_item ? [] : [new recoil.db.ChangeSet.PathItem(parts.pop(), [], [])];
+    tbl = aurora.db.schema.getTableByName(parts.join('/'));
+    while (tbl && tbl.info) {
+        let partKeys = [];
+        let name = parts.pop();
+        let expectedKeys = tbl.info.keys || [];
+
+        if (expectedKeys.length > keys.length) {
+            // missing a key
+            return null;
+        }
+
+        for (let i = 0; i < expectedKeys.length; i++) {
+            partKeys.push(keys.pop());
+        }
+        partKeys.reverse();
+        items.push(new recoil.db.ChangeSet.PathItem(name, expectedKeys, partKeys));
+        tbl = aurora.db.schema.getTableByName(parts.join('/'));
+    }
+    while (parts.length > 0) {
+        let name = parts.pop();
+        if (name !== '') {
+            items.push(new recoil.db.ChangeSet.PathItem(name, [], []));
+        }
+    }
+    items.reverse();
+
+    // don't allow too may keys
+    if (keys.length !== 0) {
+        return null;
+    }
+    return new recoil.db.ChangeSet.Path(items);
+
 };
 
 /**

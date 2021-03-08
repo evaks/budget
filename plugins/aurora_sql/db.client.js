@@ -544,6 +544,7 @@ aurora.db.Helper.createSubTableB = function(schema, tableB, pkB, col) {
             row = baseTable.getRowKeys(pk);
         }
 
+        let tbl = null;
         if (row) {
             let pkNames = baseTable.getPrimaryColumns().map(function(col) {return col.getName();});
             let path = basePath.setKeys(pkNames, pk).appendName(col.getName());
@@ -555,9 +556,23 @@ aurora.db.Helper.createSubTableB = function(schema, tableB, pkB, col) {
                 }
             });
 
-            return aurora.db.Helper.createTable(path, row.get(col), errors);
+            tbl = aurora.db.Helper.createTable(path, row.get(col), errors).unfreeze();
+
         }
-        return aurora.db.Helper.createTable(basePath, []);
+        else {
+
+            tbl = aurora.db.Helper.createTable(basePath, []).unfreeze();
+        }
+        if (baseTable.getMeta().permContext) {
+            tbl.addMeta({permContext: baseTable.getMeta().permContext});
+        }
+        let tableT = aurora.db.schema.getTable(col);
+        if (tableT && tbl) {
+            aurora.db.PermDatabase.addTablePermissions(tbl, tableT);
+        }
+
+        return tbl.freeze();
+
     }, function(tbl) {
         let res = tableB.get().createEmpty();
         let basePath = tableB.get().getMeta().basePath.appendName(col.getName());

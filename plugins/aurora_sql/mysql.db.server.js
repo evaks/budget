@@ -301,6 +301,53 @@ aurora.db.mysql.Pool.prototype.query = function(query, params, opt_callback) {
     (this.connection_ || this.pool_).query(queryObj.sql, queryObj.values, cb);
 };
 
+
+/**
+ * used for getting querys that have large result sets that shouldn't be stored in memory
+ * @param {string} query
+ * @param {!Object<string,?>} params (error, results, fields)
+ * @param {function(Object, function())} rowCb
+ * @param {function(?)} doneCb
+ */
+aurora.db.mysql.Pool.prototype.queryLarge = function(query, params, rowCb, doneCb) {
+    let queryObj = aurora.db.mysql.Pool.formatQuery(query, params || {});
+    let connection = (this.connection_ || this.pool_);
+    let doQuery = function (connection, doneQuery) {
+        let query = connection.query(queryObj.sql, queryObj.values);
+        let queryErr = null;
+        query.on('error', function(err) {
+            queryErr = err;
+        }).on('fields', function(fields) {
+            // the field packets for the rows to follow
+        }).on('result', function(row) {
+            // Pausing the connnection is useful if your processing involves I/O
+            connection.pause();
+            rowCb(row, function() {
+                connection.resume();
+                
+            });
+        }).on('end', function() {
+            doneCb(queryErr);
+        });
+    };
+    if (this.connection_) {
+        doQuery(this.connection_, doneCb);
+    }
+    else {
+        this.pool_.getConnection(function (err, connection) {
+            if (err) {
+                doneCb(err);
+            }
+            else {
+                doQuery(connection, function (err) {
+                    connection.release();
+                    doneCb(err);
+                });
+            }
+        });
+    }
+
+};
 /**
  * @param {string} table
  * @param {!Object<string,?>} values
@@ -314,12 +361,13 @@ aurora.db.mysql.Pool.prototype.insert = function(table, values, callback) {
         break;
     }
     let query = 'INSERT INTO ' + this.escapeId(table) + (hasValues ? ' SET ?values' : ' VALUES ()');
+    console.log("insert values", query, values);
     this.query(
         query,
         {values: values},
         function(error, results, fields) {
             if (error) {
-                console.log("query error", query);
+                console.log("query error", error, query);
             }
             
             callback(error, /** @type {?aurora.db.type.InsertDef} */ (results));

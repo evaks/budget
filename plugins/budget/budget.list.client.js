@@ -91,7 +91,7 @@ budget.widgets.BudgetList = function(scope) {
  */
 budget.widgets.BudgetList.getUserId = function() {
     let idStr = budget.widgets.BudgetList.getSearchParams()['id'];
-    return parseInt(idStr == undefined ? goog.net.cookies.get('userid') : idStr[0], 10);
+    return parseInt(idStr == undefined ? (goog.net.cookies.get('userid') || '0') : idStr[0], 10);
 };
 
 /**

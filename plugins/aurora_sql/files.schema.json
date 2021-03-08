@@ -1,0 +1,25 @@
+{
+    "namespace": "base",
+    "tables" : [{
+	"name": "file_storage",
+	"access": "aurora.db.access.none",
+	"accessFilter": [{"": "none"}],
+	"columns": [
+	    { "name": "id", "type": "id", "start":1},
+	    { "name": "name", "type": "string(1024)"},
+	    { "name": "user", "type": "bigint", "nullable": true},
+	    { "name": "created", "type": "datetime"},
+	    { "name": "size", "type": "bigint"},
+	    { "name": "parts", "type": "owned-list(fileid)",
+	      "table": {
+		  "name": "file_part",
+		  "columns": [
+		      {"name" : "id", "type": "id"},
+		      {"name" : "order", "type": "order"},		      
+		      {"name" : "data", "type": "blob"}		      
+		  ]
+	      }
+	    }
+	]
+    }]
+}

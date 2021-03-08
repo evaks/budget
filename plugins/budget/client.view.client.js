@@ -24,23 +24,35 @@ budget.widgets.ClientView = function(scope) {
     let budgetDiv = cd('div', {class: 'budget-div'});
     let budgetBodyDiv = cd('div', {class: 'budget-body-div'});
     let profileBodyDiv = cd('div', {class: 'profile-body-div'});
+    let notesBodyDiv = cd('div', {class: 'notes-body-div'});
+    let documentsBodyDiv = cd('div', {class: 'documents-body-div'});
     let appointmentBodyDiv = cd('div', {});
-    let bodyDiv = cd('div', {class: 'body-div'}, budgetBodyDiv, profileBodyDiv, appointmentBodyDiv);
+    let mess = budget.messages;
+    let bodyDiv = cd('div', {class: 'body-div'}, budgetBodyDiv, profileBodyDiv, notesBodyDiv, documentsBodyDiv, appointmentBodyDiv);
+    let notLoggedInDiv = cd('div', {class: 'not-logged-in'}, mess.NOT_LOGGED_IN.toString());
     let profileDiv = cd('div', {class: 'budget-edit-profile'}, aurora.messages.VIEW_EDIT_PROFILE.toString());
+    let notesDiv = cd('div', {class: 'budget-edit-profile'}, mess.NOTES.toString());
+    let documentsDiv = cd('div', {class: 'budget-edit-profile'}, mess.DOCUMENTS.toString());
     let budgetListWidget = new budget.widgets.BudgetList(scope);
     let budgetWidget = new budget.widgets.Budget(scope);
-    let screenB = frp.createB('profile');
+    let screenB = recoil.ui.frp.LocalBehaviour.create(frp, '1', 'budget.client.menu.screen', 'profile', localStorage);
     let logic = recoil.frp.logic;
     let html = new recoil.ui.HtmlHelper(scope);
     let showProfileB = logic.equal('profile', screenB);
+    let showNotesB = logic.equal('notes', screenB);
+    let showDocumentsB = logic.equal('documents', screenB);
     let arrow = cd('span', {},'«');
-
+    let secContextB = aurora.permissions.getContext(scope);
     let collapsedB = recoil.ui.frp.LocalBehaviour.create(frp, '1', 'budget.client.menu.collapsed', false, localStorage);
 
     html.innerText(arrow, frp.liftB(function(v) { return v ? '»' : '«';}, collapsedB));
     html.show(budgetBodyDiv, logic.equal('budget', screenB));
     html.show(profileBodyDiv, showProfileB);
+    html.show(notesBodyDiv, showNotesB);
+    html.show(documentsBodyDiv, showDocumentsB);
     html.class(profileDiv, recoil.frp.Chooser.if(showProfileB, 'recoil_table_selected budget-edit-profile', 'budget-edit-profile'));
+    html.class(notesDiv, recoil.frp.Chooser.if(showNotesB, 'recoil_table_selected budget-edit-profile', 'budget-edit-profile'));
+    html.class(documentsDiv, recoil.frp.Chooser.if(showDocumentsB, 'recoil_table_selected budget-edit-profile', 'budget-edit-profile'));
     budgetListWidget.getComponent().render(budgetDiv);
     budgetWidget.getComponent().render(budgetBodyDiv);
     let idStr = budget.widgets.BudgetList.getUserId();
@@ -53,9 +65,14 @@ budget.widgets.ClientView = function(scope) {
     let profileWidget = new budget.widgets.SignUp(scope, userId);
     profileWidget.getComponent().render(profileBodyDiv);
 
+    let notesWidget = new budget.widgets.Notes(scope, userId);
+    let documentsWidget = new budget.widgets.Documents(scope, userId);
+    notesWidget.getComponent().render(notesBodyDiv);
+    documentsWidget.getComponent().render(documentsBodyDiv);
+
     let sideGroupsContainer =
         cd('div', {class: 'side-groups-container'},
-           cd('div', {}, cd('h2', {class: 'group-header'}, aurora.messages.PROFILE.toString()), profileDiv),
+           cd('div', {}, cd('h2', {class: 'group-header'}, aurora.messages.PROFILE.toString()), profileDiv, notesDiv, documentsDiv),
            cd('div', {}, cd('h2', {class: 'group-header'}, aurora.messages.APPOINTMENTS.toString())),
            cd('div', {class: 'budget-budget-list'},
               cd('h2', {class: 'group-header'}, aurora.messages.BUDGETS.toString()),
@@ -66,9 +83,10 @@ budget.widgets.ClientView = function(scope) {
                           sideBarControl), sideGroupsContainer);
 
     html.enableClass(sidePanel, 'side-small', collapsedB);
+    let contentPanel = cd('div', {class: 'side-list-body'}, bodyDiv);
 
     let container = cd('div', {class: 'side-list-page'}, sidePanel,
-                       cd('div', {class: 'side-list-body'}, bodyDiv));
+                       contentPanel, notLoggedInDiv);
 
     let selectedBugdetB = budgetListWidget.createSelected();
     budgetWidget.attach(selectedBugdetB);
@@ -78,14 +96,23 @@ budget.widgets.ClientView = function(scope) {
         if (val && val.length > 0) {
             screenB.set('budget');
         }
+        let hasPerm = secContextB.good() && aurora.permissions.loggedIn(true)(secContextB.get());
+        goog.style.setElementShown(sidePanel, hasPerm);
+        goog.style.setElementShown(contentPanel, hasPerm);
+        goog.style.setElementShown(notLoggedInDiv, secContextB.good() && !hasPerm);
+
     });
-    helper.attach(selectedBugdetB);
+    helper.attach(selectedBugdetB, screenB, secContextB);
 
-    goog.events.listen(profileDiv, goog.events.EventType.CLICK, frp.accessTransFunc(function() {
-        screenB.set('profile');
-        selectedBugdetB.set([]);
-    }, screenB, selectedBugdetB));
-
+    let setScreen = function(screen) {
+        return frp.accessTransFunc(function() {
+            screenB.set(screen);
+            selectedBugdetB.set([]);
+        }, screenB, selectedBugdetB);
+    };
+    goog.events.listen(profileDiv, goog.events.EventType.CLICK, setScreen('profile'));
+    goog.events.listen(notesDiv, goog.events.EventType.CLICK, setScreen('notes'));
+    goog.events.listen(documentsDiv, goog.events.EventType.CLICK, setScreen('documents'));
 
     sideControlEnable.setDispatchTransitionEvents(goog.ui.Component.State.ALL, true);
     goog.events.listen(

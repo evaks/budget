@@ -3,6 +3,7 @@ goog.provide('budget.Client');
 
 goog.require('aurora.Client');
 goog.require('aurora.db.Comms');
+goog.require('aurora.db.PermDatabase');
 goog.require('aurora.db.Schema');
 goog.require('budget.WidgetScope');
 goog.require('recoil.db.ChangeDb');
@@ -19,7 +20,7 @@ budget.Client = function() {
     let comms = new aurora.db.Comms(db, schema, this);
 
 
-    let database = new recoil.db.ReadWriteDatabase(aurora.recoil.frp, comms);
+    let database = new aurora.db.PermDatabase(new recoil.db.ReadWriteDatabase(aurora.recoil.frp, comms));
 
     let scope = new budget.WidgetScope(aurora.recoil.frp, database, comms);
     aurora.Client.call(this, scope, function() {
@@ -59,3 +60,10 @@ budget.Client.typeFactories = (function() {
  * @const
  */
 budget.Client.VERSION = '1';
+
+/**
+ * @param {boolean} val
+ */
+budget.Client.setOverride = function(val) {
+    aurora.permissions.setOverride(budget.Client.scope(), val);
+};
