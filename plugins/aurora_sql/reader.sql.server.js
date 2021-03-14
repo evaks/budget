@@ -746,8 +746,9 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
         }
         let columns = [];
         try {
+            let trueFunc = function() {return true;};
             let scope = new recoil.db.DBQueryScope(context, new recoil.db.SQLQueryHelper(me), me.makeChildPathFunc(table));
-            let sql = isCount ? me.mkCountSql_(scope, table, filter) : me.mkSelectSql_(scope, colMap, cur, columns, limit, opt_options ? opt_options.columnFilter() : function() {return true;});
+            let sql = isCount ? me.mkCountSql_(scope, table, filter) : me.mkSelectSql_(scope, colMap, cur, columns, limit, opt_options ? opt_options.columnFilter() : trueFunc);
 
             if (!cur.data) {
                 // this the toplevel

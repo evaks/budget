@@ -539,24 +539,31 @@ aurora.db.Coms.prototype.doGetHelper_ = function(clientId, reader, secContext, n
                 else {
                     if (options && !options.isCount()) {
                         let notifyQuery = me.notifies_.addQuery(clientId, {name: name, query: queryIn, options: optionsIn}, secInfo.table, query);
-                        data.forEach(function(dataItem) {
+                        data = data.filter(function(dataItem) {
+                            let objContext = /** @type {!aurora.db.access.SecurityContext}*/ (goog.object.clone(secContext));
+                            objContext.object = dataItem;
                             notifyQuery.addObject(dataItem);
+                            if (secInfo.table.info.access && !secInfo.table.info.access(objContext, 'r')) {
+                                return false;
+                            }
 
 
                             aurora.db.Coms.traverseObject_(secInfo.table, dataItem, function(tbl, parent, value, colName, colMeta) {
                                 if (colMeta.type === 'password') {
                                     parent[colName] = null;
                                 }
-                                if (tbl.info.access && !tbl.info.access(secContext, 'r')) {
+
+                                if (tbl.info.access && !tbl.info.access(objContext, 'r')) {
                                     delete parent[colName];
                                     return false;
                                 }
-                                if (colMeta.access && !colMeta.access(secContext, 'r')) {
+                                if (colMeta.access && !colMeta.access(objContext, 'r')) {
                                     delete parent[colName];
                                     return false;
                                 }
                                 return true;
                             });
+                            return true;
                         });
                     }
                     response['value'] = data;

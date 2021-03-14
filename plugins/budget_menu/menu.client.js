@@ -170,8 +170,8 @@ budget.widgets.Menu.menu = [
         {seperator: true, perm: aurora.permissions.has('user-management')},
         {'name': 'Budget Template', 'url': '/budget_template', perm: aurora.permissions.has('site-management')},
         {'name': 'Site Info', 'url': '/site', perm: aurora.permissions.has('site-management')},
-        {'name': 'Business Hours', 'url': '/hours', perm: aurora.permissions.has('site-management')},
-        {'name': 'Appointments', 'url': '/appointments', perm: aurora.permissions.has('site-management')},
+        {'name': 'Office Hours', 'url': '/hours', perm: aurora.permissions.has('site-management')},
+        {'name': 'Avialable Hours', 'url': '/appointments', perm: aurora.permissions.hasAny(['site-management', 'mentor'])},
         {seperator: true, perm: aurora.permissions.has('user-management')},
 
         {'name': 'New Client', 'url': '/client/new', perm: aurora.permissions.has('mentor')},

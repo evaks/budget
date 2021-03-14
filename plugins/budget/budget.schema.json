@@ -74,22 +74,25 @@
 	
 	{
 	    "name" : "mentor_availablity",
-	    "indexes": [],
-	    "access": "aurora.db.access.basic([{'site-management':'crud'},{'mentor': 'crud'}, {'': 'r'}])",
+	    "indexes": [{"columns": ["stop"]},  {"columns": ["mentorid", "stop"]}],
+	    "access": "budget.access.avialablity()",
 	    "accessFilter": [
 		{"" : "all"}
 	    ],
 	    "columns": [
 		{ "name": "id", "type": "id"},
+		{ "name": "siteid", "type": "ref(site)"},
 		{ "name": "mentorid", "type": "ref(user)"},
+		{ "name": "repeat", "type": "PeriodType", "nullable": true},
 		{ "name": "start", "type": "datetime"},
-		{ "name": "stop", "type": "datetime"}
+		{ "name": "len", "type": "datetime"},
+		{ "name": "stop", "type": "datetime", "nullable": true}
 	    ]
 	},
 
 	{
 	    "name" : "appointments",
-	    "indexes": [],
+	    "indexes": [{"columns": ["stop"]},  {"columns": ["mentorid", "stop"]}, {"columns": ["userid", "stop"]}],
 	    "access": "aurora.db.access.basic([{'site-management':'crud'}, {'': 'r'}])",
 	    "accessFilter": [
 		{"" : "all"}
@@ -99,7 +102,7 @@
 		{ "name": "mentorid", "type": "ref(user)"},
 		{ "name": "userid", "type": "ref(user)"},
 		{ "name": "start", "type": "datetime"},
-		{ "name": "stop", "type": "datetime"},
+		{ "name": "stop", "type": "datetime", "nullable":true},
 		{ "name": "description", "type": "string(100)", "default": ""}
 	    ]
 	},

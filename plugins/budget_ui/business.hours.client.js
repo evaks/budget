@@ -23,19 +23,24 @@ goog.require('recoil.ui.widgets.table.TableWidget');
  * @constructor
  * @export
  * @param {!budget.WidgetScope} scope
+ * @param {string=} opt_type
  * @implements {recoil.ui.Widget}
  */
-budget.widgets.BusinessHours = function(scope) {
+budget.widgets.BusinessHours = function(scope, opt_type) {
     this.scope_ = scope;
+    this.type_ = opt_type || 'admin';
     let me = this;
-    let HOUR_RES = budget.widgets.BusinessHours.HOUR_RES;
     let frp = scope.getFrp();
     let mess = budget.messages;
     let cd = goog.dom.createDom;
     let siteT = aurora.db.schema.tables.base.site;
     let holidaysT = aurora.db.schema.tables.base.site_holidays;
+    let appointmentsT = aurora.db.schema.tables.base.appointments;
+    let availT = aurora.db.schema.tables.base.mentor_availablity;
+    this.contextB_ = aurora.permissions.getContext(scope);
     this.borderDimsB_ = frp.createB({x: 0, y: 0});
     let highlightedB = frp.createB(/** @type {{add: ?boolean, start:?{x:number,y:number},stop:?{x:number,y:number}}} */({start: null, stop: null}));
+    this.highlightedB_ = highlightedB;
 
     let pad = function(v, len) {
         let str = ('0'.repeat(len) + v);
@@ -46,9 +51,22 @@ budget.widgets.BusinessHours = function(scope) {
     let format = new Intl.DateTimeFormat(undefined, {
         weekday: 'short'
     });
+    let myId = BigInt(goog.net.cookies.get('userid'));
+    let selectedMentorB = frp.createB(new aurora.db.PrimaryKey(myId));
+    let mentorListB = budget.widgets.UserManagement.getMentorList(scope);
+    this.mentorB_ = frp.liftBI(function(selected, context, list) {
+        if (selected.db === myId && !aurora.permissions.has('mentor')(context)) {
+            return list.length > 0 ? list[0] : null;
+        }
+        return selected;
+    }, function(v) {
+        selectedMentorB.set(v);
+    }, selectedMentorB, this.contextB_, mentorListB);
+
 
     this.dateWidget_ = new recoil.ui.widgets.DateWidget2(scope);
-    this.timeWidget_ = new recoil.ui.widgets.TimeWidget(scope);
+    this.mentorWidget_ = new recoil.ui.widgets.SelectorWidget(scope);
+
 
     let milliPerDay = budget.widgets.BusinessHours.MILLI_PER_DAY;
 
@@ -60,12 +78,21 @@ budget.widgets.BusinessHours = function(scope) {
 
     this.curDateB_ = frp.createB(recoil.ui.widgets.DateWidget2.convertDateToLocal(weekdayIze()));
     this.dateWidget_.attachStruct({value: this.curDateB_, min: 19700105, step: 7});
+    this.mentorWidget_.attachStruct({value: this.mentorB_, list: mentorListB, renderer: budget.widgets.UserManagement.getMentorRenderer(scope)});
 
     this.siteB_ = scope.getDb().get(siteT.key);
+    // do this because later on we will change so we can have multiple sites
+    this.siteIdB_ = frp.liftB(function(site) {
+        let res = null;
+        site.forEach(function(row) {
+            res = row.get(siteT.cols.id);
+        });
+        return res;
+    }, this.siteB_);
 
     this.hoursTblB_ = budget.Client.instance.createSubTableB(this.siteB_, frp.createB(
-
         /** @type {Array} */ (null)), siteT.cols.regular);
+
     this.holidaysB_ = frp.switchB(frp.liftB(function(date) {
         let query = new recoil.db.Query();
         let startTime = recoil.ui.widgets.DateWidget2.convertLocaleDate(date).getTime();
@@ -79,6 +106,37 @@ budget.widgets.BusinessHours = function(scope) {
 
     }, this.curDateB_));
 
+    this.availableB_ = frp.switchB(frp.liftB(function(date) {
+        let query = new recoil.db.Query();
+        let startTime = recoil.ui.widgets.DateWidget2.convertLocaleDate(date).getTime();
+
+        let endTime = startTime + 7 * milliPerDay;
+
+        return scope.getDb().get(availT.key, query.and(
+            query.eq(availT.cols.mentorid, query.val(me.mentorB_.get())),
+            query.or(
+                query.gt(query.field(availT.cols.stop), query.val(startTime)),
+                query.null(query.field(availT.cols.stop))),
+
+            query.lt(query.field(availT.cols.start), query.val(endTime))
+        ));
+
+    }, this.curDateB_, this.mentorB_));
+
+    this.appointmentsB_ = frp.switchB(frp.liftB(function(date) {
+        let query = new recoil.db.Query();
+        let startTime = recoil.ui.widgets.DateWidget2.convertLocaleDate(date).getTime();
+
+        let endTime = startTime + 7 * milliPerDay;
+
+        return scope.getDb().get(appointmentsT.key, query.and(
+            query.gt(query.field(appointmentsT.cols.stop), query.val(startTime)),
+            query.lt(query.field(appointmentsT.cols.start), query.val(endTime))
+        ));
+
+    }, this.curDateB_));
+
+
 
     this.yAxis_ = cd('div', 'budget-calendar-hour-labels');
     this.highlightDiv_ = cd('div', 'budget-calendar-highlight');
@@ -90,7 +148,6 @@ budget.widgets.BusinessHours = function(scope) {
         let hour = cd('div', {class: 'budget-calendar-hour'}, pad(h, 2) + ':00');
         this.yAxis_.appendChild(hour);
     }
-    this.contextB_ = aurora.permissions.getContext(scope);
     this.setupMenu_();
     this.days_ = [];
     this.dateDivs_ = [];
@@ -120,15 +177,21 @@ budget.widgets.BusinessHours = function(scope) {
         this.days_.push({div: day, hours: hours});
     }
 
-    let holidaysLegend = cd('div', {class: 'legend-item'}, cd('div', {class: 'legend-key holidays'}), cd('div', {class: 'legend-name'}, 'Holidays'));
-
-    let hoursLegend = cd('div', {class: 'legend-item'}, cd('div', {class: 'legend-key hours'}), cd('div', {class: 'legend-name'}, 'Hours'));
-
+    let holidaysLegend = cd('div', {class: 'legend-item'}, cd('div', {class: 'legend-key holidays'}), cd('div', {class: 'legend-name'}, mess.HOLIDAY.toString()));
+    let hoursLegend = cd('div', {class: 'legend-item'}, cd('div', {class: 'legend-key hours'}), cd('div', {class: 'legend-name'}, mess.OFFICE_HOURS.toString()));
+    let availableLegend = cd('div', {class: 'legend-item'}, cd('div', {class: 'legend-key mentor-avail'}), cd('div', {class: 'legend-name'}, mess.AT_OFFICE.toString()));
+    
     this.legendDiv_ = cd('div', {class: 'budget-legend'}, holidaysLegend, hoursLegend);
 
+    if (this.type_ == 'mentor') {
+        this.legendDiv_.appendChild(availableLegend);
+    }
     let dateDiv = cd('div', 'budget-date');
+    let mentorDiv = cd('div', 'budget-cal-mentor goog-inline-block');
+    this.mentorDiv_ = cd('div', {}, cd('div', {class: 'budget-calendar-mentor-label'}, mess.MENTOR.toString()), mentorDiv);
     this.dateWidget_.getComponent().render(dateDiv);
-    this.calendarHeader_ = cd('div', {class: 'budget-calendar-header'}, dateDiv, this.legendDiv_);
+    this.mentorWidget_.getComponent().render(mentorDiv);
+    this.calendarHeader_ = cd('div', {class: 'budget-calendar-header'}, dateDiv, this.mentorDiv_, this.legendDiv_);
 //    this.dateWidget_.getComponent().render(this.calendarHeader_);
 
     this.loadingContainer_ = cd('div', {class: 'budget-loading'}, cd('div'));
@@ -136,6 +199,50 @@ budget.widgets.BusinessHours = function(scope) {
 
     this.container_ = budget.widgets.BusinessHours.createWidgetDom('div', {}, this.calendarHeader_, this.calendarDiv_, this.loadingContainer_, this.errorContainer_);
 
+    goog.dom.classlist.enable(this.container_, 'budget-cal-avail', this.type_ === 'mentor');
+
+    if (this.type_ === 'admin') {
+        this.setupDrag_();
+    }
+
+    this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(this.container_);
+    let contentSizeB = frp.createB(/** @type {?{width:number, height:number}} */ (null));
+
+    this.helper_ = new recoil.ui.ComponentWidgetHelper(scope, this.component_, this, this.update_, function() {
+        if (me.bodyMoveListener_) {
+            goog.events.unlistenByKey(me.bodyMoveListener_);
+        }
+    });
+
+    this.helper_.attach(this.siteB_, this.siteIdB_, highlightedB, this.curDateB_, contentSizeB, this.holidaysB_, this.borderDimsB_, this.hoursTblB_, this.appointmentsB_, this.availableB_, this.contextB_);
+    let resizeObserver = new ResizeObserver(frp.accessTransFunc(function(e) {
+        contentSizeB.set({width: Math.round(e[0].contentRect.width), height: Math.round(e[0].contentRect.height)});
+        let style = getComputedStyle(me.highlightDiv_);
+        me.borderDimsB_.set(/** @type {?} */ ({
+            x: parseInt(style.getPropertyValue('border-left-width'), 10) +
+                parseInt(style.getPropertyValue('border-right-width'), 10),
+            y: parseInt(style.getPropertyValue('border-top-width'), 10) +
+                parseInt(style.getPropertyValue('border-bottom-width'), 10)
+        }));
+
+
+    }, contentSizeB, me.borderDimsB_));
+    resizeObserver.observe(this.calendarDiv_);
+
+};
+/**
+ * @typedef {{dayIndex:number, hourIndex:number, clickPosMilli:number, clickPosTime:number}}
+ */
+budget.widgets.BusinessHours.MenuInfo;
+
+/**
+ * @private
+ */
+budget.widgets.BusinessHours.prototype.setupDrag_ = function() {
+    let me = this;
+    let HOUR_RES = budget.widgets.BusinessHours.HOUR_RES;
+    let frp = this.scope_.getFrp();
+    let highlightedB = this.highlightedB_;
     let isLeftPressed = function(e) {
         return e.getBrowserEvent().buttons === undefined
             ? e.getBrowserEvent().which === 1
@@ -153,6 +260,7 @@ budget.widgets.BusinessHours = function(scope) {
             document.selection.empty();
         }
     };
+
 
     goog.events.listen(document.body, goog.events.EventType.MOUSEUP, frp.accessTransFunc(function(e) {
         let highlighted = highlightedB.get();
@@ -266,32 +374,8 @@ budget.widgets.BusinessHours = function(scope) {
         highlightedB.set(oldPos);
     }, highlightedB);
 
-    let bodyMoveListener = goog.events.listen(document.body, goog.events.EventType.MOUSEMOVE, handleMove);
+    this.bodyMoveListener_ = goog.events.listen(document.body, goog.events.EventType.MOUSEMOVE, handleMove);
     goog.events.listen(this.calendarDiv_, goog.events.EventType.MOUSEMOVE, handleMove);
-
-
-    this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(this.container_);
-    let contentSizeB = frp.createB(/** @type {?{width:number, height:number}} */ (null));
-
-    this.helper_ = new recoil.ui.ComponentWidgetHelper(scope, this.component_, this, this.update_, function() {
-        goog.events.unlistenByKey(bodyMoveListener);
-    });
-
-    this.highlightedB_ = highlightedB;
-    this.helper_.attach(this.siteB_, highlightedB, this.curDateB_, contentSizeB, this.holidaysB_, this.borderDimsB_, this.hoursTblB_, this.contextB_);
-    let resizeObserver = new ResizeObserver(frp.accessTransFunc(function(e) {
-        contentSizeB.set({width: Math.round(e[0].contentRect.width), height: Math.round(e[0].contentRect.height)});
-        let style = getComputedStyle(me.highlightDiv_);
-        me.borderDimsB_.set(/** @type {?} */ ({
-            x: parseInt(style.getPropertyValue('border-left-width'), 10) +
-                parseInt(style.getPropertyValue('border-right-width'), 10),
-            y: parseInt(style.getPropertyValue('border-top-width'), 10) +
-                parseInt(style.getPropertyValue('border-bottom-width'), 10)
-        }));
-
-
-    }, contentSizeB, me.borderDimsB_));
-    resizeObserver.observe(this.calendarDiv_);
 
 };
 
@@ -330,7 +414,7 @@ budget.widgets.BusinessHours.MILLI_PER_DAY = 3600000 * 24;
 /**
  * returns a function that will remove a holiday
  * @private
- * @param {{dayIndex:number, hourIndex:number}} menuInfo
+ * @param {!budget.widgets.BusinessHours.MenuInfo} menuInfo
  * @return {function(?)}
  */
 budget.widgets.BusinessHours.prototype.doRemoveHolidayFunc_ = function(menuInfo) {
@@ -354,7 +438,7 @@ budget.widgets.BusinessHours.prototype.doRemoveHolidayFunc_ = function(menuInfo)
 /**
  * returns a function that will make a holiday
  * @private
- * @param {{dayIndex:number, hourIndex:number}} menuInfo
+ * @param {!budget.widgets.BusinessHours.MenuInfo} menuInfo
  * @return {function(?)}
  */
 budget.widgets.BusinessHours.prototype.doMakeHolidayFunc_ = function(menuInfo) {
@@ -423,10 +507,31 @@ budget.widgets.BusinessHours.prototype.makeDateDialog_ = function(tblB, start, s
     return td;
 };
 
+
+/**
+ * @private
+ * @param {!recoil.frp.Behaviour<!recoil.structs.table.Table>} tblB
+ * @param {number} start
+ * @param {number} stop
+ * @param {string} title
+ * @param {!recoil.frp.Behaviour} callbackB
+ * @return
+ */
+budget.widgets.BusinessHours.prototype.makeAvailableDialog_ = function(tblB, start, stop, title, callbackB) {
+    let me = this;
+    let scope = me.scope_;
+    let frp = me.scope_.getFrp();
+    let modTableB = tblB;
+    let holidaysT = aurora.db.schema.tables.base.site_holidays;
+
+    let td = new aurora.widgets.TableDialog(scope, modTableB, callbackB, title, function() {return null;}, title);
+    return td;
+};
+
 /**
  * returns a function that will display a dialog to add holidays
  * @private
- * @param {{dayIndex:number, hourIndex:number}} menuInfo
+ * @param {!budget.widgets.BusinessHours.MenuInfo} menuInfo
  * @return {function(?)}
  */
 budget.widgets.BusinessHours.prototype.doAddHolidaysDialogFunc_ = function(menuInfo) {
@@ -435,13 +540,6 @@ budget.widgets.BusinessHours.prototype.doAddHolidaysDialogFunc_ = function(menuI
     let scope = me.scope_;
 
     return frp.accessTransFunc(function(e) {
-  /*      let selectInfo = me.getSelectionDate_(menuInfo, me.curDateB_.get());
-        let start = recoil.ui.widgets.DateWidget2.convertDateToLocal(new Date(selectInfo));
-        let stop = recoil.ui.widgets.DateWidget2.convertDateToLocal(new Date(selectInfo +  budget.widgets.BusinessHours.MILLI_PER_DAY));
-
-        let td = me.createHolidaysDialog_(menuInfo, start, stop, title);
-        td.show(true);
-*/
 
         let siteT = aurora.db.schema.tables.base.site;
         let holidaysT = aurora.db.schema.tables.base.site_holidays;
@@ -471,7 +569,171 @@ budget.widgets.BusinessHours.prototype.doAddHolidaysDialogFunc_ = function(menuI
 
         td.show(true);
 
-    }, this.siteB_, this.curDateB_, this.holidaysB_);
+    }, this.siteB_, this.curDateB_, this.holidaysB_, this.siteIdB_);
+
+};
+
+
+/**
+ * @private
+ * @param {!budget.widgets.BusinessHours.MenuInfo} menuInfo
+ * @param {boolean} once
+ * @return {function(?)}
+ */
+budget.widgets.BusinessHours.prototype.doRemoveAvailableFunc_ = function(menuInfo, once) {
+    let me = this;
+    let frp = me.scope_.getFrp();
+    let scope = me.scope_;
+    let availT = aurora.db.schema.tables.base.mentor_availablity;
+    let RepeatType = aurora.db.schema.getEnum(availT.cols.repeat);
+    let nextPeriod = budget.widgets.BusinessHours.nextPeriod_;
+    return frp.accessTransFunc(function(e) {
+        let avail = me.availableB_.get();
+        let startTime = recoil.ui.widgets.DateWidget2.convertLocaleDate(me.curDateB_.get()).getTime();
+        let endTime = budget.widgets.BusinessHours.addDays_(startTime, 7);
+        let when = menuInfo.clickPosTime;
+        let res = avail.createEmpty();
+        avail.forEach(function(row) {
+
+            let found = null;
+            budget.widgets.BusinessHours.iterateOverPeriod_(row, startTime, endTime, function(start, stop) {
+                if (start <= when && when < stop) {
+                    found = {start: start, stop: stop};
+                }
+            });
+            if (found) {
+                let prevStart = nextPeriod(row, found.start, -1);
+                if (prevStart != null) {
+                    let mrow = row.unfreeze();
+                    mrow.set(availT.cols.stop, prevStart + row.get(availT.cols.len));
+                    res.addRow(mrow);
+                }
+                if (once) {
+                    // there maybe things after us so add it
+                    let nextStart = nextPeriod(row, found.start, 1);
+                    if (nextStart != null) {
+                        let mrow = row.unfreeze();
+                        mrow.set(availT.cols.start, nextStart);
+                        if (prevStart != null) {
+                            // we need a new primary key be can't use this row twice
+                            mrow.set(availT.cols.id, availT.cols.id.getDefault());
+                        }
+                        res.addRow(mrow);
+                    }
+                }
+
+            }
+            else {
+                res.addRow(row);
+            }
+        });
+        me.availableB_.set(res.freeze());
+    }, this.curDateB_, this.availableB_, this.mentorB_, this.contextB_, this.siteIdB_);
+
+};
+
+/**
+ * @private
+ * @param {{dayIndex:number, hourIndex:number, clickPosMilli: number, clickPosTime:number}} menuInfo
+ * @return {function(?)}
+ */
+budget.widgets.BusinessHours.prototype.doAddAvailableFunc_ = function(menuInfo) {
+    let me = this;
+    let frp = me.scope_.getFrp();
+    let scope = me.scope_;
+    let availT = aurora.db.schema.tables.base.mentor_availablity;
+    let RepeatType = aurora.db.schema.getEnum(availT.cols.repeat);
+    const MILLI_PER_HOUR = 3600000;
+    const MILLI_PER_DAY = budget.widgets.BusinessHours.MILLI_PER_DAY;
+    return frp.accessTransFunc(function(e) {
+        let avail = me.availableB_.get();
+
+
+        let tbl = avail.createEmpty([]);
+        let tblKeys = availT.cols;
+        let selectDate = me.getSelectionDate_(menuInfo, me.curDateB_.get());
+
+
+        let row = new recoil.structs.table.MutableTableRow();
+
+        let dayOffset = menuInfo.dayIndex;
+        let startTime = Math.floor(menuInfo.clickPosMilli / MILLI_PER_HOUR) % 24 * MILLI_PER_HOUR;
+        let stopTime = startTime + MILLI_PER_HOUR;
+
+        row.set(tblKeys.siteid, me.siteIdB_.get());
+        // to do this is just for security testing
+        row.set(tblKeys.mentorid, me.mentorB_.get());
+        row.set(tblKeys.repeat, RepeatType.weekly);
+        row.set(tblKeys.start, startTime);
+        row.set(tblKeys.len, stopTime);
+        row.set(tblKeys.stop, null);
+
+        tbl.addRow(row);
+        let modTableB = frp.createB(tbl.freeze());
+        let validTableB = frp.liftBI(function(tbl) {
+            let res = tbl.createEmpty();
+            let columns = new recoil.ui.widgets.TableMetaData();
+            columns.addColumn(new recoil.ui.columns.Time(availT.cols.start, budget.messages.START_DATE.toString()));
+            columns.addColumn(new recoil.ui.columns.Time(availT.cols.len, budget.messages.STOP_DATE.toString()));
+            columns.add(availT.cols.repeat, budget.messages.REPEAT.toString());
+
+            let doesRepeat = false;
+            tbl.forEachModify(function(row) {
+                let start = row.get(tblKeys.start);
+                let stop = row.get(tblKeys.len);
+                let stopErrors = [];
+                let endErrors = [];
+                if (stop < start + MILLI_PER_HOUR) {
+                    stopErrors.push(budget.messages.YOU_MUST_BE_AVAILABLE_FOR_AT_LEAST_AN_HOUR);
+                }
+                if (row.get(tblKeys.stop) != null && row.get(tblKeys.stop) < selectDate) {
+                    endErrors.push(budget.messages.FINISH_DATE_CANNOT_BE_BEFORE_START_DATE);
+                }
+                row.addCellMeta(tblKeys.len, {errors: stopErrors});
+                row.addCellMeta(tblKeys.stop, {errors: endErrors});
+
+                // the min
+                res.addColumnMeta(tblKeys.stop, {allowNone: true, min: selectDate});
+                doesRepeat = row.get(tblKeys.repeat) != null;
+                res.addRow(row);
+            });
+            if (doesRepeat) {
+                columns.addColumn(new recoil.ui.columns.Date2(availT.cols.stop, budget.messages.FINISH.toString()));
+            }
+            return columns.applyMeta(res);
+        }, function(tbl) {
+            let res = modTableB.get().createEmpty();
+            tbl.forEach(function(row) {
+                res.addRow(row);
+            });
+            modTableB.set(res.freeze());
+        }, modTableB);
+
+        let dayAdd = function(row, col) {
+            let date = new Date(selectDate);
+            row.set(col, row.get(col) + selectDate);
+
+        };
+
+        let td = me.makeAvailableDialog_(validTableB, startTime, stopTime, budget.messages.ADD_AVAILABLE.toString(), frp.createCallback(function(e) {
+            let res = me.availableB_.get().unfreeze();
+            modTableB.get().forEachModify(function(row) {
+                let len = row.get(tblKeys.len) - row.get(tblKeys.start);
+                let stop = row.get(tblKeys.stop);
+
+                dayAdd(row, tblKeys.start);
+                row.set(tblKeys.len, len);
+                row.set(tblKeys.stop, stop == null ? null : stop + MILLI_PER_DAY);
+                res.addRow(row);
+            });
+
+            me.availableB_.set(res.freeze());
+
+        }, modTableB, me.siteB_, me.holidaysB_, me.availableB_));
+
+        td.show(true);
+
+    }, this.siteB_, this.curDateB_, this.availableB_, this.mentorB_, this.contextB_, this.siteIdB_);
 
 };
 
@@ -499,7 +761,7 @@ budget.widgets.BusinessHours.prototype.getSelectedIndexInArray = function(arr, s
 /**
  * returns a function that will make a modify holiday dialog
  * @private
- * @param {{dayIndex:number, hourIndex:number}} menuInfo
+ * @param {{dayIndex:number, hourIndex:number, clickPosMilli:number, clickPosTime:number}} menuInfo
  * @return {function(?)}
  */
 budget.widgets.BusinessHours.prototype.doModifyHolidayDialogFunc_ = function(menuInfo) {
@@ -549,7 +811,7 @@ budget.widgets.BusinessHours.prototype.doModifyHolidayDialogFunc_ = function(men
 /**
  * returns a function that will make a dialog to add hours
  * @private
- * @param {{dayIndex:number, hourIndex:number, clickPosMilli:number}} menuInfo
+ * @param {{dayIndex:number, hourIndex:number, clickPosMilli:number, clickPosTime:number}} menuInfo
  * @return {function(?)}
  */
 budget.widgets.BusinessHours.prototype.doAddHoursDialogFunc_ = function(menuInfo) {
@@ -637,7 +899,7 @@ budget.widgets.BusinessHours.prototype.doAddHoursDialogFunc_ = function(menuInfo
 /**
  * returns a function that will remove hours
  * @private
- * @param {{dayIndex:number, hourIndex:number, clickPosMilli: number}} menuInfo
+ * @param {{dayIndex:number, hourIndex:number, clickPosMilli: number, clickPosTime:number}} menuInfo
  * @return {function(?)}
  */
 budget.widgets.BusinessHours.prototype.doRemoveHoursFunc_ = function(menuInfo) {
@@ -705,7 +967,7 @@ budget.widgets.BusinessHours.prototype.removeDateRange_ = function(timeRange, st
 /**
  * returns a function that will bring up a modify hours dialog
  * @private
- * @param {{dayIndex:number, hourIndex:number, clickPosMilli: number}} menuInfo
+ * @param {{dayIndex:number, hourIndex:number, clickPosMilli: number, clickPosTime:number}} menuInfo
  * @return {function(?)}
  */
 budget.widgets.BusinessHours.prototype.doModifyHoursDialogFunc_ = function(menuInfo) {
@@ -736,7 +998,6 @@ budget.widgets.BusinessHours.prototype.doModifyHoursDialogFunc_ = function(menuI
         columns.addColumn(startCol);
         columns.addColumn(stopCol);
 
-        // this.timeWidget.attachStruct({value: });
         // columns.add(holidaysT.cols.stop, budget.messages.STOP_DATE.toString());
         // tbl.addColumnMeta(holidaysT.cols.stop, {type: 'time'});
 
@@ -796,6 +1057,41 @@ budget.widgets.BusinessHours.prototype.doModifyHoursDialogFunc_ = function(menuI
     }, this.siteB_, this.curDateB_, this.holidaysB_, this.hoursTblB_);
 };
 
+/**
+ * @param {{dayIndex: number, hourIndex: number, clickPosMilli: number, clickPosTime:number}} menuInfo
+ * @return {boolean}
+ */
+budget.widgets.BusinessHours.prototype.regHoursExists_ = function(menuInfo) {
+    let site = this.siteB_.get();
+    let dayUsage = this.createDayUsage_(site);
+    return this.timeInDateRange_(dayUsage, menuInfo.clickPosMilli);
+
+};
+
+/**
+ * @param {{dayIndex: number, hourIndex: number, clickPosMilli: number, clickPosTime:number}} menuInfo
+ * @return {boolean}
+ */
+budget.widgets.BusinessHours.prototype.holidayExists_ = function(menuInfo) {
+    let holidays = this.holidaysB_.get();
+    let holidayUsage = this.createHolidayUsage_(holidays);
+    let startOfWeekMilli = recoil.ui.widgets.DateWidget2.convertLocaleDate(this.curDateB_.get()).getTime();
+    return this.timeInDateRange_(holidayUsage, (startOfWeekMilli + menuInfo.clickPosMilli));
+
+};
+
+
+/**
+ * @param {{dayIndex: number, hourIndex: number, clickPosMilli: number, clickPosTime:number}} menuInfo
+ * @return {boolean}
+ */
+budget.widgets.BusinessHours.prototype.isAvailable_ = function(menuInfo) {
+    let avail = this.availableB_.get();
+    let startOfWeekMilli = recoil.ui.widgets.DateWidget2.convertLocaleDate(this.curDateB_.get()).getTime();
+    let availUsage = this.createAvailable_(avail, startOfWeekMilli, startOfWeekMilli + budget.widgets.BusinessHours.MILLI_PER_DAY * 7);
+    return this.timeInDateRange_(availUsage, (menuInfo.clickPosTime - startOfWeekMilli));
+
+};
 
 
 /**
@@ -807,17 +1103,62 @@ budget.widgets.BusinessHours.prototype.setupMenu_ = function() {
     let frp = me.scope_.getFrp();
     let HOUR_RES = budget.widgets.BusinessHours.HOUR_RES;
     let scope = me.scope_;
-    let menuInfo = {dayIndex: 0, hourIndex: 0, clickPosMilli: 0};
+    let menuInfo = {dayIndex: 0, hourIndex: 0, clickPosMilli: 0, clickPosTime: 0};
+    let menus = [];
+
+    let holidayExists = this.holidayExists_.bind(this);
+    let regHoursExists = this.regHoursExists_.bind(this);
+    let isAvailable = this.isAvailable_.bind(this);
+    let not = function(func) {
+        return function(menuInfo) {
+            return !func(menuInfo);
+        };
+    };
+
+    let and = function(f1, f2) {
+        return function(menuInfo) {
+            return f1(menuInfo) && f2(menuInfo);
+        };
+    };
 
 
-    this.makeHoliday_ = new goog.ui.MenuItem(budget.messages.MAKE_HOLIDAY.toString());
-    this.removeHoliday_ = new goog.ui.MenuItem(budget.messages.REMOVE_HOLIDAY.toString());
-    this.addHolidaysDialog_ = new goog.ui.MenuItem(budget.messages.ADD_HOLIDAYS_DIALOG.toString());
-    this.modifyHolidayDialog_ = new goog.ui.MenuItem(budget.messages.MODIFY_HOLIDAY_DIALOG.toString());
-    this.modifyHoursDialog_ = new goog.ui.MenuItem(budget.messages.MODIFY_HOURS_DIALOG.toString());
-    this.addHoursDialog_ = new goog.ui.MenuItem(budget.messages.ADD_HOURS_DIALOG.toString());
+    let checkPerm = function(perms) {
+        return function() {
+            let context = me.contextB_.get();
+            for (let i = 0; i < perms.length; i++) {
+                if (aurora.permissions.has(perms[i])(context)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+    };
+    let addMenu = function(name, show, func, perm) {
+        menus.push({item: new goog.ui.MenuItem(name.toString()), show: and(show, checkPerm), func: func});
+    };
+    if (this.type_ === 'admin') {
+        addMenu(budget.messages.REMOVE_HOURS, regHoursExists, this.doRemoveHoursFunc_(menuInfo), ['site-management']);
+        addMenu(budget.messages.MODIFY_HOURS_DIALOG, regHoursExists, this.doModifyHoursDialogFunc_(menuInfo), ['site-management']);
+        addMenu(budget.messages.ADD_HOURS_DIALOG, not(regHoursExists), this.doAddHoursDialogFunc_(menuInfo), ['site-management']);
+        addMenu(budget.messages.REMOVE_HOLIDAY, holidayExists, this.doRemoveHolidayFunc_(menuInfo), ['site-management']);
+        addMenu(budget.messages.MODIFY_HOLIDAY_DIALOG, holidayExists, this.doModifyHolidayDialogFunc_(menuInfo), ['site-management']);
+        addMenu(budget.messages.MAKE_HOLIDAY, not(holidayExists), this.doMakeHolidayFunc_(menuInfo), ['site-management']);
+        addMenu(budget.messages.ADD_HOLIDAYS_DIALOG, not(holidayExists), this.doAddHolidaysDialogFunc_(menuInfo), ['site-management']);
+    }
+
+
+    if (this.type_ === 'mentor') {
+        addMenu(budget.messages.MAKE_AVAILABLE, not(isAvailable), this.doAddAvailableFunc_(menuInfo), ['mentor']);
+        addMenu(budget.messages.MAKE_UNAVAILABLE, isAvailable, this.doRemoveAvailableFunc_(menuInfo, false), ['mentor']);
+        addMenu(budget.messages.MAKE_UNAVAILABLE_ONCE, isAvailable, this.doRemoveAvailableFunc_(menuInfo, true), ['mentor']);
+    }
+
+    menus.forEach(function(mInfo) {
+        goog.events.listen(mInfo.item, goog.ui.Component.EventType.ACTION, mInfo.func);
+    });
+
 //    this.removeHoursDialog_ = new goog.ui.MenuItem(budget.messages.REMOVE_HOURS_ELLIPSE.toString());
-    this.removeHours_ = new goog.ui.MenuItem(budget.messages.REMOVE_HOURS.toString());
+    this.removeHours_ =
     this.contextMenu_ = new goog.ui.PopupMenu();
 
     let calDiv = goog.dom.getElementsByClass('budget-calendar');
@@ -828,70 +1169,43 @@ budget.widgets.BusinessHours.prototype.setupMenu_ = function() {
     goog.events.listen(
         this.calendarDiv_, goog.events.EventType.CONTEXTMENU, frp.accessTransFunc(function(e) {
 
+            if (e.ctrlKey) {
+                return;
+            }
             me.contextMenu_.removeChildren(true);
 
-            let context = me.contextB_.get();
-            if (aurora.permissions.has('site-management')(context)) {
 
-                let site = me.siteB_.get();
-                let dayUsage = me.createDayUsage_(site);
-                let holidays = me.holidaysB_.get();
-                let holidayUsage = me.createHolidayUsage_(holidays);
-                let topLeft = me.days_[0].hours[0].getBoundingClientRect();
-                let bottomRight = me.days_[6].hours[23].getBoundingClientRect();
-                let height = bottomRight.top + bottomRight.height - topLeft.top;
-                let width = bottomRight.left + bottomRight.width - topLeft.left;
-                let clickPos = me.calcPos_(e);
-                let hourIndex = Math.max(0, Math.round(Math.floor(Math.min(clickPos.y) * 24 / height * HOUR_RES) / HOUR_RES * 3600000));
+            let topLeft = me.days_[0].hours[0].getBoundingClientRect();
+            let bottomRight = me.days_[6].hours[23].getBoundingClientRect();
+            let height = bottomRight.top + bottomRight.height - topLeft.top;
+            let width = bottomRight.left + bottomRight.width - topLeft.left;
+            let clickPos = me.calcPos_(e);
+            let hourIndex = Math.max(0, Math.round(Math.floor(Math.min(clickPos.y) * 24 / height * HOUR_RES) / HOUR_RES * 3600000));
 
-                let dayIndex = Math.floor(clickPos.x * 7 / width);
-                let milliInDay = Math.max(0, Math.round(clickPos.y * 24 * 3600000 / height));
-                let clickPosMilli = milliInDay + dayIndex * 24 * 3600000;
-                let startOfWeekMilli = recoil.ui.widgets.DateWidget2.convertLocaleDate(me.curDateB_.get()).getTime();
-                menuInfo.dayIndex = dayIndex;
-                menuInfo.hourIndex = hourIndex;
-                menuInfo.clickPosMilli = clickPosMilli;
+            let dayIndex = Math.floor(clickPos.x * 7 / width);
+            let milliInDay = Math.max(0, Math.round(clickPos.y * 24 * 3600000 / height));
+            let clickPosMilli = milliInDay + dayIndex * 24 * 3600000;
 
-                if (me.timeInDateRange_(dayUsage, clickPosMilli)) {
-                    me.contextMenu_.addChild(me.removeHours_, true);
-                    me.contextMenu_.addChild(me.modifyHoursDialog_, true);
-                } else {
-                    me.contextMenu_.addChild(me.addHoursDialog_, true);
+            let startOfWeekMilli = recoil.ui.widgets.DateWidget2.convertLocaleDate(me.curDateB_.get()).getTime();
+            menuInfo.dayIndex = dayIndex;
+            menuInfo.hourIndex = hourIndex;
+            menuInfo.clickPosMilli = clickPosMilli;
+            menuInfo.clickPosTime = budget.widgets.BusinessHours.addDays_(startOfWeekMilli, dayIndex, milliInDay);
+            let show = false;
+            menus.forEach(function(mInfo) {
+                if (mInfo.show(menuInfo)) {
+                    me.contextMenu_.addChild(mInfo.item, true);
+                    show = true;
                 }
+            });
 
-
-                if (me.timeInDateRange_(holidayUsage, (startOfWeekMilli + clickPosMilli))) {
-                    me.contextMenu_.addChild(me.removeHoliday_, true);
-                    me.contextMenu_.addChild(me.modifyHolidayDialog_, true);
-                } else {
-                    me.contextMenu_.addChild(me.makeHoliday_, true);
-                    me.contextMenu_.addChild(me.addHolidaysDialog_, true);
-                }
-
+            if (show) {
                 me.contextMenu_.showAt(e.clientX, e.clientY);
-                e.preventDefault();
-                e.stopPropagation();
+
             }
-        }, this.siteB_, this.curDateB_, this.holidaysB_, this.contextB_));
-
-
-
-    goog.events.listen(this.makeHoliday_, goog.ui.Component.EventType.ACTION, this.doMakeHolidayFunc_(menuInfo));
-
-    goog.events.listen(this.addHolidaysDialog_, goog.ui.Component.EventType.ACTION, this.doAddHolidaysDialogFunc_(menuInfo));
-
-    goog.events.listen(this.removeHoliday_, goog.ui.Component.EventType.ACTION, this.doRemoveHolidayFunc_(menuInfo));
-
-    goog.events.listen(this.modifyHolidayDialog_, goog.ui.Component.EventType.ACTION, this.doModifyHolidayDialogFunc_(menuInfo));
-
-
-        goog.events.listen(this.addHoursDialog_, goog.ui.Component.EventType.ACTION, this.doAddHoursDialogFunc_(menuInfo));
-
-    goog.events.listen(this.removeHours_, goog.ui.Component.EventType.ACTION, this.doRemoveHoursFunc_(menuInfo));
-
-    goog.events.listen(this.modifyHoursDialog_, goog.ui.Component.EventType.ACTION, this.doModifyHoursDialogFunc_(menuInfo));
-
-
+            e.preventDefault();
+            e.stopPropagation();
+        }, this.siteB_, this.curDateB_, this.holidaysB_, this.appointmentsB_, this.availableB_));
 };
 
 /**
@@ -945,7 +1259,7 @@ budget.widgets.BusinessHours.createWidgetDom = function(tagName, opt_attributes,
 
 /**
  * @private
- * @param {{dayIndex:number,hourIndex:number}} menuInfo
+ * @param {{dayIndex:number,hourIndex:number,clickPosTime:number}} menuInfo
  * @param {number} curDate
  * @return {number}
  */
@@ -1040,6 +1354,206 @@ budget.widgets.BusinessHours.prototype.createHolidayUsage_ = function(holidays) 
 
     holidays.forEach(function(entry) {
         dayUsage.push({start: entry.get(holidaysT.cols.start), stop: entry.get(holidaysT.cols.stop)});
+    });
+
+    this.mergeDayUsage_(dayUsage, true);
+    return dayUsage;
+};
+
+
+/**
+ * @private
+ * add months to start taking into consideration month lengths, if the lenght is shorter it will go
+ * to the last day of the month
+ * @param {number} start
+ * @param {number} months number of months to add
+ * @return {number}
+ */
+budget.widgets.BusinessHours.addMonths_ = function(start, months) {
+    let startDate = new Date(start);
+    let month = startDate.getMonth();
+    startDate.setMonth(month + months + 1, 0);
+    let maxDate = startDate.getDate();
+    startDate = new Date(start);
+    startDate.setMonth(month + months, Math.min(maxDate, startDate.getDate()));
+    return startDate.getTime();
+
+};
+
+/**
+ * @private
+ * add months to start taking into consideration month lengths, if the lenght is shorter it will go
+ * to the last day of the month
+ * @param {number} start
+ * @param {number} days number of months to add
+ * @param {number=} opt_millInDay if specified will set the time of day
+ * @return {number}
+ */
+budget.widgets.BusinessHours.addDays_ = function(start, days, opt_millInDay) {
+    let date = new Date(start);
+    date.setDate(date.getDate() + days);
+    if (opt_millInDay != undefined) {
+        let MILL_PER_HOUR = 3600000;
+        let hours = Math.floor(opt_millInDay / MILL_PER_HOUR);
+        let rem = opt_millInDay % MILL_PER_HOUR;
+        date.setHours(hours);
+        date.setMinutes(Math.floor(rem / 60000));
+        rem = rem % 60000;
+        date.setSeconds(Math.floor(rem / 1000), rem % 1000);
+    }
+    return date.getTime();
+
+};
+
+/**
+ * @private
+ * gets the number of months since 0000
+ * @param {number} when
+ * @return {number}
+ */
+budget.widgets.BusinessHours.getMonths_ = function(when) {
+    let date = new Date(when);
+    return date.getFullYear() * 12 + date.getMonth();
+};
+
+
+/**
+ * @param {!recoil.structs.table.TableRowInterface} entry
+ * @param {number} cur millis since epoc
+ * @param {number} steps
+ * @return {?number}
+ */
+budget.widgets.BusinessHours.nextPeriod_ = function(entry, cur, steps) {
+    let availT = aurora.db.schema.tables.base.mentor_availablity;
+    let RepeatType = aurora.db.schema.getEnum(availT.cols.repeat);
+    let repeatMeta = aurora.db.schema.getMeta(availT.cols.repeat);
+    let repType = entry.get(availT.cols.repeat);
+
+    const REGULAR = [RepeatType.weekly, RepeatType.fortnightly, RepeatType.daily];
+    let regularIdx = REGULAR.indexOf(repType);
+    let startRep = entry.get(availT.cols.start);
+    let stopRep = entry.get(availT.cols.stop);
+
+    if (steps === 0) {
+        return cur;
+    }
+
+    if (repType == null) {
+        // once of there is no next or previous
+        return null;
+    }
+    let when = null;
+    if (regularIdx != -1) {
+        let interval = repeatMeta.enumInfo[repType].rate;
+        let date = new Date(cur);
+        date.setDate(date.getDate() + steps * interval);
+        when = date.getTime();
+
+    }
+    else {
+        let intervalMonths = Math.round(12 * (repeatMeta.enumInfo[repType].rate / 365));
+        when = budget.widgets.BusinessHours.addMonths_(cur, intervalMonths * steps);
+    }
+    if (when < startRep) {
+        // before the start so doesn't exits
+        return null;
+    }
+    if (stopRep != null && stopRep <= when) {
+        return null;
+    }
+    return when;
+
+};
+
+/**
+ * @param {!recoil.structs.table.TableRowInterface} entry
+ * @param {number} periodStart millis since epoc
+ * @param {number} periodStop millis since epoc
+ * @param {function(number,number)} callback - params start and stop
+ */
+budget.widgets.BusinessHours.iterateOverPeriod_ = function(entry, periodStart, periodStop, callback) {
+    let availT = aurora.db.schema.tables.base.mentor_availablity;
+    let RepeatType = aurora.db.schema.getEnum(availT.cols.repeat);
+    let repeatMeta = aurora.db.schema.getMeta(availT.cols.repeat);
+
+    const REGULAR = [RepeatType.weekly, RepeatType.fortnightly, RepeatType.daily];
+    let startRep = entry.get(availT.cols.start);
+    let stopRep = entry.get(availT.cols.stop);
+
+    if (periodStop < periodStart) {
+        return;
+    }
+    let repType = entry.get(availT.cols.repeat);
+    if (repType == null) {
+        if (startRep >= periodStart && startRep < periodStop) {
+            callback(startRep, startRep + entry.get(availT.cols.len));
+        }
+        return;
+    }
+
+    let stopTime = stopRep == null ? periodStop : stopRep;
+    let regularIdx = REGULAR.indexOf(repType);
+    if (regularIdx !== -1) {
+        let interval = repeatMeta.enumInfo[repType].rate * budget.widgets.BusinessHours.MILLI_PER_DAY;
+        let curStart = startRep;
+        if (startRep < periodStart) {
+            let numIntervals = Math.ceil((periodStart - startRep) / interval);
+            curStart = numIntervals * interval + startRep;
+        }
+
+        for (let i = curStart; i < stopTime; i += interval) {
+            // deal with daylight savings
+            let dayDiff = Math.round((i - startRep) / budget.widgets.BusinessHours.MILLI_PER_DAY);
+
+            let time = new Date(startRep);
+            time.setDate(time.getDate() + dayDiff);
+            callback(time.getTime(), time.getTime() + entry.get(availT.cols.len));
+        }
+    }
+    else if (repType === RepeatType.monthly || repType === RepeatType.quarterly || repType === RepeatType.yearly) {
+        // we will work in months and compare
+        let repMonths = budget.widgets.BusinessHours.getMonths_(startRep);
+        let startMonths = budget.widgets.BusinessHours.getMonths_(periodStart);
+        let interval = Math.round(12 * (repeatMeta.enumInfo[repType].rate / 365));
+        let curStart = repMonths;
+
+        if (startMonths > repMonths) {
+            let numIntervals = Math.ceil((startMonths - repMonths) / interval);
+            curStart = repMonths + numIntervals * interval;
+        }
+
+
+        let curMonth = curStart - repMonths;
+
+        let curDate = budget.widgets.BusinessHours.addMonths_(startRep, curMonth);
+        while (curDate < stopTime) {
+            callback(curDate, curDate + entry.get(availT.cols.len));
+            curMonth += interval;
+            curDate = budget.widgets.BusinessHours.addMonths_(startRep, curMonth);
+
+        }
+    }
+};
+/**
+ * @private
+ * @param {!recoil.structs.table.Table} avail
+ * @param {number} periodStart
+ * @param {number} periodStop
+ * @return {!Array<{start: number, stop: number}>}
+ */
+budget.widgets.BusinessHours.prototype.createAvailable_ = function(avail, periodStart, periodStop) {
+    let availT = aurora.db.schema.tables.base.mentor_availablity;
+
+    let iterateOverPeriod = budget.widgets.BusinessHours.iterateOverPeriod_;
+
+    let dayUsage = [];
+    // the end time here is where the repeat stops not the appointment
+    avail.forEach(function(entry) {
+        iterateOverPeriod(entry, periodStart, periodStop, function(start, stop) {
+            if (stop > periodStart && start < periodStop) {
+                dayUsage.push({start: start - periodStart, stop: stop - periodStart});
+            }
+        });
     });
 
     this.mergeDayUsage_(dayUsage, true);
@@ -1169,6 +1683,80 @@ budget.widgets.BusinessHours.prototype.calcDayStart = function(day) {
 };
 
 /**
+ * @param {!Array<{start: number, stop: number}>} dayUsage
+ * @param {?} calDim
+ * @param {?} hourDim
+ * @param {string} cls the class of the div to add
+ * @param {boolean} handleDaylightSaving
+ */
+budget.widgets.BusinessHours.prototype.updateUsage_ = function(dayUsage, calDim, hourDim, cls, handleDaylightSaving) {
+    let milliPerDay = budget.widgets.BusinessHours.MILLI_PER_DAY;
+    let milliPerWeek = milliPerDay * 7;
+    let cd = goog.dom.createDom;
+    let hourH = hourDim.height;
+    let minY = hourDim.top - calDim.top;
+    let weekStart = this.dateWidget_.convertLocaleDate(this.curDateB_.get()).getTime();
+    let getDstAdjust = function(day) {
+        if (!handleDaylightSaving) {
+            return 0;
+        }
+        let dayEnd = budget.widgets.BusinessHours.addDays_(weekStart, day + 1);
+        return (weekStart + milliPerDay * (day + 1)) - dayEnd;
+    };
+    let days = {};
+    for (let i = 0; i < 7; i++) {
+        let dayStart = i * milliPerDay;
+        let dayEnd = dayStart + milliPerDay;
+        days[i] = [];
+        dayUsage.forEach(function(item) {
+
+            let itemStart = (item.start) % milliPerWeek;
+                let itemStop = itemStart + (item.stop - item.start);
+            if (itemStop < dayStart) {
+                if (itemStop >= dayStart) {
+                    days[i].push({start: 0, stop: Math.min(milliPerDay, itemStop - dayStart)});
+                }
+            }
+            else if (itemStart < dayEnd) {
+                days[i].push({start: Math.max(itemStart - dayStart, 0) , stop: Math.min(milliPerDay, itemStop - dayStart)});
+            }
+
+
+        });
+    }
+
+    for (let i = 0; i < 7; i++) {
+        let dstOffset = getDstAdjust(i);
+
+        let avail = days[i];
+        let availDivs = goog.dom.getElementsByClass(cls, this.days_[i].div);
+            let availLen = (avail ? avail.length : 0);
+        // remove dives that are not needed
+        if (availDivs) {
+            for (let j = availDivs.length - 1; j >= availLen; j--) {
+                goog.dom.removeNode(availDivs[j]);
+            }
+        }
+
+        for (let j = 0; j < availLen; j++) {
+            let curDiv = availDivs && availDivs[j];
+
+            if (!curDiv) {
+                curDiv = cd('div', cls);
+                this.days_[i].div.appendChild(curDiv);
+            }
+            let yStart = (minY + hourH * (avail[j].start + dstOffset) / 3600000);
+            let yEnd = (minY + hourH * (avail[j].stop + dstOffset) / 3600000);
+
+            curDiv.style.top = yStart + 'px';
+                curDiv.style.height = (yEnd - yStart) + 'px';
+            curDiv.style.width = hourDim.width + 'px';
+        }
+
+    }
+
+};
+/**
  * @private
  * @param {!recoil.ui.ComponentWidgetHelper} helper
  */
@@ -1180,6 +1768,9 @@ budget.widgets.BusinessHours.prototype.update_ = function(helper) {
 
     let me = this;
     if (helper.isGood()) {
+
+        goog.style.setElementShown(this.mentorDiv_, aurora.permissions.has('user-management')(this.contextB_.get()));
+
         let border = this.borderDimsB_.get();
         let range = this.highlightedB_.get();
         goog.style.setElementShown(this.highlightDiv_, range.start !== null);
@@ -1220,60 +1811,18 @@ budget.widgets.BusinessHours.prototype.update_ = function(helper) {
 
         let dayUsage = this.createDayUsage_(site);
         let holidays = this.holidaysB_.get();
+        let mentorAvail = this.availableB_.get();
         let holidayUsage = this.createHolidayUsage_(holidays);
 
         let milliPerDay = budget.widgets.BusinessHours.MILLI_PER_DAY;
         let milliPerWeek = milliPerDay * 7;
 
-        let days = {};
-        for (let i = 0; i < 7; i++) {
-            let dayStart = i * milliPerDay;
-            let dayEnd = dayStart + milliPerDay;
-            days[i] = [];
-            dayUsage.forEach(function(item) {
-
-                let itemStart = (item.start) % milliPerWeek;
-                let itemStop = itemStart + (item.stop - item.start);
-                if (itemStop < dayStart) {
-                    if (itemStop >= dayStart) {
-                        days[i].push({start: 0, stop: Math.min(milliPerDay, itemStop - dayStart)});
-                    }
-                }
-                else if (itemStart < dayEnd) {
-                    days[i].push({start: Math.max(itemStart - dayStart, 0) , stop: Math.min(milliPerDay, itemStop - dayStart)});
-                }
-
-
-            });
+        me.updateUsage_(dayUsage, calDim, hourDim, 'avail', false);
+        if (me.type_ === 'mentor') {
+            let pStart = this.dateWidget_.convertLocaleDate(curDate).getTime();
+            me.updateUsage_(this.createAvailable_(this.availableB_.get(), pStart, pStart + milliPerWeek), calDim, hourDim, 'mentor-avail', true);
         }
 
-        for (let i = 0; i < 7; i++) {
-            let avail = days[i];
-            let availDivs = goog.dom.getElementsByClass('avail', this.days_[i].div);
-            let availLen = (avail ? avail.length : 0);
-            // remove dives that are not needed
-            if (availDivs) {
-                for (let j = availDivs.length - 1; j >= availLen; j--) {
-                    goog.dom.removeNode(availDivs[j]);
-                }
-            }
-
-            for (let j = 0; j < availLen; j++) {
-                let curDiv = availDivs && availDivs[j];
-
-                if (!curDiv) {
-                    curDiv = cd('div', 'avail');
-                    this.days_[i].div.appendChild(curDiv);
-                }
-                let yStart = (minY + hourH * avail[j].start / 3600000);
-                let yEnd = (minY + hourH * avail[j].stop / 3600000);
-
-                curDiv.style.top = yStart + 'px';
-                curDiv.style.height = (yEnd - yStart) + 'px';
-                curDiv.style.width = hourDim.width + 'px';
-            }
-
-        }
 
         let startDateMillis = this.dateWidget_.convertLocaleDate(curDate).getTime();
 

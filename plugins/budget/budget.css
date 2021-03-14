@@ -126,6 +126,7 @@ img.budget-logo {
     font-variant-caps: petite-caps;
     font-size: 18pt;
     padding-left: 10px;
+    color: white;
 }
 
 .page-menu .goog-menubar {
@@ -146,17 +147,19 @@ img.budget-logo {
     background: none;
     color: white;
     margin-bottom: 2px;
+    height: 50px;
 }
 
 .menu-container .goog-menu-button-caption {
     white-space: nowrap;
     font-size: 16pt;
     font-variant-caps: petite-caps;
+    line-height: 45px;
 }
 
 .menu-container .goog-menubar .goog-menu-button.goog-menu-button-hover {
     background: #113311;
-    box-shadow: -1px 5px 8px 1px black;
+    box-shadow: -1px 1px 1px 1px black;
 }
 
 .page-menu .goog-menuitem-content {

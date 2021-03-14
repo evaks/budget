@@ -195,6 +195,12 @@ budget.messages.SERVICE_NAME = recoil.ui.message.getParamMsg('Hutt City Budget a
  */
 budget.messages.BUDGET_PROTECTED = recoil.ui.message.getParamMsg('This sheet is Protected.  It will only allow entries to be made in the Entry fields (Grey)');
 
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.FINISH_DATE_CANNOT_BE_BEFORE_START_DATE = recoil.ui.message.getParamMsg('Finish date cannot be before start date');
+
 
 /**
  * @type {!recoil.ui.message.Message}
@@ -446,6 +452,26 @@ budget.messages.CHILDREN = recoil.ui.message.getParamMsg('Children');
  * @final
  */
 budget.messages.INVALID_EMAIL = recoil.ui.message.getParamMsg('Invalid Email');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.MAKE_AVAILABLE = recoil.ui.message.getParamMsg('Available');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.MAKE_UNAVAILABLE_ONCE = recoil.ui.message.getParamMsg('Unavailable Once');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.MAKE_UNAVAILABLE = recoil.ui.message.getParamMsg('Unavailable');
+
+
 /**
  * @type {!recoil.ui.message.Message}
  * @final
@@ -464,6 +490,26 @@ budget.messages.REMOVE_HOLIDAY = recoil.ui.message.getParamMsg('Remove Holiday')
  */
 budget.messages.ADD_HOLIDAYS_DIALOG = recoil.ui.message.getParamMsg('Add Holidays...');
 
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.ADD_AVAILABLE = recoil.ui.message.getParamMsg('Add Available');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.AT_OFFICE = recoil.ui.message.getParamMsg('At Office');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.YOU_MUST_BE_AVAILABLE_FOR_AT_LEAST_AN_HOUR = recoil.ui.message.getParamMsg('You must be available for at least 1 hour.');
+
 /**
  * @type {!recoil.ui.message.Message}
  * @final
@@ -481,6 +527,13 @@ budget.messages.START_DATE = recoil.ui.message.getParamMsg('Start Date');
  * @final
  */
 budget.messages.STOP_DATE = recoil.ui.message.getParamMsg('Stop Date');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.FINISH = recoil.ui.message.getParamMsg('Finish');
 
 /**
  * @type {!recoil.ui.message.Message}
@@ -513,6 +566,19 @@ budget.messages.MODIFY_HOURS_DIALOG = recoil.ui.message.getParamMsg('Modify Busi
  */
 budget.messages.REMOVE_HOURS = recoil.ui.message.getParamMsg('Remove Business Hours');
 
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.OFFICE_HOURS = recoil.ui.message.getParamMsg('Office Hours');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.MENTOR = recoil.ui.message.getParamMsg('Mentor');
+
 /**
  * @type {!recoil.ui.message.Message}
  * @final
@@ -523,13 +589,20 @@ budget.messages.ADD_HOURS_DIALOG = recoil.ui.message.getParamMsg('Add Business H
  * @type {!recoil.ui.message.Message}
  * @final
  */
-budget.messages.START_TIME = recoil.ui.message.getParamMsg('Start Time:');
+budget.messages.START_TIME = recoil.ui.message.getParamMsg('Start Time');
 
 /**
  * @type {!recoil.ui.message.Message}
  * @final
  */
-budget.messages.STOP_TIME = recoil.ui.message.getParamMsg('Stop Time:');
+budget.messages.STOP_TIME = recoil.ui.message.getParamMsg('Stop Time');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.REPEAT = recoil.ui.message.getParamMsg('Repeat');
 
 /**
  * @type {!recoil.ui.message.Message}

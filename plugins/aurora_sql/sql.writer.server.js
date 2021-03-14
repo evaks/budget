@@ -187,12 +187,15 @@ aurora.db.sql.ChangeWriter.getFileMetaByPath = function(schema, path) {
 /**
  * @private
  * @param {!recoil.db.ChangeSet.Change} change
- * @param {!aurora.db.access.SecurityContext} secContext
+ * @param {!aurora.db.access.SecurityContext} inSecContext
  * @return {boolean}
  */
-aurora.db.sql.ChangeWriter.prototype.hasPermission_ = function(change, secContext) {
+aurora.db.sql.ChangeWriter.prototype.hasPermission_ = function(change, inSecContext) {
     let path = change.path();
     let access = 'r';
+    let secContext = /** @type {!aurora.db.access.SecurityContext}*/(goog.object.clone(inSecContext));
+
+    secContext.change = change;
 
     if (change instanceof recoil.db.ChangeSet.Set) {
         access = 'u';
@@ -355,7 +358,6 @@ aurora.db.sql.ChangeWriter.prototype.applyChanges = function(changes, secContext
     }
     this.async_.eachSeries(baseList, function(base, callback) {
         try {
-
             let tbl = base.tbl;
 
             let ids = [];
@@ -384,6 +386,26 @@ aurora.db.sql.ChangeWriter.prototype.applyChanges = function(changes, secContext
                             let pk = obj[tbl.info.pk.getName()];
                             base.objs[pk] = obj;
                         }
+
+                        base.paths.forEach(function(pInfo) {
+                            let objectContext = /** @type {!aurora.db.access.SecurityContext}*/(goog.object.clone(secContext));
+                            let change = changes[pInfo.changeIndex];
+                            let basePk = null;
+                            change.path().items().forEach(function(item) {
+                                if (basePk === null && item.keys().length > 0) {
+                                    basePk = item.keys()[0].db;
+                                }
+
+                            });
+
+                            objectContext.object = base.objs[basePk];
+                            if (!me.hasPermission_(change, objectContext)) {
+                                me.log_.warn('Field Object Access Denied', change.path().toString());
+                                results[pInfo.changeIndex] = {error: 'Access Denied'};
+
+                            }
+                        });
+
 
                     }
 

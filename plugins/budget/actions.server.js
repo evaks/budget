@@ -1,6 +1,8 @@
 goog.provide('budget.actions');
 
+goog.require('aurora.log');
 goog.require('config');
+goog.require('recoil.db.Query');
 
 /**
  * @param {!aurora.db.access.SecurityContext} context
@@ -240,6 +242,151 @@ budget.actions.requestResetPassword = function(context, reader, inputs, callback
     });
 };
 
+/**
+ * @private
+ * @param {!aurora.db.access.SecurityContext} context
+ * @param {!Object} mentor
+ * @param {!Object} user
+ * @param {number} start
+ * @param {number} length
+ * @param {function (?, !Array)} callback (error, outputs)
+ */
+budget.actions.sendAppointmentEmail_ = function(context, mentor, user, start, length, callback) {
+    const ics = require('ics');
+    let mod = 'SCHEDULE';
+    let log = aurora.log.createModule(mod);
+    budget.actions.getEmailTransporterInfo_(context, function(err, transporter, emailInfo, previewer) {
+        if (err) {
+            log.error('unable to create email info to schedule appointment', err);
+            callback('Unable able to create email', []);
+            return;
+        }
+
+        let toEmail = [user, mentor].filter(function(v) { return v.email.indexOf('@') > 0;});
+        if (toEmail.length === 0) {
+            // its ok no one specified an email so we just won't send an email
+            callback(null, []);
+            return;
+        }
+
+        let startDate = new Date(start);
+        let userName = user.firstName + ' ' + (user.lastName).trim();
+        emailInfo.text = 'An appointment with ' + userName + ' has been scheduled with ' + mentor.firstName + ' at ' + startDate.toLocaleString();
+        emailInfo.html = '<html>An appointment with <em>' + goog.string.htmlEscape(userName)
+            + '</em> has been scheduled with <em>' + goog.string.htmlEscape(mentor.firstName) + '</em>' + ' at <em>' + startDate.toLocaleString() + '</em></html>';
+        emailInfo.html = '<html>You have a budgeting appointment scheduled at </html>';
+
+
+        // ics.createEvent({start: [now.getYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes()], duration: {minutes:90}, status: 'CONFIRMED', title: 'Budgeting', attendees: [{ name: 'Mo', email: 'mo@foo.com'}], alarms: { action: 'display', trigger: {minutes: 30, before: true }}});
+
+        let when = new Date(start);
+        ics.createEvent({
+            start: [when.getFullYear(), when.getMonth() + 1, when.getDate(), when.getHours(), when.getMinutes()],
+            duration: {minutes: Math.round(length / 60000)}, status: 'CONFIRMED', title: 'Budgeting',
+            attendees: toEmail.map(function(u) {return { name: u.firstName || '', email: u.email};}),
+            alarms: [{ action: 'display', trigger: {minutes: 30, before: true }}],
+        }, function(err, evt) {
+            emailInfo.attachments = [{
+                filename: 'invite.ics',
+                content: evt,
+                contentType: 'text/calendar'
+            }];
+            transporter.sendMail(emailInfo).then(function(info) {
+                callback(null, []);
+            }, function(err) {
+                callback(err, []);
+            });
+        });
+    });
+};
+
+/**
+ * @param {!aurora.db.access.SecurityContext} context
+ * @param {!aurora.db.Reader} reader
+ * @param {number} mentorid
+ * @param {?number} userid
+ * @param {?string} email
+ * @param {?string} firstname
+ * @param {?string} lastname
+ * @param {number} time
+ * @param {number} length
+ * @param {function (?, !Array)} callback (error, outputs)
+ */
+budget.actions.scheduleAppointment = function(context, reader, mentorid, userid, email, firstname, lastname, time, length, callback) {
+    let mod = 'SCHEDULE';
+    let log = aurora.log.createModule(mod);
+    let userT = aurora.db.schema.tables.base.user;
+    let apptT = aurora.db.schema.tables.base.appointments;
+    let query = new recoil.db.Query();
+    let mentorObj = null;
+    let userObj = null;
+    reader.readObjects(
+        context, userT,
+        query.or(query.eq(userT.cols.id, query.val(mentorid)), query.eq(userT.cols.id, query.val(userid))), null, function(err, users) {
+
+            if (err) {
+                callback(err, []);
+                return;
+            }
+
+
+            // we can send to a non existant user
+            let userEmail = email;
+            users.forEach(function(obj) {
+                if (obj.id == mentorid) {
+                    mentorObj = obj;
+                }
+                else if (obj.id == userid) {
+                    userObj = obj;
+                }
+            });
+            if (!mentorObj) {
+                callback('Unable for find Mentor', []);
+                return;
+            }
+
+            if (!userObj) {
+                userObj = {
+                    firstName: firstname || '',
+                    lastName: lastname || '',
+                    email: email || ''
+                };
+
+            } else {
+                userObj.email = email.indexOf('@') > 0 || userObj.email;
+                userObj.firstName = firstname || lastname ? firstname : userObj.firstName;
+                userObj.lastName = firstname || lastname ? lastname : userObj.lastName;
+            }
+            console.log(' put an index on end time, mentor and userid in appointments');
+
+            // check to see if their is a free slot for the mentor and user
+
+            reader.transaction(function(reader, transCb) {
+                reader.readObjects(context, apptT, query.and(
+                    query.eq(apptT.cols.mentorid, query.val(mentorid)),
+                    query.gt(apptT.cols.stop, query.val(time)),
+                    query.lt(apptT.cols.start, query.val(time + length))), function(err, appointments) {
+                        if (err) {
+                            transCb(err);
+                        }
+                        else if (appointments.length) {
+                            transCb('Mentor already has an appointment scheduled');
+                        }
+                    });
+            }, function(err) {
+                if (err) {
+                    callback(err, []);
+                }
+                else {
+
+                    budget.actions.sendAppointmentEmail_(context, mentorObj, userObj, time, length, callback);
+                }
+            });
+            // now schedule them event the calander
+
+
+        });
+};
 
 /**
  * @param {!aurora.db.access.SecurityContext} context
@@ -247,7 +394,7 @@ budget.actions.requestResetPassword = function(context, reader, inputs, callback
  * @param {number} uid
  * @param {string} secret
  * @param {string} password
- * @param {function (?, !Array)} callback (error, outputs)
+ * @param {function(?, !Array)} callback (error, outputs)
  */
 budget.actions.doResetPassword = function(context, reader, uid, secret, password, callback) {
     let mod = 'RESET-PASSWORD';
