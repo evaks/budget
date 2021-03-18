@@ -180,7 +180,7 @@ budget.widgets.BusinessHours = function(scope, opt_type) {
     let holidaysLegend = cd('div', {class: 'legend-item'}, cd('div', {class: 'legend-key holidays'}), cd('div', {class: 'legend-name'}, mess.HOLIDAY.toString()));
     let hoursLegend = cd('div', {class: 'legend-item'}, cd('div', {class: 'legend-key hours'}), cd('div', {class: 'legend-name'}, mess.OFFICE_HOURS.toString()));
     let availableLegend = cd('div', {class: 'legend-item'}, cd('div', {class: 'legend-key mentor-avail'}), cd('div', {class: 'legend-name'}, mess.AT_OFFICE.toString()));
-    
+
     this.legendDiv_ = cd('div', {class: 'budget-legend'}, holidaysLegend, hoursLegend);
 
     if (this.type_ == 'mentor') {
@@ -524,7 +524,7 @@ budget.widgets.BusinessHours.prototype.makeAvailableDialog_ = function(tblB, sta
     let modTableB = tblB;
     let holidaysT = aurora.db.schema.tables.base.site_holidays;
 
-    let td = new aurora.widgets.TableDialog(scope, modTableB, callbackB, title, function() {return null;}, title);
+    let td = new aurora.widgets.TableDialog(scope, modTableB, callbackB, title, function() {return null;}, title, undefined, {blockErrors: true});
     return td;
 };
 
@@ -590,13 +590,13 @@ budget.widgets.BusinessHours.prototype.doRemoveAvailableFunc_ = function(menuInf
     return frp.accessTransFunc(function(e) {
         let avail = me.availableB_.get();
         let startTime = recoil.ui.widgets.DateWidget2.convertLocaleDate(me.curDateB_.get()).getTime();
-        let endTime = budget.widgets.BusinessHours.addDays_(startTime, 7);
+        let endTime = budget.widgets.BusinessHours.addDays(startTime, 7);
         let when = menuInfo.clickPosTime;
         let res = avail.createEmpty();
         avail.forEach(function(row) {
 
             let found = null;
-            budget.widgets.BusinessHours.iterateOverPeriod_(row, startTime, endTime, function(start, stop) {
+            budget.widgets.BusinessHours.iterateOverPeriod(row, startTime, endTime, function(start, stop) {
                 if (start <= when && when < stop) {
                     found = {start: start, stop: stop};
                 }
@@ -665,6 +665,7 @@ budget.widgets.BusinessHours.prototype.doAddAvailableFunc_ = function(menuInfo) 
         row.set(tblKeys.mentorid, me.mentorB_.get());
         row.set(tblKeys.repeat, RepeatType.weekly);
         row.set(tblKeys.start, startTime);
+        row.set(tblKeys.appointmentLen, 60);
         row.set(tblKeys.len, stopTime);
         row.set(tblKeys.stop, null);
 
@@ -675,16 +676,19 @@ budget.widgets.BusinessHours.prototype.doAddAvailableFunc_ = function(menuInfo) 
             let columns = new recoil.ui.widgets.TableMetaData();
             columns.addColumn(new recoil.ui.columns.Time(availT.cols.start, budget.messages.START_DATE.toString()));
             columns.addColumn(new recoil.ui.columns.Time(availT.cols.len, budget.messages.STOP_DATE.toString()));
+            columns.addColumn(new recoil.ui.widgets.table.NumberColumn(availT.cols.appointmentLen, budget.messages.APPOINTMENT_LENGTH.toString()));
             columns.add(availT.cols.repeat, budget.messages.REPEAT.toString());
+            res.addColumnMeta(availT.cols.appointmentLen, {min: 10, max: 120});
 
             let doesRepeat = false;
             tbl.forEachModify(function(row) {
                 let start = row.get(tblKeys.start);
                 let stop = row.get(tblKeys.len);
+                let appointmentLen = row.get(tblKeys.appointmentLen);
                 let stopErrors = [];
                 let endErrors = [];
-                if (stop < start + MILLI_PER_HOUR) {
-                    stopErrors.push(budget.messages.YOU_MUST_BE_AVAILABLE_FOR_AT_LEAST_AN_HOUR);
+                if (stop < start + appointmentLen * 60000) {
+                    stopErrors.push(budget.messages.YOU_MUST_BE_AVAILABLE_FOR_ONE_APPOINTMENT_LENGTH);
                 }
                 if (row.get(tblKeys.stop) != null && row.get(tblKeys.stop) < selectDate) {
                     endErrors.push(budget.messages.FINISH_DATE_CANNOT_BE_BEFORE_START_DATE);
@@ -1190,7 +1194,7 @@ budget.widgets.BusinessHours.prototype.setupMenu_ = function() {
             menuInfo.dayIndex = dayIndex;
             menuInfo.hourIndex = hourIndex;
             menuInfo.clickPosMilli = clickPosMilli;
-            menuInfo.clickPosTime = budget.widgets.BusinessHours.addDays_(startOfWeekMilli, dayIndex, milliInDay);
+            menuInfo.clickPosTime = budget.widgets.BusinessHours.addDays(startOfWeekMilli, dayIndex, milliInDay);
             let show = false;
             menus.forEach(function(mInfo) {
                 if (mInfo.show(menuInfo)) {
@@ -1294,6 +1298,15 @@ budget.widgets.BusinessHours.prototype.timeInDateRange_ = function(timeRange, ti
  * @param {boolean=} opt_absolute
  */
 budget.widgets.BusinessHours.prototype.mergeDayUsage_ = function(dayUsage, opt_absolute) {
+    budget.widgets.BusinessHours.mergeDayUsage(dayUsage, opt_absolute);
+};
+
+/**
+ * @param {!Array<{start: number, stop: number}>} dayUsage
+ * @param {boolean=} opt_absolute
+ */
+budget.widgets.BusinessHours.mergeDayUsage = function(dayUsage, opt_absolute) {
+
     let comparator = function(x, y) {
         let res = x.start - y.start;
         if (res) {
@@ -1381,7 +1394,6 @@ budget.widgets.BusinessHours.addMonths_ = function(start, months) {
 };
 
 /**
- * @private
  * add months to start taking into consideration month lengths, if the lenght is shorter it will go
  * to the last day of the month
  * @param {number} start
@@ -1389,7 +1401,7 @@ budget.widgets.BusinessHours.addMonths_ = function(start, months) {
  * @param {number=} opt_millInDay if specified will set the time of day
  * @return {number}
  */
-budget.widgets.BusinessHours.addDays_ = function(start, days, opt_millInDay) {
+budget.widgets.BusinessHours.addDays = function(start, days, opt_millInDay) {
     let date = new Date(start);
     date.setDate(date.getDate() + days);
     if (opt_millInDay != undefined) {
@@ -1471,7 +1483,7 @@ budget.widgets.BusinessHours.nextPeriod_ = function(entry, cur, steps) {
  * @param {number} periodStop millis since epoc
  * @param {function(number,number)} callback - params start and stop
  */
-budget.widgets.BusinessHours.iterateOverPeriod_ = function(entry, periodStart, periodStop, callback) {
+budget.widgets.BusinessHours.iterateOverPeriod = function(entry, periodStart, periodStop, callback) {
     let availT = aurora.db.schema.tables.base.mentor_availablity;
     let RepeatType = aurora.db.schema.getEnum(availT.cols.repeat);
     let repeatMeta = aurora.db.schema.getMeta(availT.cols.repeat);
@@ -1544,7 +1556,7 @@ budget.widgets.BusinessHours.iterateOverPeriod_ = function(entry, periodStart, p
 budget.widgets.BusinessHours.prototype.createAvailable_ = function(avail, periodStart, periodStop) {
     let availT = aurora.db.schema.tables.base.mentor_availablity;
 
-    let iterateOverPeriod = budget.widgets.BusinessHours.iterateOverPeriod_;
+    let iterateOverPeriod = budget.widgets.BusinessHours.iterateOverPeriod;
 
     let dayUsage = [];
     // the end time here is where the repeat stops not the appointment
@@ -1700,7 +1712,7 @@ budget.widgets.BusinessHours.prototype.updateUsage_ = function(dayUsage, calDim,
         if (!handleDaylightSaving) {
             return 0;
         }
-        let dayEnd = budget.widgets.BusinessHours.addDays_(weekStart, day + 1);
+        let dayEnd = budget.widgets.BusinessHours.addDays(weekStart, day + 1);
         return (weekStart + milliPerDay * (day + 1)) - dayEnd;
     };
     let days = {};

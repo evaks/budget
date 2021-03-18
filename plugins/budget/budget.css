@@ -203,7 +203,19 @@ ul.feature-list li {
 div .recoil-table-pager.pagination {
     margin: 0;
 }
-
+.budget-bookings {
+    width: 99vw;
+    position: relative;
+    left: 0;
+}
+.budget-seperator-row {
+    background: #cacaca;
+    text-align: center;
+    font-weight: bold;
+    line-height: 20pt;
+    border: outset 2px;
+    color: #636363;
+}
 div table.recoil-table-pager .page {
     width: calc(100% - 9px);
 }

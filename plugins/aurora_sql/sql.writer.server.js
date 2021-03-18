@@ -735,7 +735,6 @@ aurora.db.sql.ChangeWriter.prototype.applyTransactionChanges_ = function(changeL
             }
             else if (entry.key.type === CType.SET) {
                 let info = makeObject(entry.key.parent);
-                console.log('made set object', info);
                 if (info) {
                 // this is a set
                     reader.updateOneLevel(context, info.tbl, info.obj, query.eq(info.tbl.info.pk, entry.key.parent.last().keys()[0].db), function(err) {

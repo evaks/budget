@@ -150,6 +150,11 @@ aurora.db.sql.Reader.readObject_ = function(driver, path, start, data, table, co
         return null;
     }
 
+    if (table.info.view) {
+
+        console.log('reading row', colMap[table.info.pk.getId()]);
+    }
+
     if (colMap[table.info.pk.getId()] === undefined) {
         return {next: start + 1, object: null};
     }
@@ -158,6 +163,7 @@ aurora.db.sql.Reader.readObject_ = function(driver, path, start, data, table, co
     let curObject = {};
     let row = data[start];
     let curPk = row[colMap[table.info.pk.getId()]];
+
     if (curPk === null) {
         return {next: start + 1, object: null, pk: null}; // only null if outer join comes back null
     }
@@ -534,6 +540,7 @@ aurora.db.sql.Reader.prototype.mkSelectSql_ = function(scope, colMap, cur, colum
         let tables = [];
         let todo = [];
 
+
         let getDataInternal = function(table, isList, columns, path, listCount, parentField, childField) {
             let addedLists = 0;
             let tId = tableIdMap.get(path);
@@ -567,6 +574,10 @@ aurora.db.sql.Reader.prototype.mkSelectSql_ = function(scope, colMap, cur, colum
 
             }
             for (let k in table.cols) {
+                if (!columnFilter(path.slice(0).concat([k]), false)) {
+                    continue;
+                }
+
                 let col = table.cols[k];
                 let meta = table.meta[col.getName()];
                 if (!meta.isList && !meta.isObject) {
@@ -583,7 +594,6 @@ aurora.db.sql.Reader.prototype.mkSelectSql_ = function(scope, colMap, cur, colum
                                 let col = meta.key;
                                 colMap[col.getId()] = 'col' + colIdx;
                                 columns.push({tid: fileTid, col: col.getName(), colName: 'col' + colIdx++});
-                                console.log('need to add we should not be able to change the file id', name);
                             }
                         }
                     }
@@ -662,7 +672,6 @@ aurora.db.sql.Reader.prototype.readLevel = function(context, table, filter, secu
     }).join(',') + ' FROM ' + driver.escapeId(table.info.table) + ' ' + driver.escapeId(tName) +
         this.makeWhere_(scope, filter, securityFilter);
 
-    console.log('sql', sql);
     driver.queryLarge(sql, {}, entryCb, doneCb);
 
     /*
@@ -703,11 +712,13 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
     let colMap = {};
     let me = this;
 
-
+    let trueFunc = function() {return true;};
+    let colFilter = opt_options ? opt_options.columnFilter() : trueFunc;
     let topLevelList = [];
     // a map of path to table info of tables to read
     let unreadTables = {};
     // a map from path to table data
+
     unreadTables[JSON.stringify([])] = {
         data: null,
         sec: securityFilter,
@@ -717,18 +728,19 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
 
     };
     let isCount = opt_options ? opt_options.isCount() : false;
-
-    console.log('should limit', opt_options ? opt_options : null);
     let readObject = aurora.db.sql.Reader.readObject_;
-
-
     let processList = function(unreadTables, opt_options) {
         let limit = opt_options ? opt_options.size() != undefined : false;
         let cur = null;
         for (let k in unreadTables) {
             cur = unreadTables[k];
             delete unreadTables[k];
-            break;
+            if (colFilter(cur.path, cur.path.length > 0)) {
+                break;
+            }
+            else {
+                cur = null;
+            }
         }
         if (!cur) {
             // nothing todo we are done
@@ -741,14 +753,44 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
                 return;
             }
         }
-        if (opt_options) {
-            console.log('read options are', opt_options);
-        }
         let columns = [];
         try {
-            let trueFunc = function() {return true;};
             let scope = new recoil.db.DBQueryScope(context, new recoil.db.SQLQueryHelper(me), me.makeChildPathFunc(table));
-            let sql = isCount ? me.mkCountSql_(scope, table, filter) : me.mkSelectSql_(scope, colMap, cur, columns, limit, opt_options ? opt_options.columnFilter() : trueFunc);
+            let sql;
+            if (isCount) {
+                sql = me.mkCountSql_(scope, table, filter);
+            } else {
+                if (cur.table.info.view) {
+                    let srcCur = goog.object.clone(cur);
+                    let srcFilter = function(path, subtable) {
+                        if (!colFilter(path, subtable)) {
+                            return false;
+                        }
+                        if (path.length > 0) {
+                            let last = path[path.length - 1];
+                            if (cur.table.meta[last]) {
+                                return true;
+                            }
+                            return false;
+                        }
+                        return true;
+                    };
+                    srcCur.table = aurora.db.schema.getTableByName(cur.table.info.view);
+                    sql = me.mkSelectSql_(scope, colMap, /** @type {?} */(srcCur), columns, limit, srcFilter);
+                    for (var k in srcCur.table.meta) {
+                        let meta = cur.table.meta[k];
+                        let srcMeta = srcCur.table.meta[k];
+                        if (meta) {
+                            colMap[meta.key.getId()] = colMap[srcMeta.key.getId()];
+                        }
+                    }
+                    console.log('colmap', colMap);
+                }
+                else {
+                    sql = me.mkSelectSql_(scope, colMap, cur, columns, limit, colFilter);
+                }
+            }
+
 
             if (!cur.data) {
                 // this the toplevel
@@ -761,7 +803,10 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
                 sql.query += ' WHERE ' + sql.filter.query(scope);
             }
 
-            console.log('query', driver.addOptions(sql.query, opt_options));
+            if (cur.table.info.view) {
+                console.log('view sql---------------------------------------------', sql);
+            }
+
             driver.query(driver.addOptions(sql.query, opt_options), function(error, data, colInfo) {
                 try {
                     if (error) {
@@ -1092,7 +1137,6 @@ aurora.db.sql.Reader.prototype.readIds_ = function(context, table, query, securi
     let sql = 'SELECT ' + this.driver_.escapeId(table.info.pk.getName()) + ' id FROM '
         + this.driver_.escapeId(table.info.table) + ' ' + this.driver_.escapeId(tName) + ' '
         + this.makeWhere_(scope, query, securityFilter);
-    console.log(sql);
     this.driver_.query(sql, function(error, data) {
                 if (error) {
                     callback(error, null);
@@ -1167,7 +1211,6 @@ aurora.db.sql.Reader.prototype.deleteObjects = function(context, table, query, s
     }
 
     this.transaction(function(reader, transCallback) {
-        console.log('delete trans', table.info.table);
         let deleteMe = function() {
             let sql = 'DELETE FROM ' + me.driver_.escapeId(table.info.table) + ' ' + whereClause;
             console.log('sql =', sql);

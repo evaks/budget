@@ -98,7 +98,7 @@ budget.widgets.UserManagement.getMentorRenderer = function(scope) {
     return scope.getFrp().liftB(function(tbl) {
         let mentors = {};
         tbl.forEach(function(row) {
-            mentors[row.get(userT.cols.firstName) || 'Mentor ' + row.get(userT.cols.id)] = row.get(userT.cols.id);
+            mentors[row.get(userT.cols.firstName) || row.get(userT.cols.username)] = row.get(userT.cols.id);
         });
 
         let res = recoil.ui.renderers.MapRenderer(mentors, recoil.ui.messages.NONE);

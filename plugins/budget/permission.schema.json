@@ -80,7 +80,16 @@
 		    {"name":"lastName", "type":"string"}		
 		]
 	    }],
-
+    "views": [
+	{
+	    "name" : "mentor",
+	    "access": "aurora.db.access.basic([{'': 'r'}])",
+	    "accessFilter": [{"" : "budget.filter.isMentor"}],
+	    "filter": [{"" : "all"}],
+	    "table": "user",
+	    "columns": [{"name":"id"},{"name":"firstName"}, {"name":"username"}]
+	}
+    ],
     "tables": [
 	{
 	    "name" : "user",

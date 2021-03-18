@@ -1,7 +1,9 @@
 .recoil_table_selected{
 	background-color: #009de0;
 }
-
+.recoil-label {
+    white-space: nowrap;
+}
 .recoil-addTable{
 	position: relative;
 	width: 100%;

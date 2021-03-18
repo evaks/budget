@@ -502,13 +502,20 @@ budget.messages.ADD_AVAILABLE = recoil.ui.message.getParamMsg('Add Available');
  * @type {!recoil.ui.message.Message}
  * @final
  */
+budget.messages.APPOINTMENT_LENGTH = recoil.ui.message.getParamMsg('Appt Length (Min)');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
 budget.messages.AT_OFFICE = recoil.ui.message.getParamMsg('At Office');
 
 /**
  * @type {!recoil.ui.message.Message}
  * @final
  */
-budget.messages.YOU_MUST_BE_AVAILABLE_FOR_AT_LEAST_AN_HOUR = recoil.ui.message.getParamMsg('You must be available for at least 1 hour.');
+budget.messages.YOU_MUST_BE_AVAILABLE_FOR_ONE_APPOINTMENT_LENGTH = recoil.ui.message.getParamMsg('You must be available for at least 1 appointment length');
 
 /**
  * @type {!recoil.ui.message.Message}

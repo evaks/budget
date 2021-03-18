@@ -1,6 +1,17 @@
 const path = require('path');
 const fs = require('fs');
 
+
+let getSourceColumn = function(viewTable, name) {
+    for (let i = 0; i < viewTable.columns.length; i++) {
+        if (viewTable.columns[i].name === name) {
+            return viewTable.columns[i];
+        }
+    }
+    return null;
+};
+
+
 let getStringInfo = function(info) {
     let params = info.params;
     if (params.length === 0) {
@@ -242,7 +253,53 @@ function toStr(txt) {
     return '\'' + txt + '\'';
 }
 
-let traverseTable = function(inDef, cb) {
+let traverseTable = function(inDef, cb, tableDefs) {
+    let nullFunc = function() {};
+    let todo = [{def: inDef, stack: []}];
+    while (todo.length > 0) {
+        let item = todo.shift();
+        let stack = [...item.stack];
+        let def = item.def;
+        if (def.tableName === undefined) {
+            def.tableName = def.name;
+        }
+        stack.push(item.def);
+
+        let fullTableName = stack.map(function(d) {
+            return jsEscape(d.name);
+        }).join('.');
+
+
+        (cb.startTable || nullFunc)(def.name, def, stack, fullTableName, item.col);
+
+        (def.columns || []).forEach(function(col) {
+            if (def.view) {
+                let viewTable = tableDefs[def.table].info;
+                let e = getSourceColumn(viewTable, col.name);
+
+                (cb.startCol || nullFunc)(col.name, e, fullTableName, def.tableName, item.col);
+            }
+            else {
+                (cb.startCol || nullFunc)(col.name, col, fullTableName, def.tableName, item.col);
+            }
+            if (col.table) {
+                let tdef = {...col.table};
+                tdef.tableName = col.table.name;
+                tdef.name = col.name;
+                todo.push({def: tdef, stack: stack, col: col});
+            }
+
+            (cb.endCol || nullFunc)(col.name, col, fullTableName);
+        });
+
+
+        (cb.endTable || nullFunc)(def.name, def, stack, fullTableName);
+    }
+
+
+};
+
+let traverseView_ = function(inDef, cb) {
     let nullFunc = function() {};
     let todo = [{def: inDef, stack: []}];
     while (todo.length > 0) {
@@ -280,6 +337,7 @@ let traverseTable = function(inDef, cb) {
 
 
 };
+
 let shouldSkip = function(client, type, parentCol, types) {
     if (client) {
         if (serverOnlyTypes.indexOf(type) !== -1) {
@@ -292,25 +350,33 @@ let shouldSkip = function(client, type, parentCol, types) {
     }
     return false;
 };
-let traverse = function(def, cb) {
+let traverse = function(def, cb, tableDefs) {
     (def.tables || []).forEach(function(table) {
-        traverseTable(table, cb, []);
+        traverseTable(table, cb, tableDefs);
     });
+    if (tableDefs) {
+        (def.views || []).forEach(function(table) {
+            traverseTable(table, cb, tableDefs);
+        });
+    }
 };
 
-let doGenerate = function(def, ns, client, custRequires, types, actions, out) {
+
+
+
+
+let doGenerate = function(def, ns, client, custRequires, types, actions, out, tableDefs) {
     let nullFunc = function() {return {};};
     fs.writeFileSync(out, '/**\n * GENERATED DO NOT CHANGE\n */\n\n');
     let provides = [];
     let prefix = 'aurora.db.schema.tables.' + ns;
     let actionNames = {};
 
-
     traverse(def, {
         startTable: function(name, data, stack, fullName) {
             provides.push(prefix + '.' + fullName);
         }
-    });
+    }, tableDefs);
 
     provides.sort();
 
@@ -389,7 +455,7 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out) {
             fs.appendFileSync(out, '};\n\n');
 
         }
-    });
+    }, tableDefs);
 
     traverse(def, {
         startTable: function(name, data, stack, fullTableName, parentCol) {
@@ -413,9 +479,15 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out) {
             tablePathMap[data.tableName] = tablePath;
             if (!client) {
                 tableMap[data.tableName] = prefix + '.' + tName;
-                fs.appendFileSync(out, '    table: ' + stringify(data.tableName) + ',\n');
+                if (!data.view) {
+                    fs.appendFileSync(out, '    table: ' + stringify(data.tableName) + ',\n');
+                }
                 if (parentCol) {
                     fs.appendFileSync(out, '    parentKey: new recoil.structs.table.ColumnKey(' + toStr(getColType(parentCol, types).childKey) + '),\n');
+                }
+                if (data.view) {
+                    console.log('view table ', ns, tableDefs[data.table].path);
+                    fs.appendFileSync(out, '    view: ' + stringify('/' + ns + '/' + tableDefs[data.table].path) + ',\n');
                 }
             }
 
@@ -446,18 +518,32 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out) {
 
             let pk = null;
             let auto = true;
-            for (let column in data.columns) {
-                let e = data.columns[column];
-                if (e.type === 'id') {
-                    if (pk !== null) {
-                        throw prefix + '.' + tName + ' has more than 1 primary key';
+            if (data.view) {
+                let viewTable = tableDefs[data.table].info;
+                for (let col = 0; col < data.columns.length; col++) {
+                    let e = getSourceColumn(viewTable, data.columns[col].name);
+                    if (!e) {
+                        throw prefix + '.' + tName + ' view references unknown column ' + data.columns[col].name;
                     }
-                    if (e.auto === false) {
-                        auto = false;
+                    if (e.type === 'id') {
+                        pk = jsEscape(e.name);
                     }
-                    pk = jsEscape(e.name);
                 }
+            }
+            else {
+                for (let column in data.columns) {
+                    let e = data.columns[column];
+                    if (e.type === 'id') {
+                        if (pk !== null) {
+                            throw prefix + '.' + tName + ' has more than 1 primary key';
+                        }
+                        if (e.auto === false) {
+                            auto = false;
+                        }
+                        pk = jsEscape(e.name);
+                    }
 
+                }
             }
             if (pk === null) {
                 throw prefix + '.' + tName + ' has no primary key';
@@ -497,7 +583,7 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out) {
 
         }
 
-    });
+    }, tableDefs);
     let skipCol = false;
 
     let writeMeta = function(name, data, fullTableName, tableName, parentCol, accessOverride) {
@@ -623,7 +709,7 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out) {
             fs.appendFileSync(out, '};\n\n');
 
         }
-    });
+    }, tableDefs);
 
 
     function writeAction(a, parts) {
@@ -1185,12 +1271,13 @@ function mergeTable(oldTable, newTable) {
 module.exports = {
     generateSchema: function(sqlDefFiles, ns, output) {
         let tableMap = {};
-        let defs = {tables: []};
+        let defs = {tables: [], views: []};
         let requires = {};
         let requiresServerOnly = {};
         let requiresClientOnly = {};
         let types = {};
         let actions = {};
+        let tableDefs = {};
         sqlDefFiles.forEach(function(sqlDefFile) {
             let curDef = JSON.parse(fs.readFileSync(sqlDefFile));
             if (curDef.require) {
@@ -1251,6 +1338,14 @@ module.exports = {
                 }
             }
 
+            if (curDef.views) {
+                for (let i = 0; i < curDef.views.length; i++) {
+                    let table = curDef.views[i];
+                    table.view = true;
+                    defs.views.push(table);
+                }
+            }
+
         });
         let filterReq = function(reqs, excludes) {
             let res = {};
@@ -1261,8 +1356,14 @@ module.exports = {
             }
             return res;
         };
-        doGenerate(defs, ns, true, filterReq(requires, requiresServerOnly), types, actions, output + '.gen.client.js');
-        doGenerate(defs, ns, false, filterReq(requires, requiresClientOnly), types, actions, output + '.gen.server.js');
+        traverse(defs, {
+            startTable: function(name, data, stack, fullName) {
+                tableDefs[name] = {info: data, path: stack.map(function(v) {return v.name;}).join('/')};
+            }
+        });
+
+        doGenerate(defs, ns, true, filterReq(requires, requiresServerOnly), types, actions, output + '.gen.client.js', tableDefs);
+        doGenerate(defs, ns, false, filterReq(requires, requiresClientOnly), types, actions, output + '.gen.server.js', tableDefs);
         generateDbInit(defs, ns, types, output + '.init.gen.server.js');
     },
 };
