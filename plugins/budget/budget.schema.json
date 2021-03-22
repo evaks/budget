@@ -29,8 +29,11 @@
 		{"name": "Lower Hutt",
 		 "phone": "04 5666357",
 		 "email": "info@budgetservice.org.nz",
+		 "mapAddress": "Level 1, 40-44 Bloomfield Terrace, (corner Bloomfield Terrace & Knights Road) Lower Hutt City , Wellington.",
 		 "address": "Woburn House, Level 1, 40-44 Bloomfield Terrace, (corner Bloomfield Terrace & Knights Road) Lower Hutt City , Wellington.",
+
 		 "regular": [
+		     
 		     {"start":32400000,"stop": 61200000},
 		     {"start":118800000,"stop": 147600000},
 		     {"start":205200000,"stop": 234000000},
@@ -44,6 +47,7 @@
 		{ "name": "name", "type": "string(100)"},
 		{ "name": "phone", "type": "Phone"},
 		{ "name": "email", "type": "string(128)"},
+		{ "name": "mapAddress", "type": "string(255)"},
 		{ "name": "address", "type": "string(255)"},
 		{ "name": "regular", "type": "owned-list(siteid)",
 		  "table": {

@@ -653,3 +653,15 @@ budget.messages.PM = recoil.ui.message.getParamMsg('PM');
  * @final
  */
 budget.messages.AM = recoil.ui.message.getParamMsg('AM');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.FULL_CALENDAR = recoil.ui.message.getParamMsg('Full Calendar');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.MAP_ADDRESS = recoil.ui.message.getParamMsg('Map Address');

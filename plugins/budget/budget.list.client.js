@@ -37,7 +37,7 @@ budget.widgets.BudgetList = function(scope) {
         columns.add(budgetT.cols.name, 'Name');
         columns.add(budgetT.cols.createTime, 'Created');
         let res = tbl.createEmpty([], [COPY]);
-        res.addMeta({headerRowDecorator: null});
+        res.addMeta({headerRowDecorator: null, confirmDelete: 5000});
         res.addColumnMeta(budgetT.cols.createTime, {editable: false, converter: converter, classes: ['small-time']});
         res.addColumnMeta(budgetT.cols.name, {displayLength: 7});
         tbl.forEach(function(row) {

@@ -741,12 +741,12 @@ div.budget-div:hover div {
     width: 100%;
 }
 
-.address-item {
+.contact-item {
     margin-bottom: 10px;
     color: #636363   ;
 }
 
-.address-item .label {
+.contact-item .label {
     font-weight: bold;
     width: 120px;
     vertical-align: top;
@@ -755,6 +755,21 @@ div.budget-div:hover div {
     width: 100%;
 }
 
+.office-hours td.days {
+    width: 1px;
+    white-space: nowrap;
+    padding-right: 10px;
+}
+
 .budget-contact {
     border-spacing: 0 10px;
+}
+
+.contact-item a:visited {
+    color: blue;
+}
+
+.budget-system th {
+    vertical-align: top;
+    padding: 4px;
 }

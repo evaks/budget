@@ -41,6 +41,9 @@ budget.widgets.Login = function(scope) {
 
     usernameWidget.getComponent().render(uname);
     passwordWidget.getComponent().render(password);
+
+    usernameWidget.focus();
+
     let busyB = frp.createB(false);
     let BWE = recoil.ui.BoolWithExplanation;
 
@@ -139,6 +142,10 @@ budget.widgets.Login = function(scope) {
     let loggedIn = goog.net.cookies.get('username');
 
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(loggedIn ? alreadyLoggedIn : container);
+
+    usernameWidget.focus();
+
+
 };
 
 

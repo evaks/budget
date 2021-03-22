@@ -53,7 +53,14 @@ aurora.widgets.TableWidget.createMovableSizable = function(tableB, opt_movable) 
         var frp = scope.getFrp();
         var widget = new recoil.ui.widgets.ButtonWidget(scope);
         var value = recoil.frp.table.TableCell.getValue(frp, cellB);
-        var meta = recoil.frp.table.TableCell.getMeta(frp, cellB);
+        var meta = frp.liftB(function(m) {
+            let res = goog.object.clone(m);
+            if (m.confirmDelete) {
+                res.confirm = m.confirmDelete;
+            }
+            return res;
+        }, recoil.frp.table.TableCell.getMeta(frp, cellB));
+
         widget.attachStruct(recoil.frp.struct.extend(frp, meta, {action: value, classes: ['aurora-icon-button'], text: ico}));
         return widget;
     };

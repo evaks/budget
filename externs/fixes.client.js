@@ -21,3 +21,13 @@ function ResizeObserver(s) {};
  * @param {Element} el
  */
 ResizeObserver.prototype.observe = function (el) {};
+
+/**
+ * @param {Element} el
+ */
+ResizeObserver.prototype.unobserve = function (el) {};
+
+/**
+ * 
+ */
+ResizeObserver.prototype.disconnect = function () {};

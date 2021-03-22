@@ -32,30 +32,31 @@ budget.widgets.Contact = function(scope) {
 
     let contactTable = cd('table', {class: 'contact-table contact'});
 
-
-    let src = 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3001.46733756455!2d174.90554621601007!3d-41.211585143724555!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x6d38aa57748009a5%3A0x1654e6e37bbcdf1b!2s40%20Bloomfield%20Terrace%2C%20Hutt%20Central%2C%20Lower%20Hutt%205010!5e0!3m2!1sen!2snz!4v1595367482164!5m2!1sen!2snz';
-
-    this.map_ = cd('iframe', {class: 'center', src: src, width: '900px', height: 400, frameborder: 0, allowfullscreen: '', 'aria-hidden': false, tabindex: 0, style: 'border:0;'});
+    this.map_ = cd('iframe', {class: 'center', width: '900px', height: 400, frameborder: 0, allowfullscreen: '', 'aria-hidden': false, tabindex: 0, style: 'border:0;'});
     let mapDiv = cd('div', {class: 'mapDiv'}, this.map_);
 
     this.phone_ = cd('a', {class: 'phone'});
     this.email_ = cd('a', {class: 'email'});
-    this.address_ = cd('div', {class: 'address'});
+    this.address_ = cd('td', {class: 'address'});
     this.officeHours_ = cd('table', {class: 'office-hours'});
 
     let phoneLabel = cd('td', {class: 'label'}, 'Phone');
-    let phone = cd('tr', {class: 'address-item'}, phoneLabel, cd('td', {class: 'info-data'}, this.phone_));
+    let phone = cd('tr', {class: 'contact-item'}, phoneLabel, cd('td', {class: 'info-data'}, this.phone_));
 
     let emailLabel = cd('td', {class: 'label'}, 'Email');
-    let email = cd('tr', {class: 'address-item'}, emailLabel, cd('td', {class: 'info-data'}, this.email_));
+    let email = cd('tr', {class: 'contact-item'}, emailLabel, cd('td', {class: 'info-data'}, this.email_));
 
     let addressLabel = cd('td', {class: 'label'}, 'Address');
-    let address = cd('tr', {class: 'address-item'}, addressLabel, this.address_);
+    let address = cd('tr', {class: 'contact-item'}, addressLabel, this.address_);
 
     let officeHoursLabel = cd('td', {class: 'label'}, 'Office Hours', this.officeHours_);
 
-    let officeHours = cd('tr', {class: 'address-item'}, officeHoursLabel, this.officeHours_);
-    let contactDiv = cd('table', {class: 'budget-contact'}, phone, email, address, officeHours);
+    let calLink = cd('td', {}, cd('a', {href: '/hours'}, budget.messages.FULL_CALENDAR.toString()));
+    let linkLabel = cd('tr', {class: 'contact-item'}, cd('td'), calLink);
+
+
+    let officeHours = cd('tr', {class: 'contact-item'}, officeHoursLabel, this.officeHours_);
+    let contactDiv = cd('table', {class: 'budget-contact'}, phone, email, address, officeHours, linkLabel);
 
     this.container_ = cd('div', {class: 'container'}, headerDiv, mapDiv, contactDiv);
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(this.container_);
@@ -93,10 +94,10 @@ budget.widgets.Contact.prototype.update_ = function(helper) {
         this.phone_.setAttribute('href', 'tel:' + site.get(siteT.cols.phone));
         this.email_.innerText = site.get(siteT.cols.email);
         this.email_.setAttribute('href', 'mailto:' + site.get(siteT.cols.email));
-        this.address_.innerText = site.get(siteT.cols.address);
+        this.address_.innerText = site.get(siteT.cols.mapAddress);
 
 
-        this.map_.setAttribute('src', 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3001.46733756455!2d174.90554621601007!3d-41.211585143724555!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x6d38aa57748009a5%3A0x1654e6e37bbcdf1b!2s' + site.get(siteT.cols.address) + '!5e0!3m2!1sen!2snz!4v1595367482164!5m2!1sen!2snz');
+        this.map_.setAttribute('src', 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3001.46733756455!2d174.90554621601007!3d-41.211585143724555!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x6d38aa57748009a5%3A0x1654e6e37bbcdf1b!2s' + encodeURIComponent(site.get(siteT.cols.mapAddress)) + '!5e0!3m2!1sen!2snz!4v1595367482164!5m2!1sen!2snz');
         let days = [];
         let map = new goog.structs.AvlTree(recoil.util.object.compareKey);
         let format = new Intl.DateTimeFormat(undefined, {

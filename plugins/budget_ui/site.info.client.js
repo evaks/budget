@@ -35,7 +35,7 @@ budget.widgets.SiteInfo = function(scope) {
     this.siteB_ = scope.getDb().get(siteT.key);
 
     this.containerDiv_ = cd('div', {class: 'budget-table'});
-    this.container_ = budget.widgets.BusinessHours.createWidgetDom('div', {}, this.containerDiv_);
+    this.container_ = budget.widgets.BusinessHours.createWidgetDom('div', {class: 'budget-system'}, this.containerDiv_);
 
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(this.container_);
     this.tableWidget_ = new recoil.ui.widgets.table.TableWidget(scope);
@@ -46,6 +46,7 @@ budget.widgets.SiteInfo = function(scope) {
         columns.add(siteT.cols.phone, mess.PHONE);
         columns.add(siteT.cols.email, amess.EMAIL_ADDRESS, {displayLength: 20});
         columns.addColumn(new recoil.ui.widgets.table.TextAreaColumn(siteT.cols.address, mess.ADDRESS));
+        columns.addColumn(new recoil.ui.widgets.table.TextAreaColumn(siteT.cols.mapAddress, mess.MAP_ADDRESS));
         return columns.applyMeta(site);
 
     }, function(site) {
