@@ -178,9 +178,14 @@ div.budget-calendar-date {
     padding-left: 5px;
 }
 
-div.budget-cal-avail .hours {
+div.budget-cal-avail div.budget-legend .hours {
     /* background: linear-gradient(90deg, #0000ff8c, #1212ec38 10px, #1212ec6b 50%, #1212ec6b calc(100% - 10px), #0000ff8c);*/
     background: #0000ff17;
+}
+
+div.budget-legend .hours {
+    /* background: linear-gradient(90deg, #0000ff8c, #1212ec38 10px, #1212ec6b 50%, #1212ec6b calc(100% - 10px), #0000ff8c);*/
+    background: #0000ff8c;
 }
 
 

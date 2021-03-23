@@ -65,6 +65,16 @@ budget.filter.isMentor = function(context) {
 };
 
 
+/**
+ * @param {aurora.db.access.SecurityContext} context
+ * @return {!recoil.db.Query}
+ */
+budget.filter.client = function(context) {
+    let query = new recoil.db.Query();
+    return query.isIn(query.field(aurora.db.schema.tables.base.user.cols.id), [query.raw("SELECT ug.id FROM `user_group` ug, `group` tg WHERE tg.name = 'client' and ug.groupid = tg.id")]);
+};
+
+
 
 /**
  * @param {aurora.db.access.SecurityContext} context

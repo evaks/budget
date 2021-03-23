@@ -88,6 +88,26 @@
 	    "filter": [{"" : "all"}],
 	    "table": "user",
 	    "columns": [{"name":"id"},{"name":"firstName"}, {"name":"username"}]
+	},
+	{
+	    "name" : "client",
+	    "access": "aurora.db.access.basic([{'': 'r'}])",
+	    "accessFilter": [
+		{"user-management" : "budget.filter.client"},
+		{"mentor": "budget.filter.userMentor"},
+		{"": "none"}
+	    ],
+	    "filter": [{"" : "all"}],
+	    "table": "user",
+	    "columns": [
+		{"name":"id"},
+		{"name":"username"},
+		{"name":"firstName"},
+		{"name":"lastName"},
+		{"name":"email"},
+		{"name":"phone"},
+		{"name":"address"}
+	    ]
 	}
     ],
     "tables": [

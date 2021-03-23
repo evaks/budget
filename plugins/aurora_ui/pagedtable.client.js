@@ -12,11 +12,13 @@ goog.require('recoil.ui.widgets.table.PagedTableWidget');
  * @param {function(!aurora.WidgetScope,!recoil.frp.Behaviour<!recoil.structs.table.Table>):!recoil.frp.Behaviour<!recoil.structs.table.Table>} factory
  * @param {function(!aurora.WidgetScope,!recoil.frp.Behaviour<!recoil.structs.table.Table>):!recoil.frp.Behaviour<!recoil.structs.table.Table>} headerFactory
  * @param {!recoil.frp.Behaviour<!recoil.db.Query>=} opt_filters
+ * @param {!recoil.frp.Behaviour<recoil.db.Query>=} opt_userQueryB
  */
-aurora.widgets.PagedTable = function(scope, tableT, pageSize, factory, headerFactory, opt_filters) {
+aurora.widgets.PagedTable = function(scope, tableT, pageSize, factory, headerFactory, opt_filters, opt_userQueryB) {
 
     let frp = scope.getFrp();
     let query = new recoil.db.Query();
+    let userQueryB = opt_userQueryB || frp.createB(null);
     let inFiltersB = opt_filters ? opt_filters : frp.createConstB(query.True());
     let lastGoodDataTableB = frp.createNotReadyB();
     let sortOrderB = frp.createB([{id: true}]);
@@ -77,7 +79,10 @@ aurora.widgets.PagedTable = function(scope, tableT, pageSize, factory, headerFac
     };
 
     let filtersB = frp.liftB(
-        function(userFilter, inFilter) {
+        function(userFilter, inFilter, userQuery) {
+            if (userQuery) {
+                return userQuery;
+            }
             let query = new recoil.db.Query();
             if (!userFilter) {
                 return inFilter;
@@ -111,8 +116,7 @@ aurora.widgets.PagedTable = function(scope, tableT, pageSize, factory, headerFac
 
             return query.and.apply(query, parts);
         },
-        filterTableB, inFiltersB
-    );
+        filterTableB, inFiltersB, userQueryB);
 
     let serverDataTableB = ns.createKeyedValue(
         scope, tableT.key, filtersB,
@@ -154,7 +158,7 @@ aurora.widgets.PagedTable = function(scope, tableT, pageSize, factory, headerFac
         frp, {text: addText},
         frp.liftB(function(tbl) {
             return tbl.getMeta().add || {};
-        }), {action: addCallbackB}
+        }, tableB), {action: addCallbackB}
     );
 
     let tableWidget = new recoil.ui.widgets.table.PagedTableWidget(scope, true);
@@ -175,7 +179,7 @@ aurora.widgets.PagedTable = function(scope, tableT, pageSize, factory, headerFac
         frp, {text: removeText},
         frp.liftB(function(tbl) {
             return tbl.getMeta().remove || {};
-        }), {action: removeCallbackB}
+        }, tableB), {action: removeCallbackB}
     );
 
 
@@ -286,6 +290,14 @@ aurora.widgets.PagedTable.prototype.flatten = recoil.frp.struct.NO_FLATTEN;
  */
 aurora.widgets.PagedTable.prototype.getComponent = function() {
     return this.tableWidget_.getComponent();
+};
+
+
+/**
+ * @return {!recoil.frp.Behaviour<!Array<!Array<(Object)>>>}
+ */
+aurora.widgets.PagedTable.prototype.createSelected = function() {
+    return this.tableWidget_.createSelected();
 };
 
 /**

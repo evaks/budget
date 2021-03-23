@@ -165,7 +165,7 @@ aurora.db.Helper.prototype.updateCount = function(tbl, query, options, err, coun
     }
     if (err) {
         entry.value.failure.forEach(function(failCb) {
-            failCb(err);
+            failCb(recoil.frp.BStatus.errors([err]));
         });
     }
     else {

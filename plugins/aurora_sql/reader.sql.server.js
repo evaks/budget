@@ -758,7 +758,18 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
             let scope = new recoil.db.DBQueryScope(context, new recoil.db.SQLQueryHelper(me), me.makeChildPathFunc(table));
             let sql;
             if (isCount) {
-                sql = me.mkCountSql_(scope, table, filter);
+                if (cur.table.info.view) {
+                    let viewTable = aurora.db.schema.getTableByName(cur.table.info.view);
+                    if (viewTable) {
+                        sql = me.mkCountSql_(scope, viewTable, filter);
+                    }
+                    else {
+                        callback('Invalid table ' + cur.table.info.view, []);
+                    }
+                }
+                else {
+                    sql = me.mkCountSql_(scope, table, filter);
+                }
             } else {
                 if (cur.table.info.view) {
                     let srcCur = goog.object.clone(cur);

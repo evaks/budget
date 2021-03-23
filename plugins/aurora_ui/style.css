@@ -162,7 +162,10 @@ th .aurora-icon-button {
     text-align: center;
 }
 
-
+.modal-dialog-content .recoil-table-pager-container {
+    width: calc(100vw - 40px);
+    height: 70vh;
+}
 .aurora-add-empty-table:hover {
     color: #8bbfeb;
 }

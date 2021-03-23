@@ -275,6 +275,7 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
                 mrow.set(userT.cols.groups, mrow.get(userT.cols.groups) || []);
                 mrow.addCellMeta(userT.cols.groups, {queryFactory: filterGroups});
                 mrow.addCellMeta(userT.cols.password, {cellWidgetFactory: null});
+                mrow.addCellMeta(resetPasswordCol, {cellWidgetFactory: null});
                 extraCols.forEach(function(info) {
                     info.search && info.search(mrow);
                 });

@@ -335,13 +335,17 @@ budget.widgets.BusinessHours.prototype.setupDrag_ = function() {
 
     goog.events.listen(this.calendarDiv_, goog.events.EventType.MOUSEDOWN, frp.accessTransFunc(function(e) {
         clearSelection();
+        if (!aurora.permissions.has('site-management')(me.contextB_.get())) {
+            return;
+        }
+
         if (!isLeftPressed(e)) {
             return;
         }
         let pos = me.calcPos_(e);
         highlightedB.set({start: pos, stop: pos, add: !e.ctrlKey });
 
-    }, highlightedB));
+    }, highlightedB, this.contextB_));
 
 
     goog.events.listen(
@@ -1128,17 +1132,23 @@ budget.widgets.BusinessHours.prototype.setupMenu_ = function() {
 
     let checkPerm = function(perms) {
         return function() {
-            let context = me.contextB_.get();
-            for (let i = 0; i < perms.length; i++) {
-                if (aurora.permissions.has(perms[i])(context)) {
-                    return true;
+            let context = null;
+            frp.accessTrans(function() {
+                context = me.contextB_.get();
+            }, me.contextB_);
+            if (context !== null) {
+                for (let i = 0; i < perms.length; i++) {
+                    if (aurora.permissions.has(perms[i])(/** @type {{permissions: !Object<string,boolean>, userid: ?}} */ (context))) {
+                        return true;
+                    }
                 }
             }
             return false;
+
         };
     };
     let addMenu = function(name, show, func, perm) {
-        menus.push({item: new goog.ui.MenuItem(name.toString()), show: and(show, checkPerm), func: func});
+        menus.push({item: new goog.ui.MenuItem(name.toString()), show: and(show, checkPerm(perm)), func: func});
     };
     if (this.type_ === 'admin') {
         addMenu(budget.messages.REMOVE_HOURS, regHoursExists, this.doRemoveHoursFunc_(menuInfo), ['site-management']);
@@ -1781,7 +1791,7 @@ budget.widgets.BusinessHours.prototype.update_ = function(helper) {
     let me = this;
     if (helper.isGood()) {
 
-        goog.style.setElementShown(this.mentorDiv_, aurora.permissions.has('user-management')(this.contextB_.get()));
+        goog.style.setElementShown(this.mentorDiv_, me.type_ == 'mentor' && aurora.permissions.has('user-management')(this.contextB_.get()));
 
         let border = this.borderDimsB_.get();
         let range = this.highlightedB_.get();

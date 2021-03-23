@@ -2,6 +2,7 @@ goog.provide('budget.widgets.Bookings');
 
 goog.require('aurora.Client');
 goog.require('aurora.db.schema.tables.base.user');
+goog.require('aurora.widgets.SearchDialog');
 goog.require('budget.messages');
 goog.require('goog.dom');
 goog.require('goog.dom.classlist');
@@ -39,6 +40,8 @@ budget.widgets.Bookings = function(scope) {
     let today = new Date();
     today.setHours(0, 0, 0, 0);
     this.curDateB_ = frp.createB(recoil.ui.widgets.DateWidget2.convertDateToLocal(today));
+    let clientT = aurora.db.schema.tables.base.client;
+
     let mentorsB = scope.getDb().get(mentorT.key);
     this.appointmentsB_ = frp.switchB(frp.liftB(function(date) {
         let query = new recoil.db.Query();
@@ -79,7 +82,8 @@ budget.widgets.Bookings = function(scope) {
 
     }, this.curDateB_));
 
-
+    let START_COL = new recoil.structs.table.ColumnKey('starttime');
+    let SEARCH_COL = new recoil.structs.table.ColumnKey('search');
     this.siteB_ = scope.getDb().get(siteT.key);
     let dateDiv = cd('div', 'budget-date');
     let bookingsDiv = cd('div', 'budget-bookings');
@@ -117,9 +121,16 @@ budget.widgets.Bookings = function(scope) {
         return res;
 
     };
+    let searchIcon = function() {
+        let res = cd('i', 'fas fa-search');
+        res.equals = function(other) {
+            return res.className === other.className;
+        };
+        return res;
+    };
     let tableB = frp.liftBI(function(site, holidays, appointments, avail, startDate, mentorConverter) {
         // this reuses the some columns so we can get the meta data
-        let table = appointments.createEmpty();
+        let table = appointments.createEmpty([], [START_COL, SEARCH_COL]);
         // make the key an array of [time, mentor] we get the right order
 
 
@@ -129,15 +140,16 @@ budget.widgets.Bookings = function(scope) {
         let apptMap = budget.widgets.Bookings.makeAppointmentMap_(avail, holidays, appointments, startTime, endTime);
 
         let columns = new recoil.ui.widgets.TableMetaData();
-        columns.add(appointmentsT.cols.showed, 'Came', {displayLength: 20});
-        columns.addColumn(new recoil.ui.columns.Time(appointmentsT.cols.start, 'Time'));
+        columns.addColumn(new recoil.ui.columns.Time(START_COL, 'Time'));
         columns.add(appointmentsT.cols.mentorid, 'Mentor');
         columns.add(appointmentsT.cols.name, 'Client Name');
         columns.add(appointmentsT.cols.address, 'Client Address');
         columns.add(appointmentsT.cols.email, 'Client Email');
-        columns.add(appointmentsT.cols.phone, mess.PHONE);
+        columns.add(appointmentsT.cols.phone, mess.PHONE, {displayLength: 7});
+        columns.addColumn(new recoil.ui.widgets.table.ButtonColumn(SEARCH_COL, 'Search'));
         columns.add(appointmentsT.cols.scheduled, 'Scheduled');
-        table.addColumnMeta(appointmentsT.cols.start, {editable: false});
+        columns.add(appointmentsT.cols.showed, 'Came', {displayLength: 20});
+        table.addColumnMeta(START_COL, {editable: false});
         table.addColumnMeta(appointmentsT.cols.mentorid, {editable: false, converter: mentorConverter});
         table.addColumnMeta(appointmentsT.cols.name, {displayLength: 20});
         table.addColumnMeta(appointmentsT.cols.address, {displayLength: 20});
@@ -153,11 +165,13 @@ budget.widgets.Bookings = function(scope) {
                 let row = new recoil.structs.table.MutableTableRow(pos++);
                 row.set(appointmentsT.cols.showed, false);
 
-                row.addCellMeta(appointmentsT.cols.start, /** @type {!Object} */(dateCol.getMeta({
-                    editable: false, cellDecorator: recoil.ui.widgets.TableMetaData.createSpanDecorator(8, {class: 'budget-seperator-row'})})));
+                row.addCellMeta(START_COL, /** @type {!Object} */(dateCol.getMeta({
+                    editable: false, cellDecorator: recoil.ui.widgets.TableMetaData.createSpanDecorator(9, {class: 'budget-seperator-row'})})));
                 row.addRowMeta({cellDecorator: null});
 
-                row.set(appointmentsT.cols.start, recoil.ui.widgets.DateWidget2.convertDateToLocal(today));
+                row.set(appointmentsT.cols.start, entry.key[0]);
+                row.set(START_COL, recoil.ui.widgets.DateWidget2.convertDateToLocal(today));
+                row.set(SEARCH_COL, null);
                 row.set(appointmentsT.cols.stop, null);
                 row.set(appointmentsT.cols.mentorid, entry.key[1]);
                 row.set(appointmentsT.cols.name, '');
@@ -178,22 +192,28 @@ budget.widgets.Bookings = function(scope) {
                 let row = new recoil.structs.table.MutableTableRow(pos++);
                 row.set(appointmentsT.cols.id, getId(entry.key[1], now));
                 row.set(appointmentsT.cols.showed, false);
-                row.set(appointmentsT.cols.start, recoil.ui.widgets.TimeWidget.convertTimeToLocal(now));
+                row.set(START_COL, recoil.ui.widgets.TimeWidget.convertTimeToLocal(now));
+                row.set(appointmentsT.cols.start, entry.key[0]);
                 row.set(appointmentsT.cols.stop, entry.stop);
                 row.set(appointmentsT.cols.mentorid, entry.key[1]);
+                row.set(SEARCH_COL, null);
                 row.set(appointmentsT.cols.name, '');
                 row.set(appointmentsT.cols.address, '');
                 row.set(appointmentsT.cols.email, '');
                 row.set(appointmentsT.cols.phone, '');
                 row.set(appointmentsT.cols.scheduled, false);
                 row.set(appointmentsT.cols.userid, null);
+                row.addCellMeta(SEARCH_COL, {text: searchIcon()});
                 table.addRow(row);
             }
             else {
                 entry.avail.forEach(function(inRow) {
                     let row = inRow.unfreeze();
-                    row.set(appointmentsT.cols.start, recoil.ui.widgets.TimeWidget.convertTimeToLocal(row.get(appointmentsT.cols.start)));
-                    row.set(appointmentsT.cols.start, recoil.ui.widgets.TimeWidget.convertTimeToLocal(row.get(appointmentsT.cols.start)));
+                    // todo fix this we nee equality to be faster
+                    row.addCellMeta(SEARCH_COL, {text: searchIcon()});
+                    row.set(SEARCH_COL, null);
+                    row.set(START_COL, recoil.ui.widgets.TimeWidget.convertTimeToLocal(new Date(row.get(appointmentsT.cols.start))));
+                    row.set(appointmentsT.cols.mentorid, row.get(appointmentsT.cols.mentorid).db);
                     row.setPos(pos++);
                     table.addRow(row);
                 });
@@ -201,8 +221,108 @@ budget.widgets.Bookings = function(scope) {
         });
         return columns.applyMeta(table);
 
-    }, function(site) {
-        //me.siteB_.set(site);
+    }, function(tbl) {
+        let origAppointments = me.appointmentsB_.get();
+        let seen = new goog.structs.AvlTree(recoil.util.compare);
+        let res = origAppointments.createEmpty();
+        let aKeys = appointmentsT.cols;
+        let cols = [clientT.cols.username, clientT.cols.firstName,
+                    clientT.cols.lastName, clientT.cols.email,
+                    clientT.cols.phone];
+        tbl.forEach(function(row) {
+            if (row.get(SEARCH_COL)) {
+                let searchRow = new recoil.structs.table.MutableTableRow(-1);
+                searchRow.set(clientT.cols.username, '');
+                searchRow.set(clientT.cols.firstName, row.get(aKeys.name));
+                searchRow.set(clientT.cols.lastName, ''); // leave hopefull we wil all an index on first concat last
+                searchRow.set(clientT.cols.email, row.get(aKeys.email));
+                searchRow.set(clientT.cols.address, row.get(aKeys.address));
+                searchRow.set(clientT.cols.phone, row.get(aKeys.phone));
+                cols.forEach(function(col) {
+                    searchRow.addCellMeta(col, {editable: true});
+                });
+
+                searchRow.addCellMeta(clientT.cols.address, {cellDecorator: null});
+                let searchRowB = frp.createB(searchRow.freeze());
+                let queryB = frp.liftB(function(searchRow) {
+                    let parts = [];
+                    let query = new recoil.db.Query();
+                    cols.forEach(function(col) {
+                        let val = searchRow.get(col);
+                        if (val && val.trim().length > 0) {
+                            parts.push(query.eq(query.field(col), query.val(val.trim())));
+                        }
+                    });
+                    if (parts.length == 0) {
+                        return query.False();
+                    }
+                    return query.and.apply(query, parts);
+                }, searchRowB);
+
+                let headerFactory = function(scope, sourceB) {
+                    return frp.liftBI(function(tbl, searchRow) {
+                        let res = tbl.createEmpty();
+                        res.addRow(searchRow);
+                        return res.freeze();
+                    }, function(tbl) {
+                        let res = sourceB.get().createEmpty();
+
+                        tbl.forEach(function(row) {
+                            searchRowB.set(row);
+                            res.addRow(row);
+                        });
+                        sourceB.set(res.freeze());
+                    },sourceB, searchRowB);
+                };
+
+                let bodyFactory = function(scope, sourceB) {
+                    return frp.liftB(function(tbl) {
+                        let res = tbl.unfreeze();
+                        let columns = new recoil.ui.widgets.TableMetaData();
+                        columns.add(clientT.cols.username, 'User Name', {displayLength: 10});
+                        columns.add(clientT.cols.firstName, 'First Name', {displayLength: 10});
+                        columns.add(clientT.cols.lastName, 'Last Name', {displayLength: 10});
+                        columns.add(clientT.cols.email, 'Email', {displayLength: 20});
+                                     columns.add(clientT.cols.phone, 'Phone', {displayLength: 7});
+                        columns.add(clientT.cols.address, 'Address', {displayLength: 20});
+
+                        return columns.applyMeta(res);
+                    }, sourceB);
+                };
+                let dialog = new aurora.widgets.SearchDialog(scope, clientT, 10, bodyFactory, headerFactory, frp.createCallback(function() {
+                },me.appointmentsB_), 'Select', 'Find Client', undefined, queryB);
+                dialog.show(true);
+            }
+            let relColumns = [aKeys.name, aKeys.email, aKeys.phone, aKeys.address];
+            let pk = row.get(aKeys.id);
+            let blank = relColumns.reduce(function(total, col) {
+                if (!total) {
+                    return false;
+                }
+                let val = row.get(col);
+                return !val || val.trim().length == 0;
+            }, true);
+
+            seen.add(row.get(aKeys.id));
+            if (blank) {
+                // need to remove
+
+            }
+            else {
+                let mrow = row.unfreeze();
+                mrow.set(aKeys.mentorid, new aurora.db.PrimaryKey(row.get(aKeys.mentorid)));
+                res.addRow(mrow);
+            }
+
+        });
+        // todo add rows that where in original table but not in here just to be safe
+        origAppointments.forEach(function(row) {
+            let outRow = seen.findFirst(row.get(aKeys.id));
+            if (!outRow) {
+                res.addRow(row);
+            }
+        });
+        me.appointmentsB_.set(res.freeze());
     }, this.siteB_, this.holidaysB_, this.appointmentsB_, this.availableB_, this.curDateB_, mentorConverterB);
     this.tableWidget_.attachStruct(tableB);
     this.tableWidget_.getComponent().render(this.containerDiv_);
