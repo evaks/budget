@@ -179,7 +179,7 @@ budget.widgets.BusinessHours = function(scope, opt_type) {
 
     let holidaysLegend = cd('div', {class: 'legend-item'}, cd('div', {class: 'legend-key holidays'}), cd('div', {class: 'legend-name'}, mess.HOLIDAY.toString()));
     let hoursLegend = cd('div', {class: 'legend-item'}, cd('div', {class: 'legend-key hours'}), cd('div', {class: 'legend-name'}, mess.OFFICE_HOURS.toString()));
-    let availableLegend = cd('div', {class: 'legend-item'}, cd('div', {class: 'legend-key mentor-avail'}), cd('div', {class: 'legend-name'}, mess.AT_OFFICE.toString()));
+    let availableLegend = cd('div', {class: 'legend-item'}, cd('div', {class: 'legend-key mentor-avail'}), cd('div', {class: 'legend-name'}, mess.FREE_SESSION.toString()));
 
     this.legendDiv_ = cd('div', {class: 'budget-legend'}, holidaysLegend, hoursLegend);
 
@@ -1404,10 +1404,10 @@ budget.widgets.BusinessHours.addMonths_ = function(start, months) {
 };
 
 /**
- * add months to start taking into consideration month lengths, if the lenght is shorter it will go
- * to the last day of the month
+ * add days to start taking into consideration day lengths, if the lenght is shorter it will go
+ * to the last day of the day
  * @param {number} start
- * @param {number} days number of months to add
+ * @param {number} days number of days to add
  * @param {number=} opt_millInDay if specified will set the time of day
  * @return {number}
  */
@@ -1704,6 +1704,34 @@ budget.widgets.BusinessHours.prototype.calcDayStart = function(day) {
     return ((7 + day - zeroDay.getDay()) % 7) * milliPerDay + zeroDay.getTime();
 };
 
+
+/**
+ * @param {{permissions: !Object<string,boolean>, userid: ?}} context
+ * @return {boolean}
+ */
+budget.widgets.BusinessHours.prototype.shouldShowOfficeHoursOnHolidays_ = function(context) {
+    return aurora.permissions.hasAny(['mentor', 'user-management'])(context);
+};
+
+/**
+ * @param {number} time
+ * @param {Array<{start: number, stop: number}>} holidays
+ * @return {boolean}
+ */
+budget.widgets.BusinessHours.prototype.isHoliday_ = function(time, holidays) {
+
+    for (let i = 0; i < holidays.length; i++) {
+        let hol = holidays[i];
+
+        if (time >= hol.start && time < hol.stop) {
+            return true;
+        }
+    }
+    return false;
+};
+
+
+
 /**
  * @param {!Array<{start: number, stop: number}>} dayUsage
  * @param {?} calDim
@@ -1725,15 +1753,26 @@ budget.widgets.BusinessHours.prototype.updateUsage_ = function(dayUsage, calDim,
         let dayEnd = budget.widgets.BusinessHours.addDays(weekStart, day + 1);
         return (weekStart + milliPerDay * (day + 1)) - dayEnd;
     };
+
+
+    let holidays = this.holidaysB_.get();
+    let holidayUsage = this.createHolidayUsage_(holidays);
+
     let days = {};
     for (let i = 0; i < 7; i++) {
         let dayStart = i * milliPerDay;
         let dayEnd = dayStart + milliPerDay;
         days[i] = [];
-        dayUsage.forEach(function(item) {
 
+        if (!budget.widgets.BusinessHours.prototype.shouldShowOfficeHoursOnHolidays_(this.contextB_.get())) {
+            if (this.isHoliday_(budget.widgets.BusinessHours.addDays(weekStart, i), holidayUsage)) {
+                continue;
+            }
+        }
+
+        dayUsage.forEach(function(item) {
             let itemStart = (item.start) % milliPerWeek;
-                let itemStop = itemStart + (item.stop - item.start);
+            let itemStop = itemStart + (item.stop - item.start);
             if (itemStop < dayStart) {
                 if (itemStop >= dayStart) {
                     days[i].push({start: 0, stop: Math.min(milliPerDay, itemStop - dayStart)});
@@ -1742,7 +1781,6 @@ budget.widgets.BusinessHours.prototype.updateUsage_ = function(dayUsage, calDim,
             else if (itemStart < dayEnd) {
                 days[i].push({start: Math.max(itemStart - dayStart, 0) , stop: Math.min(milliPerDay, itemStop - dayStart)});
             }
-
 
         });
     }
@@ -1771,10 +1809,10 @@ budget.widgets.BusinessHours.prototype.updateUsage_ = function(dayUsage, calDim,
             let yEnd = (minY + hourH * (avail[j].stop + dstOffset) / 3600000);
 
             curDiv.style.top = yStart + 'px';
-                curDiv.style.height = (yEnd - yStart) + 'px';
+            curDiv.style.height = (yEnd - yStart) + 'px';
             curDiv.style.width = hourDim.width + 'px';
-        }
 
+        }
     }
 
 };

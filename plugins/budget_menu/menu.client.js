@@ -24,6 +24,7 @@ budget.widgets.Menu = function(scope) {
     this.scope_ = scope;
     this.menuWidget_ = new recoil.ui.widgets.MenuBarWidget(scope);
 
+
     this.menuWidget_.attach({}, this.makeMenuBar(), true);
 
 };
@@ -34,7 +35,6 @@ budget.widgets.Menu = function(scope) {
 budget.widgets.Menu.prototype.makeMenuBar = function() {
     let scope = this.scope_;
     let frp = scope.getFrp();
-
     let menuInfoB = frp.liftB(function(inMenu, context) {
         let res = [];
         let filterChildren = function(children, context) {
@@ -78,8 +78,36 @@ budget.widgets.Menu.prototype.makeMenuBar = function() {
         return res;
     }, frp.createB(budget.widgets.Menu.menu), aurora.permissions.getContext(scope));
 
+    let userMenu = goog.dom.createDom('i', {'class': 'fas fa-user'});
+    let noUserMenu = goog.dom.createDom('i', {'class': 'fas fa-bars'});
+    let userDiv = goog.dom.createDom('div', {class: 'user-logged-in'}, userMenu, noUserMenu);
 
-    return frp.liftB(function(menuInfo) {
+    let query = new recoil.db.Query();
+    let username = goog.net.cookies.get('username');
+
+    let menuIconB = frp.liftB(function(context) {
+
+        if (aurora.permissions.loggedIn(true)(context)) {
+            return userDiv;
+        } else {
+            return noUserMenu;
+        }
+    }, aurora.permissions.getContext(scope));
+
+    let loginInfoB = frp.liftB(function(context) {
+        if (aurora.permissions.loggedIn(true)(context)) {
+            return {userName: username, loggedIn: true};
+        }
+        return {userName: '', loggedIn: false};
+    }, aurora.permissions.getContext(scope));
+
+
+    let makeUsernameDiv = function(loginInfo) {
+        let cd = goog.dom.createDom;
+        return cd('div', {class: 'budget-menu-user-container'}, cd('div', {class: 'budget-menu-username'}, loginInfo));
+    };
+    return frp.liftB(function(menuInfo, loginInfo) {
+
 
         let res = [];
         menuInfo.forEach(function(item) {
@@ -92,6 +120,7 @@ budget.widgets.Menu.prototype.makeMenuBar = function() {
                 menuButton.attachStruct({name: item.name, action: action, items: []});
                 res.push(menuButton);
             }
+
             else {
                 let menuButton = new recoil.ui.widgets.MenuButtonWidget(scope);
                 item.children.forEach(function(menuItemInfo) {
@@ -99,8 +128,20 @@ budget.widgets.Menu.prototype.makeMenuBar = function() {
                         let menuButton = new recoil.ui.widgets.MenuSeparatorWidget();
                         menuItems.push(menuButton);
                     }
-                    else {
+                    else if (menuItemInfo.userName) {
 
+                         if (loginInfo.loggedIn) {
+                             let itemWidget = new recoil.ui.widgets.LabelWidget(scope);
+
+                             let formatterB = frp.liftB(function(loginInfo) {
+                                 return makeUsernameDiv;
+                             }, loginInfoB);
+                             itemWidget.attachStruct({name: loginInfo.userName, formatter: formatterB});
+                             menuItems.push(itemWidget);
+                         }
+                    }
+
+                    else {
                         let itemWidget = new recoil.ui.widgets.MenuItemActionWidget(scope);
 
                         itemWidget.attach(menuItemInfo.name.toString(), true, frp.createCallback(function() {
@@ -109,12 +150,13 @@ budget.widgets.Menu.prototype.makeMenuBar = function() {
                         menuItems.push(itemWidget);
                     }
                 });
-                menuButton.attach(item.name, menuItems);
+                menuButton.attach(menuIconB, menuItems);
                 res.push(menuButton);
             }
+
         });
         return res;
-    }, menuInfoB);
+    }, menuInfoB, loginInfoB);
 
 
 /*
@@ -165,7 +207,8 @@ budget.widgets.Menu.menu = [
     {'name': 'Intro', 'url': '/'},
     {'name': 'Features', url: '/features'},
     {'name': 'Contact', url: '/contact'},
-    {'name': goog.dom.createDom('i', {class: 'fas fa-bars'}), 'children' : [
+    {userIcon: true, 'children' : [
+        {'name': '', userName: true},
         {'name': 'Users', 'url': '/admin/mentors', perm: aurora.permissions.has('user-management')},
         {seperator: true, perm: aurora.permissions.has('user-management')},
         {'name': 'Budget Template', 'url': '/budget_template', perm: aurora.permissions.has('site-management')},

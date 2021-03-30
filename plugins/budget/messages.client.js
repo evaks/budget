@@ -509,7 +509,7 @@ budget.messages.APPOINTMENT_LENGTH = recoil.ui.message.getParamMsg('Appt Length 
  * @type {!recoil.ui.message.Message}
  * @final
  */
-budget.messages.AT_OFFICE = recoil.ui.message.getParamMsg('At Office');
+budget.messages.FREE_SESSION = recoil.ui.message.getParamMsg('Free Session');
 
 /**
  * @type {!recoil.ui.message.Message}

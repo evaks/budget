@@ -20,7 +20,8 @@ div.budget-cal-avail div.budget-calendar-day .avail {
 
 div.budget-calendar-day .avail {
     position: absolute;
-    background: linear-gradient(90deg, #0000ff8c, #1212ec38 10px, #1212ec6b 50%, #1212ec6b calc(100% - 10px), #0000ff8c);
+/*    background: linear-gradient(90deg, #0000ff8c, #1212ec38 10px, #1212ec6b 50%, #1212ec6b calc(100% - 10px), #0000ff8c); */
+    background: #0000ff17;
     width: 20px;
     height: 20px;
     pointer-events: none;
@@ -185,7 +186,8 @@ div.budget-cal-avail div.budget-legend .hours {
 
 div.budget-legend .hours {
     /* background: linear-gradient(90deg, #0000ff8c, #1212ec38 10px, #1212ec6b 50%, #1212ec6b calc(100% - 10px), #0000ff8c);*/
-    background: #0000ff8c;
+    /*    background: #0000ff8c;*/
+    background: #0000ff17;
 }
 
 
