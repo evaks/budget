@@ -130,6 +130,7 @@ aurora.db.Notify.ObjectMap.prototype.addObject = function(object) {
  */
 aurora.db.Coms = function(authenticator) {
     let me = this;
+    aurora.db.Coms.instance = me;
     this.log_ = aurora.log.createModule('DBCOMS');
     this.async_ = require('async');
     this.authenticator_ = authenticator;
@@ -173,6 +174,7 @@ aurora.db.Coms = function(authenticator) {
                     if (action.access) {
                         if (!action.access(secContext, 'r')) {
                             response['error'] = 'Access Denied';
+                            me.log_.warn('Action Access Denied', path);
                             me.channel_.send(response, e.clientId);
                             return;
                         }
@@ -207,12 +209,39 @@ aurora.db.Coms = function(authenticator) {
                             action.func(secContext, reader, inputs, responseHandler);
                         }
                         else {
-                            if (Object.keys(inputs).length !== expectedInputs.length) {
-                                response['error'] = 'Unexpected number of parameter expected ' + expectedInputs.length + ' got ' + inputs.length;
+                            console.log('xx1', inputs, e.data, expectedInputs);
+                            if (recoil.util.map.size(inputs) !== expectedInputs.length) {
+                                response['error'] = 'Unexpected number of parameter expected ' + expectedInputs.length + ' got ' + recoil.util.map.size(inputs);
+                                me.log_.warn(response['error']);
                                 me.channel_.send(response, e.clientId);
                                 return;
                             }
+                            let convertType = function(expected, val) {
+                                if (expected[0] === '?' && val == null) {
+                                    return null;
+                                }
+
+                                try {
+                                    if ((expected === 'bigint' || expected === '?bigint') && val != null) {
+                                        return BigInt(val);
+                                    }
+                                }
+                                catch (e) {
+                                    return null;
+                                }
+                                return val;
+                            };
                             let checkType = function(expected, actual) {
+                                if (expected[0] === '?') {
+                                    if (actual == null) {
+                                        return true;
+                                    }
+                                    expected = expected.substring(1);
+                                }
+                                if (actual == null) {
+                                    return false;
+                                }
+
                                 if (expected == 'number' || expected === 'string') {
                                     return typeof(actual) === expected;
                                 }
@@ -221,18 +250,33 @@ aurora.db.Coms = function(authenticator) {
                             let args = [];
 
                             for (let i = 0; i < expectedInputs.length; i++) {
-                                let expected = expectedInputs[i];
-                                if (!inputs.hasOwnProperty(expected.name)) {
-                                    response['error'] = 'Missing parameter ' + expected.name;
+
+                                try {
+                                    let expected = expectedInputs[i];
+                                    if (!inputs.hasOwnProperty(expected.name)) {
+                                        response['error'] = 'Missing parameter ' + expected.name;
+                                        me.log_.warn(response['error']);
+                                        me.channel_.send(response, e.clientId);
+                                        return;
+                                    }
+                                    let val = convertType(expected.type, inputs[expected.name]);
+
+                                    if (!checkType(expected.type, val)) {
+                                        response['error'] = 'Invalid type for parameter ' + expected.name;
+                                        me.log_.warn(response['error']);
+                                        me.channel_.send(response, e.clientId);
+                                        return;
+                                    }
+
+                                    args.push(val);
+                                }
+                                catch (e) {
+                                    me.log_.warn('Failed to deserialize param');
+                                    response['error'] = 'Invalid type for parameter ' + e;
                                     me.channel_.send(response, e.clientId);
                                     return;
                                 }
-                                if (!checkType(expected.type, inputs[expected.name])) {
-                                    response['error'] = 'Invalid type for parameter ' + expected.name;
-                                    me.channel_.send(response, e.clientId);
-                                    return;
-                                }
-                                args.push(inputs[expected.name]);
+
                             }
                             action.func.apply(null, [secContext, reader].concat(args).concat([responseHandler]));
                         }
@@ -277,9 +321,10 @@ aurora.db.Coms = function(authenticator) {
  * @param {Object} object
  * @param {!recoil.db.ChangeSet.Path} basePath
  * @param {!recoil.db.ChangeSet.Path} path
+ * @param {boolean=} opt_validOnly returns true if the item is valid is null
  * @return {?}
  */
-aurora.db.Coms.getSubObject_ = function(object, basePath, path) {
+aurora.db.Coms.getSubObject_ = function(object, basePath, path, opt_validOnly) {
     let pathItems = path.items();
     let idx = basePath.size();
     let keysEqual = function(pItem, object) {
@@ -343,16 +388,22 @@ aurora.db.Coms.getSubObject_ = function(object, basePath, path) {
         }
 
     }
+    if (opt_validOnly && pathIndex === pathItems.length) {
+        return true;
+    }
+
     return object;
 
 };
 /**
- * @private
  * @param {recoil.db.ChangeSet.Change} change
+ * @param {function()=} opt_done
  */
-aurora.db.Coms.prototype.notifyListeners_ = function(change) {
+aurora.db.Coms.prototype.notifyListeners = function(change, opt_done) {
     let reader = this.reader_;
+    let done = opt_done || function() {};
     if (!reader) {
+        done();
         return;
     }
     let async = this.async_;
@@ -362,9 +413,28 @@ aurora.db.Coms.prototype.notifyListeners_ = function(change) {
     let readObjectQueue = async.queue(function(data, callback) {
         if (data.done) {
 
+            let todo = {};
+
             for (let clientId in sendClients) {
-                let info = sendClients[clientId];
-                me.doGetHelper_(clientId, reader, info.context, info.key.name, info.key.query, info.key.options);
+                todo[clientId] = true;
+            }
+
+            console.log('todo', todo);
+            if (recoil.util.map.isEmpty(todo)) {
+                if (opt_done) {
+                    opt_done();
+                }
+            }
+            else {
+                for (let clientId in sendClients) {
+                    let info = sendClients[clientId];
+                    me.doGetHelper_(clientId, reader, info.context, info.key.name, info.key.query, info.key.options, function() {
+                        delete todo[clientId];
+                        if (recoil.util.map.isEmpty(todo) && opt_done) {
+                            opt_done();
+                        }
+                    });
+                }
             }
             return;
         }
@@ -385,16 +455,23 @@ aurora.db.Coms.prototype.notifyListeners_ = function(change) {
         // global lookups so shouldn't really matter
         let pathItems = change.path().items();
         let onlyPath = new recoil.db.QueryOptions({columnFilters: {prefix: change.path().toStringArray()}});
+        console.log('reading object');
+
         reader.readObjects(
             data.context, baseTable, query.and(query, query.eq(query.field(baseTable.info.pk), query.val(data.basePath.last().keys()[0]))),
             accessFilter,
             function(err, results) {
+                console.log('read', results);
+
                 if (!err) {
                     // check if path exists in the results to see if path exists in objects if so we need to the update
 
                     for (var i = 0; i < results.length; i++) {
-                        let object = aurora.db.Coms.getSubObject_(results[i], recoil.db.ChangeSet.Path.fromString(baseTable.info.path), change.path());
+                        let object = aurora.db.Coms.getSubObject_(results[i], recoil.db.ChangeSet.Path.fromString(baseTable.info.path), change.path(), true);
+                        // this object can be null though  xxx
+                        console.log('x1');
                         if (object != null) {
+                            console.log('x2');
                             let secureChange = change.filter(function(path) {
                                 try {
                                     let meta = aurora.db.schema.getMetaByPath(path.pathAsString());
@@ -410,6 +487,8 @@ aurora.db.Coms.prototype.notifyListeners_ = function(change) {
 
                                 return aurora.db.schema.hasAccess(data.context, path, 'r');
                             });
+                            console.log('x3', secureChange);
+
                             if (secureChange) {
                                 // it would be great just to send the change that the client was interested in but
                                 // for now will just resend the query that the change effected its simpler and safer
@@ -429,11 +508,15 @@ aurora.db.Coms.prototype.notifyListeners_ = function(change) {
 
     // todo currently we add a top level item or update an item so it now matches this will not update
     // notify interested queries
+    console.log('notifiying');
     this.notifies_.forEachEffected(change.path(), function(context, clientid, basePath, path, key, query) {
         // if the client doesn't have access to read the field don't send
+        console.log('effected -1', change.path().toString(), context);
         if (!aurora.db.schema.hasAccess(context, change.path(), 'r')) {
             return;
         }
+        console.log('effected');
+
         readObjectQueue.push({context, clientid, basePath, path, key, query});
 
     });
@@ -507,8 +590,9 @@ aurora.db.Coms.prototype.doGet_ = function(reader, e, secContext) {
  * @param {string} name
  * @param {?} queryIn
  * @param {?} optionsIn
+ * @param {function()=} opt_done
  */
-aurora.db.Coms.prototype.doGetHelper_ = function(clientId, reader, secContext, name, queryIn, optionsIn) {
+aurora.db.Coms.prototype.doGetHelper_ = function(clientId, reader, secContext, name, queryIn, optionsIn, opt_done) {
     let secName = aurora.db.schema.tables.sec.permissions.info.name;
     let me = this;
     let response = {'command': 'full', 'name': name, 'query': queryIn, 'options': optionsIn, 'value': null};
@@ -519,9 +603,15 @@ aurora.db.Coms.prototype.doGetHelper_ = function(clientId, reader, secContext, n
     if (name === secName) {
         // this is special every one can request what permissions they have
         me.channel_.send({'command': 'full', 'name': name, 'query': queryIn, 'options': optionsIn, 'value': secContext}, clientId);
+        if (opt_done) {
+            opt_done();
+        }
         return;
     }
     if (!reader) {
+        if (opt_done) {
+            opt_done();
+        }
         return;
     }
     let secInfo = me.doSecurityCheck_(clientId, name, secContext, 'r', response);
@@ -571,7 +661,16 @@ aurora.db.Coms.prototype.doGetHelper_ = function(clientId, reader, secContext, n
                     me.log_.debug('read data', queryIn, optionsIn, data, (new Date().getTime() - start) / 1000);
                 }
                 me.channel_.send(response, clientId);
+                if (opt_done) {
+                    opt_done();
+                }
+
             }, options);
+    }
+    else {
+        if (opt_done) {
+            opt_done();
+        }
     }
 
 };
@@ -981,7 +1080,7 @@ aurora.db.Coms.prototype.setupUpload_ = function () {
                                         fields.push(new recoil.db.ChangeSet.Set(path.appendName(name), null, obj[name]));
                                     }
                                 }
-                                me.notifyListeners_(new recoil.db.ChangeSet.Add(path, fields));
+                                me.notifyListeners(new recoil.db.ChangeSet.Add(path, fields));
                             });
                         }
                     });
@@ -1071,3 +1170,7 @@ aurora.db.Coms.ValSerializer.prototype.deserialize = function(path, val) {
     return val;
 };
 
+/**
+ * @type {aurora.db.Coms} 
+ */
+aurora.db.Coms.instance = null;

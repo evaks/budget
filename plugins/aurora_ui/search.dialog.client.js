@@ -36,21 +36,29 @@ aurora.widgets.SearchDialog = function(scope, tableT, pageSizeB, factory, header
 
     var container = goog.dom.createDom('div', {class: 'dialog-table'});
 
-    var selectEnabledB = frp.liftB(function(validator, tbl, errors) {
-        return selectEnabledB.get().length > 0 ? recoil.ui.BoolWithExplanation.TRUE : recoil.ui.BoolWithExplanation.FALSE;
-    }, selectedB);
+
+    let tableB = this.tableWidget_.getTableB();
+    let selectedRowB = frp.liftB(function() {
+        let row = null;
+        if (selectedB.get().length === 1) {
+            return tableB.get().getRow(selectedB.get()[0]);
+        }
+        return null;
+
+    }, selectedB, tableB);
 
     var doSelectB = frp.createCallback(function() {
 
-        let row = null;
-        if (selectedB.get().length === 1) {
-            //row = searchResultsB.get().getRow(selectedB.get()[0]);
-        }
+        let row = selectedRowB.get();
         if (row) {
             callbackB.set(row);
         }
 
-    }, callbackB);
+    }, callbackB, selectedRowB);
+
+    var selectEnabledB = frp.liftB(function(selectedRow) {
+        return selectedRow ? recoil.ui.BoolWithExplanation.TRUE : recoil.ui.BoolWithExplanation.FALSE;
+    }, selectedRowB);
 
     var options = {
         hasCloseX: true,
@@ -82,8 +90,8 @@ aurora.widgets.SearchDialog = function(scope, tableT, pageSizeB, factory, header
         if (helper.isGood()) {
             buttonSet.addButton({key: 'ok', caption: buttonNameB.get()}, true);
             this.dialog_.setButtonSet(buttonSet);
+            buttonSet.setButtonEnabled('ok', helper.isGood() && selectEnabledB.get().val());
 
-            buttonSet.setButtonEnabled('ok', selectEnabledB.get().val());
         }
 
     }).attach(buttonNameB, selectEnabledB);

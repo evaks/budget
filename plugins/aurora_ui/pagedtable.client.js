@@ -273,11 +273,16 @@ aurora.widgets.PagedTable = function(scope, tableT, pageSize, factory, headerFac
     }, tableB, headerTableB), pager.page, pager.count);
 
     tableWidget.attachAdd(addB, removeB);
-
+    this.tableB_ = tableB;
     this.tableWidget_ = tableWidget;
 };
 
-
+/**
+ * @return {!recoil.frp.Behaviour<!recoil.structs.table.Table>}
+ */
+aurora.widgets.PagedTable.prototype.getTableB = function() {
+    return this.tableB_;
+};
 /**
  * all widgets should not allow themselves to be flatterned
  *

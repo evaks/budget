@@ -48,6 +48,7 @@
 			"websocket":true
 		}
 	],
+	"hostname": "www.budgetservice.org.nz",
 	"directoryBrowsing": false,
 	"defaultPage": "home",
 	"serverDescription": "AuroraHTTP",

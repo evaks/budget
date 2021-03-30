@@ -665,3 +665,10 @@ budget.messages.FULL_CALENDAR = recoil.ui.message.getParamMsg('Full Calendar');
  * @final
  */
 budget.messages.MAP_ADDRESS = recoil.ui.message.getParamMsg('Map Address');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.UNSCHEDULE_TO_EDIT = recoil.ui.message.getParamMsg('Unschedule to edit');

@@ -46,7 +46,9 @@ aurora.ui.widgets.LinkWidget.prototype.getComponent = function() {
  * @private
  */
 aurora.ui.widgets.LinkWidget.prototype.updateValue_ = function(helper) {
-    this.container_.href = helper.isGood() ? this.valueB_.get() : '';
+    let value = helper.isGood() ? this.valueB_.get() : null;
+    this.container_.href = value;
+    goog.style.setElementShown(this.container_, !!value);
 };
 
 /**

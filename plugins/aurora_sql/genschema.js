@@ -1305,7 +1305,7 @@ module.exports = {
                     parts.shift();
                     while (parts.length > 0) {
                         let part = parts.shift();
-                        cur[part] = actions[part] || {};
+                        cur[part] = cur[part] || {};
                         cur = cur[part];
                     }
                     cur.path = '/actions/' + curDef.namespace + action.path;

@@ -206,10 +206,12 @@ aurora.db.schema.hasAccess = function(context, path, access) {
         }
         // could be just a column with no subtable so check the parent
         tbl = aurora.db.schema.getTableByName(path.parent());
+
         if (tbl === null) {
             return false;
         }
         let meta = tbl.meta[path.last().name()];
+
         if (!meta) {
             return false;
         }
