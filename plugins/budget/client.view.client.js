@@ -12,6 +12,8 @@ goog.require('goog.ui.CustomButton');
 goog.require('goog.ui.ToggleButton');
 goog.require('goog.ui.decorate');
 
+goog.require('recoil.ui.widgets.LabelWidget');
+
 /**
  * @constructor
  * @export
@@ -44,8 +46,14 @@ budget.widgets.ClientView = function(scope) {
     let arrow = cd('span', {},'«');
     let secContextB = aurora.permissions.getContext(scope);
     let collapsedB = recoil.ui.frp.LocalBehaviour.create(frp, '1', 'budget.client.menu.collapsed', false, localStorage);
+    let usernameDiv = cd('div', {});
+    let sideBarControl = cd('div', {class: 'side-bar-control goog-css3-toggle-button'}, arrow);
+    let slideMenuControl = cd('div', {class: 'slide-menu-control'}, usernameDiv, sideBarControl);
 
     html.innerText(arrow, frp.liftB(function(v) { return v ? '»' : '«';}, collapsedB));
+    html.show(usernameDiv, logic.not(collapsedB));
+    html.class(slideMenuControl, recoil.frp.Chooser.if(collapsedB, 'slide-menu-control-collapse', 'slide-menu-control'));
+
     html.show(budgetBodyDiv, logic.equal('budget', screenB));
     html.show(profileBodyDiv, showProfileB);
     html.show(notesBodyDiv, showNotesB);
@@ -59,7 +67,7 @@ budget.widgets.ClientView = function(scope) {
     let userId = budget.widgets.BudgetList.getUserId();
 
     let sideControlEnable = new goog.ui.ToggleButton('');
-    let sideBarControl = cd('div', {class: 'side-bar-control goog-css3-toggle-button'}, arrow);
+
     sideControlEnable.decorate(sideBarControl);
 
     let profileWidget = new budget.widgets.SignUp(scope, userId);
@@ -78,9 +86,39 @@ budget.widgets.ClientView = function(scope) {
               cd('h2', {class: 'group-header'}, aurora.messages.BUDGETS.toString()),
               budgetDiv));
 
+    let query = new recoil.db.Query();
+
+    let userT = aurora.db.schema.tables.base.user;
+    let userTblB = scope.getDb().get(userT.key, query.eq(userT.cols.id, query.val(userId)));
+
+    let nameB = frp.liftB(function(tbl) {
+        let name = { name: '', uname: ''};
+
+        tbl.forEach(function(row) {
+
+            if (row.get(userT.cols.firstName) !== null) {
+                name.name = row.get(userT.cols.firstName);
+            }
+
+            name.uname = row.get(userT.cols.username);
+        });
+        return name;
+
+    }, userTblB);
+
+
+    let usernameLabel = new recoil.ui.widgets.LabelWidget(scope);
+
+    usernameLabel.attachStruct({name: nameB, classes: ['slide-menu-name-container'], formatter: function(v) {
+        return cd('div', {class: 'slide-menu-firstname truncate'}, v.name, cd('div', {class: 'slide-menu-username truncate'}, v.uname));
+    }});
+
+    usernameLabel.getComponent().render(usernameDiv);
+
+
+
     let sidePanel = cd('div', {class: 'side-list-side'},
-                       cd('div', {class: 'slide-menu-control'},
-                          sideBarControl), sideGroupsContainer);
+                       slideMenuControl, sideGroupsContainer);
 
     html.enableClass(sidePanel, 'side-small', collapsedB);
     let contentPanel = cd('div', {class: 'side-list-body'}, bodyDiv);

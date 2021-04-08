@@ -675,7 +675,52 @@ div.side-list-side.side-small {
 
 div.slide-menu-control {
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(45deg, #0080007d, #0080001a);
+    margin-left: -10px;
+}
+
+div.slide-menu-control-collapse {
+    margin-left: -10px;
+}
+
+span.slide-menu-firstname {
+    font-variant: small-caps;
+}
+
+span.slide-menu-username {
+    color: #ffffff;
+    padding-left: 5px;
+    font-style: italic;
+    font-variant: none;
+}
+
+div.slide-menu-firstname {
+    font-variant: small-caps;
+    /* font-weight: bold; */
+    color: white;
+    font-size: larger;
+}
+
+div.slide-menu-username {
+    color: #dcdcdc;
+    font-variant: normal;
+    font-style: italic;
+    font-weight: normal;
+    font-size: 10pt;
+    margin-top: 0px;
+    padding-bottom: 3px;
+    padding-left: 5px;
+    /* border: 1px solid; */
+    line-height: 10pt;
+}
+
+div.slide-menu-name-container {
+    width: 200px;
+    display: flex;
+    flex-direction: column;
+    padding-left: 5px;
 }
 
 div.side-bar-control {
@@ -684,6 +729,7 @@ div.side-bar-control {
     font-size: 35px;
     color: #135612;
     padding-bottom: 5px;
+    margin-left: 10px;
 }
 
 div.side-bar-control:hover {
@@ -696,6 +742,9 @@ div.side-bar-control:hover {
     padding-bottom: 5px;
 }
 
+.slide-menu-control username {
+    border: 1px solid #000000;
+}
 
 div.side-bar-control div {
     border: none;
@@ -787,8 +836,8 @@ div.budget-div:hover div {
     padding: 5px;
     background: linear-gradient(45deg, #0080007d, green);
 }
-.budget-menu-username {
 
+.budget-menu-username {
     text-align: right;
     color: #ffffff;
     font-weight: bold;
@@ -797,5 +846,11 @@ div.budget-div:hover div {
     white-space: nowrap;
     text-overflow: ellipsis;
     overflow: hidden;
-    width: 190px;
+    width: 190px;    
+}
+
+.truncate {
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
 }
