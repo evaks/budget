@@ -584,7 +584,7 @@ aurora.db.sql.ChangeWriter.prototype.applyChanges_ = function(changes, context, 
         else {
             me.applyTransactionChanges_(changeList, context, secContext, function(err) {
                 if (err) {
-                    me.log_.warn('got silent error in apply transaction changes', error);
+                    me.log_.warn('got silent error in apply transaction changes', err);
                     me.applySilentError(err, results);
                 }
                 callback(err);
@@ -681,7 +681,7 @@ aurora.db.sql.ChangeWriter.prototype.applyTransactionChanges_ = function(changeL
 
                     let doDelete = function(callback) {
                         let pkQuery = query.eq(tbl.info.pk, query.val(path.lastKeys()[0].db));
-                        reader.deleteOneLevel(context, tbl, pkQuery, null, function(err) {
+                        reader.deleteObjects(context, tbl, pkQuery, null, function(err) {
                             callback(err);
                         });
                     };

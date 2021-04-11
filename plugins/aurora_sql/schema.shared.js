@@ -4,6 +4,7 @@
 goog.provide('aurora.db.Schema');
 goog.provide('aurora.db.schema.ColsType');
 goog.provide('aurora.db.schema.InfoType');
+goog.provide('aurora.db.schema.RefType');
 goog.provide('aurora.db.schema.TableQueryScope');
 goog.provide('aurora.db.schema.TableType');
 goog.provide('aurora.db.schema.actionMap');
@@ -34,6 +35,7 @@ aurora.db.SchemaType;
  * @typedef {{path:string,
  *            pk:!recoil.structs.table.ColumnKey,
  *            parentKey:(!recoil.structs.table.ColumnKey|undefined),
+ *            refs:!Array<!aurora.db.schema.RefType>,  
  *            autoPk:(boolean|undefined),
  *            access:(function(!aurora.db.access.SecurityContext,string):boolean|undefined),
  *            accessFilter:(function(!aurora.db.access.SecurityContext):!recoil.db.Query|undefined),
@@ -46,6 +48,12 @@ aurora.db.schema.InfoType;
  * @typedef {Object}
  */
 aurora.db.schema.ColsType;
+
+
+/**
+ * @typedef {{table:!aurora.db.schema.TableType, col: string, nullable:boolean}}
+ */
+aurora.db.schema.RefType;
 
 /**
  * @typedef {{type:string,list:(boolean|undefined), owned:(boolean|undefined),childKey:(undefined|string)}}
@@ -187,6 +195,18 @@ aurora.db.schema.getTableByName = function(name) {
     }
     return aurora.db.schema.keyMap[name.pathAsString()] || null;
 };
+
+/**
+ * get a list of tables that reference this table
+ *
+ * @param {!aurora.db.schema.TableType} table
+ * @return {!Array<!aurora.db.schema.RefType>}
+ */
+
+aurora.db.schema.getReferences = function(table) {
+    return table.info.refs;
+};
+
 
 /**
  * @param {!aurora.db.access.SecurityContext} context
@@ -715,7 +735,8 @@ aurora.db.schema.tables.sec.permissions.info = {
     name: '/$sec/permissions',
     path: '/$sec/permissions',
     pk: aurora.db.schema.tables.sec.permissions.cols.userid,
-    unique: []
+    unique: [],
+    refs: []
 };
 /**
  * @const

@@ -1117,8 +1117,6 @@ aurora.db.sql.Reader.prototype.getChildTables_ = function(table) {
 };
 
 
-
-
 /**
  * @private
  * @param {!recoil.db.DBQueryScope} scope
@@ -1211,7 +1209,9 @@ aurora.db.sql.Reader.prototype.deleteObjects = function(context, table, query, s
     // first get the information about the children tables
     // with a dependancy map
     let whereClause = null;
-    let childTables = this.getChildTables_(table);
+
+    let referers = this.getChildTables_(table).map(function (v) {return {child: true, table: v};}).concat(aurora.db.schema.getReferences(table));
+    
     let filter = this.addSecurityFilter_(query, securityFilter);
     let scope = new recoil.db.DBQueryScope({}, new recoil.db.SQLQueryHelper(this), this.makeChildPathFunc(table));
     let me = this;
@@ -1220,27 +1220,42 @@ aurora.db.sql.Reader.prototype.deleteObjects = function(context, table, query, s
     if (filter) {
         whereClause = ' WHERE ' + filter.query(scope);
     }
-
     this.transaction(function(reader, transCallback) {
         let deleteMe = function() {
             let sql = 'DELETE FROM ' + me.driver_.escapeId(table.info.table) + ' ' + whereClause;
-            console.log('sql =', sql);
             reader.driver_.query(sql, function(error) {
                 transCallback(error);
             });
         };
 
-        if (childTables.length === 0) {
+        if (referers.length === 0) {
             deleteMe();
         }
         else {
             me.readIds_(context, table, filter, null, function(error, ids) {
                 console.log('delete trans ids', ids, error);
+                if (ids.length === 0) {
+                    // I don't think we need delete me since there is nothing to delete
+                    deleteMe();
+                    return;
+                }
                 if (!error) {
-                    async.each(childTables, function(child, callback) {
-                        reader.deleteObjects(context, child, query.isIn(child.info.parentKey, ids), null, function(error) {
-                            callback(error);
-                        });
+                    async.each(referers, function(ref, callback) {
+                        if (ref.child) {
+                            reader.deleteObjects(context, ref.table, query.isIn(ref.table.info.parentKey, ids), null, function(error) {
+                                callback(error);
+                            });
+                        }
+                        else if (ref.nullable) {
+                            let object = {};
+                            object[ref.col] = null;
+                            reader.updateOneLevel(context, ref.table, object, query.isIn(ref.table.meta[ref.col].key, ids), callback);
+                        }
+                        else {
+                            reader.deleteObjects(context, ref.table, query.isIn(ref.table.meta[ref.col].key, ids), null, function(error) {
+                                callback(error);
+                            });
+                        }
                     }, function(error) {
                         if (error) {
                             transCallback(error);

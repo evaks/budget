@@ -388,6 +388,7 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
     let keyMap = {};
     let prefixMap = {};
     let tableMap = {};
+    let refMap = {};
     let tablePathMap = {};
     let requires = ['aurora.db.schema.TableType', 'recoil.db.BasicType',
                     'aurora.db.access', 'aurora.db.access.filter', 'recoil.structs.table.ColumnKey',
@@ -476,6 +477,8 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
 
             fs.appendFileSync(out, '    name: ' + stringify(tablePath) + ',\n');
             fs.appendFileSync(out, '    path: ' + stringify(tablePath) + ',\n');
+            fs.appendFileSync(out, '    refs: [],\n');
+            
             tablePathMap[data.tableName] = tablePath;
             if (!client) {
                 tableMap[data.tableName] = prefix + '.' + tName;
@@ -594,6 +597,11 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
         fs.appendFileSync(out, ',\n       type: ' + toStr(client && typeInfo.type == 'file' ? 'bigint' : typeInfo.type));
 
         let isRef = typeInfo.type === 'ref';
+        
+        if (isRef) {
+            refMap[prefix + '.' + typeInfo.table] = refMap[prefix + '.' + typeInfo.table] || [];
+            refMap[prefix + '.' + typeInfo.table].push('{col:' + toStr(name) + ', table:' + prefix + '.' + fullTableName + ', nullable:' + (data.nullable === true) + '}');
+        }
 
         if (isRef) {
             fs.appendFileSync(out, ',\n       ref: ' + stringify(tablePathMap[typeInfo.table]));
@@ -794,6 +802,23 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
     fs.appendFileSync(out, '})(aurora.db.schema.prefixMap);\n');
 
 
+    fs.appendFileSync(out, '(function() {\n');
+    // name path -> tableInfo
+    for (let k in refMap) {
+        let entries =  refMap[k];
+        fs.appendFileSync(out, '    '+ k + '.info.refs = [\n');
+        for (let i = 0; i < entries.length; i++) {
+            fs.appendFileSync(out, '        '+ entries[i]);
+            if (i != entries.length -1) {
+                fs.appendFileSync(out, ',');
+            }
+            fs.appendFileSync(out, '\n');
+        }
+        fs.appendFileSync(out, '    ];\n');
+    }
+    fs.appendFileSync(out, '})();\n');
+    
+    
     if (!client) {
         fs.appendFileSync(out, '(function(map) {\n');
         // name path -> tableInfo
