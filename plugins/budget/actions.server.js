@@ -518,7 +518,7 @@ budget.actions.scheduleAppointment = function(context, reader, apptId, mentorid,
                 budget.actions.sendAppointmentEmail_(context, /** @type {!Object} */ (mentorObj), /** @type {!Object} */ (userObj), time, length, null, function(err, val) {
                     if (change) {
                         console.log('sending changes 1', change.path().toString());
-                        aurora.db.Coms.instance.notifyListeners(change, function() {
+                        aurora.db.Coms.instance.notifyListeners([change], {}, function() {
                             callback(err, val);
                         });
                     }
@@ -615,7 +615,7 @@ budget.actions.unscheduleAppointment = function(context, reader, apptid, callbac
                 }
                 if (change) {
                     console.log('sending changes', change.path().toString());
-                    aurora.db.Coms.instance.notifyListeners(change, function() {
+                    aurora.db.Coms.instance.notifyListeners([change], {}, function() {
                         console.log('action done');
                         callback(err, []);
                     });

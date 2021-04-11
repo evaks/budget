@@ -574,11 +574,12 @@ aurora.db.sql.Reader.prototype.mkSelectSql_ = function(scope, colMap, cur, colum
 
             }
             for (let k in table.cols) {
-                if (!columnFilter(path.slice(0).concat([k]), false)) {
+                let col = table.cols[k];
+                if (col !== table.info.pk &&  !columnFilter(path.slice(0).concat([k]), false)) {
                     continue;
                 }
 
-                let col = table.cols[k];
+
                 let meta = table.meta[col.getName()];
                 if (!meta.isList && !meta.isObject) {
                     if (meta.type === 'file') {
@@ -718,7 +719,6 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
     // a map of path to table info of tables to read
     let unreadTables = {};
     // a map from path to table data
-
     unreadTables[JSON.stringify([])] = {
         data: null,
         sec: securityFilter,
@@ -753,6 +753,7 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
                 return;
             }
         }
+
         let columns = [];
         try {
             let scope = new recoil.db.DBQueryScope(context, new recoil.db.SQLQueryHelper(me), me.makeChildPathFunc(table));
@@ -795,7 +796,6 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
                             colMap[meta.key.getId()] = colMap[srcMeta.key.getId()];
                         }
                     }
-                    console.log('colmap', colMap);
                 }
                 else {
                     sql = me.mkSelectSql_(scope, colMap, cur, columns, limit, colFilter);

@@ -61,6 +61,29 @@ aurora.db.Notify.prototype.removeClient = function(clientid) {
     delete this.contexts_[clientid];
 };
 
+/**
+ * @param {recoil.db.ChangeSet.Path} path
+ * @return {recoil.db.ChangeSet.Path}
+ */
+aurora.db.Notify.fixPath = function (path) {
+
+    if (path) {
+        return new recoil.db.ChangeSet.Path(path.items().map(function (v) {
+            let keys = v.keys();
+            if (keys.length == 0) {
+                return v;
+            }
+            
+            return new recoil.db.ChangeSet.PathItem(v.name(), v.keyNames(), keys.map(function (v) {
+                if (v instanceof aurora.db.PrimaryKey) {
+                    return v.db;
+                }
+                return v;
+            }));                        
+        }));
+    }
+    return path;
+};
 
 /**
  * @param {recoil.db.ChangeSet.Path} path
@@ -68,7 +91,9 @@ aurora.db.Notify.prototype.removeClient = function(clientid) {
  */
 aurora.db.Notify.prototype.forEachEffected = function(path, callback) {
     // to get the root path find the first path with a key
-    let items = path.items();
+    // fix up the id types in path
+    let items = aurora.db.Notify.fixPath(path).items();
+
     let rootItems = [];
     for (let i = 0; i < items.length; i++) {
         rootItems.push(items[i]);
@@ -209,7 +234,6 @@ aurora.db.Coms = function(authenticator) {
                             action.func(secContext, reader, inputs, responseHandler);
                         }
                         else {
-                            console.log('xx1', inputs, e.data, expectedInputs);
                             if (recoil.util.map.size(inputs) !== expectedInputs.length) {
                                 response['error'] = 'Unexpected number of parameter expected ' + expectedInputs.length + ' got ' + recoil.util.map.size(inputs);
                                 me.log_.warn(response['error']);
@@ -396,10 +420,101 @@ aurora.db.Coms.getSubObject_ = function(object, basePath, path, opt_validOnly) {
 
 };
 /**
- * @param {recoil.db.ChangeSet.Change} change
+ * @param {!aurora.db.schema.TableType} baseTable 
+ * @param {?} object
+ * @param {!recoil.db.ChangeSet.Change} change
+ * @return {boolean}
+ */
+aurora.db.Coms.doesChangeApplyToObject_ = function (baseTable, object, change) {
+    let obj = aurora.db.Coms.getSubObject_(object, recoil.db.ChangeSet.Path.fromString(baseTable.info.path), /** @type {!recoil.db.ChangeSet.Path}*/ (aurora.db.Notify.fixPath(change.path())), true);
+    return obj != null;
+};
+
+/**
+ * checks the security on the change so we can make sure its ok
+ * @param {!goog.structs.AvlTree<{key: ?, context: Object, clientId:string, changes:!Array<!recoil.db.ChangeSet.Change>}>} sendClients this will add 
+ * @param {?} key the key used to work out the table
+ * @param {!recoil.db.Query} query the query return results for the table
+ * @param {string} clientId
+ * @param {!aurora.db.access.SecurityContext} context the security context of client
+ * @param {!aurora.db.schema.TableType} baseTable
+ * @param {recoil.db.Query} accessFilter
+ * @param {!Array<!recoil.db.ChangeSet.Path>} basePaths
+ * @param {!Array<!recoil.db.ChangeSet.Change>} changes the changes applicable for this query
+ * @param {function()} callback called when done
+ */
+aurora.db.Coms.prototype.getSendableClients_ = function (sendClients, key, query, clientId, context, baseTable, accessFilter, basePaths, changes, callback) {
+
+    let reader = this.reader_;
+    if (!reader) {
+        callback();
+        return;
+    }
+    let prefixLen = baseTable.info.path.split('/').length - 1;
+    let columnFilters = changes.map(function (change) {
+        let path = change.path().toStringArray();
+        
+        return {prefix: path.slice(prefixLen), result: true};
+    });
+    columnFilters.push({all: true, result: false});
+
+    let onlyPath = new recoil.db.QueryOptions({columnFilters: columnFilters});
+    let q = new recoil.db.Query();
+    
+    let basePathKeys = basePaths.map(function (basePath) {return q.val(basePath.last().keys()[0]);});
+    reader.readObjects(
+        context, baseTable, q.and(query, q.isIn(query.field(baseTable.info.pk), basePathKeys)),
+        accessFilter,
+        function(err, results) {
+            
+            if (!err) {
+                // check if path exists in the results to see if path exists in objects if so we need to the update
+                
+                for (var i = 0; i < results.length; i++) {
+                    for (let j = 0; j < changes.length; j++) {
+                            
+                        let change = changes[j];
+                        if (aurora.db.Coms.doesChangeApplyToObject_(baseTable, results[i], change)) {
+                            let secureChange = change.filter(function(path) {
+                                try {
+                                    let meta = aurora.db.schema.getMetaByPath(path.pathAsString());
+                                    if (meta.type === 'password') {
+                                        return false;
+                                    }
+                                }
+                                catch (e) {
+                                    // if the path doesn't exist then it is a internally made up path like file attributes so
+                                    // for now its ok check the parent
+                                    return aurora.db.schema.hasAccess(context, path.parent(), 'r');
+                                }
+                                
+                                return aurora.db.schema.hasAccess(context, path, 'r');
+                            });
+                            
+                            if (secureChange) {
+                                // it would be great just to send the change that the client was interested in but
+                                // for now will just resend the query that the change effected its simpler and safer
+                                // and will do for now, it deals with things like queries that filter limit options
+                                sendClients.safeFind({clientId:clientId, key: key, context: context, changes: []}).changes.push(secureChange);
+                            }
+                            
+                            break;
+                        }
+                    }
+                }
+
+            }
+
+            callback();
+        }, onlyPath);
+
+};
+/**
+ * @param {!Array<!recoil.db.ChangeSet.Change>} changes
+ * @param {Object<string,boolean>} exclude a map of client ids not to send to
  * @param {function()=} opt_done
  */
-aurora.db.Coms.prototype.notifyListeners = function(change, opt_done) {
+aurora.db.Coms.prototype.notifyListeners = function(changes, exclude, opt_done) {
     let reader = this.reader_;
     let done = opt_done || function() {};
     if (!reader) {
@@ -407,39 +522,31 @@ aurora.db.Coms.prototype.notifyListeners = function(change, opt_done) {
         return;
     }
     let async = this.async_;
-    let sendClients = {};
+    let sendClients = new goog.structs.AvlTree(recoil.util.object.compare);
 
     let me = this;
     let readObjectQueue = async.queue(function(data, callback) {
         if (data.done) {
-
-            let todo = {};
-
-            for (let clientId in sendClients) {
-                todo[clientId] = true;
-            }
-
-            console.log('todo', todo);
-            if (recoil.util.map.isEmpty(todo)) {
+            let todo = sendClients.getCount();
+            if (todo == 0) {
                 if (opt_done) {
                     opt_done();
                 }
             }
             else {
-                for (let clientId in sendClients) {
-                    let info = sendClients[clientId];
-                    me.doGetHelper_(clientId, reader, info.context, info.key.name, info.key.query, info.key.options, function() {
-                        delete todo[clientId];
-                        if (recoil.util.map.isEmpty(todo) && opt_done) {
+                sendClients.inOrderTraverse(function (info) {
+                    me.doGetHelper_(info.clientId, reader, info.context, info.key.name, info.key.query, info.key.options, function() {
+                        todo--;
+                        if (todo === 0 && opt_done) {
                             opt_done();
                         }
                     });
-                }
+                });
+                                           
             }
             return;
         }
-
-        let baseTable = aurora.db.schema.getTableByName(data.basePath);
+        let baseTable = aurora.db.schema.getTableByName(data.basePaths[0]);
         if (!baseTable && baseTable.info.accessFilterFunc) {
             return;
         }
@@ -453,72 +560,44 @@ aurora.db.Coms.prototype.notifyListeners = function(change, opt_done) {
         // todo we should really merge this with the other options since something like a limit would mean we shouldn't get
         // the value although the limit wouldn't work since we lookup by key anyway just send it or perhaps not they are just
         // global lookups so shouldn't really matter
-        let pathItems = change.path().items();
-        let onlyPath = new recoil.db.QueryOptions({columnFilters: {prefix: change.path().toStringArray()}});
-        console.log('reading object');
+        me.getSendableClients_(sendClients, data.key, data.query, data.clientId, data.context, baseTable, accessFilter, data.basePaths, data.changes, callback);
 
-        reader.readObjects(
-            data.context, baseTable, query.and(query, query.eq(query.field(baseTable.info.pk), query.val(data.basePath.last().keys()[0]))),
-            accessFilter,
-            function(err, results) {
-                console.log('read', results);
-
-                if (!err) {
-                    // check if path exists in the results to see if path exists in objects if so we need to the update
-
-                    for (var i = 0; i < results.length; i++) {
-                        let object = aurora.db.Coms.getSubObject_(results[i], recoil.db.ChangeSet.Path.fromString(baseTable.info.path), change.path(), true);
-                        // this object can be null though  xxx
-                        console.log('x1');
-                        if (object != null) {
-                            console.log('x2');
-                            let secureChange = change.filter(function(path) {
-                                try {
-                                    let meta = aurora.db.schema.getMetaByPath(path.pathAsString());
-                                    if (meta.type === 'password') {
-                                        return false;
-                                    }
-                                }
-                                catch (e) {
-                                    // if the path doesn't exist then it is a internally made up path like file attributes so
-                                    // for now its ok check the parent
-                                    return aurora.db.schema.hasAccess(data.context, path.parent(), 'r');
-                                }
-
-                                return aurora.db.schema.hasAccess(data.context, path, 'r');
-                            });
-                            console.log('x3', secureChange);
-
-                            if (secureChange) {
-                                // it would be great just to send the change that the client was interested in but
-                                // for now will just resend the query that the change effected its simpler and safer
-                                // and will do for now, it deals with things like queries that filter limit options
-                                sendClients[data.clientid] = {change: secureChange, key: data.key, context: data.context};
-                            }
-
-                            break;
-                        }
-                    }
-
-                }
-
-                callback();
-            }, onlyPath);
     });
 
     // todo currently we add a top level item or update an item so it now matches this will not update
     // notify interested queries
-    console.log('notifiying');
-    this.notifies_.forEachEffected(change.path(), function(context, clientid, basePath, path, key, query) {
-        // if the client doesn't have access to read the field don't send
-        console.log('effected -1', change.path().toString(), context);
-        if (!aurora.db.schema.hasAccess(context, change.path(), 'r')) {
-            return;
+    // todo is a map of queries -> clients
+    let todo = new goog.structs.AvlTree(recoil.util.object.compareKey);
+    
+    
+    
+    changes.forEach(function (change) {
+        me.notifies_.forEachEffected(change.path(), function(context, clientid, basePath, path, key, query) {
+            // if the client doesn't have access to read the field don't send
+            if (!aurora.db.schema.hasAccess(context, change.path(), 'r')) {
+                return;
+            }
+            let clientMap = todo.safeFind({key: key, query: query, clients: {}}).clients;
+            
+
+            let clientInfo = recoil.util.map.safeGet(clientMap, clientid, {context: context, basePaths: [], changes: []});
+            clientInfo.changes.push(change);
+            clientInfo.basePaths.push(basePath);
+            // key is the json object to used to send data back for the query 
+            
+        });
+    });
+
+
+
+    todo.inOrderTraverse(function (item) {
+        for (let clientId in item.clients) {
+            if (exclude[clientId]) {
+                continue;
+            }
+            let clientInfo = item.clients[clientId];
+            readObjectQueue.push({context: clientInfo.context, clientId: clientId, basePaths: clientInfo.basePaths, key: item.key, query: item.query, changes: clientInfo.changes});
         }
-        console.log('effected');
-
-        readObjectQueue.push({context, clientid, basePath, path, key, query});
-
     });
     readObjectQueue.push({done: true});
 };
@@ -536,6 +615,12 @@ aurora.db.Coms.prototype.doChanges_ = function(reader, e, secContext) {
     let me = this;
     this.writer_.applyChanges(changes, secContext, function(result) {
         me.channel_.send({'command': 'set', 'id': e.data['id'], 'results': result}, e.clientId);
+        if (!result.error) {
+            let myClient = {};
+            myClient[e.clientId] = true;
+            me.notifyListeners(changes, myClient);
+
+        }
 
     });
 };
@@ -935,7 +1020,6 @@ aurora.db.Coms.prototype.setupDownload_ = function () {
                     }
                     reader.readObjectByKey(context, urlInfo.baseTable, urlInfo.keyValues, urlInfo.baseTable.info.accessFilter(context), function (err, object) {
                         let fileInfo = me.findElement(object, urlInfo.base, urlInfo.path);
-                        console.log("about to do read", fileInfo);
                         if (err || !fileInfo) {
                             done(undefined);
                             return;
@@ -949,7 +1033,6 @@ aurora.db.Coms.prototype.setupDownload_ = function () {
                         let request = state.request;
                         let headers = state.responseHeaders;
 
-                        console.log("name", fileInfo.name);
                         
                         headers.set('Content-Length', fileInfo.size);
                         headers.set('Content-Type', mime.getType(fileInfo.name));
@@ -962,9 +1045,7 @@ aurora.db.Coms.prototype.setupDownload_ = function () {
                         
                         // now read the parts but we need to read it piecewize otherwize it may be too big
                         let query = new recoil.db.Query();
-                        console.log("about to do read");
                         reader.readLevel(context, fileT.parts, query.eq(fileT.parts.info.parentKey, query.val(fileId)), null, function (part, cb) {
-                            console.log("got part", part);
                             response.write(part.data);
                             cb();
                         }, function (err) {
@@ -972,7 +1053,6 @@ aurora.db.Coms.prototype.setupDownload_ = function () {
                                 me.log_.error('error reading file', err);
 
                             }
-                            console.log("done");
                             response.end();
                         });
                         
@@ -1026,7 +1106,6 @@ aurora.db.Coms.prototype.setupUpload_ = function () {
                                 return;
                             }
                             done(false);
-                            console.log("insert el", insertEl, urlInfo.path.toString(), urlInfo.table.info.parentKey.getName());
                                 
                             let parentId = insertEl[urlInfo.parentTable.info.pk.getName()];
                             
@@ -1080,7 +1159,7 @@ aurora.db.Coms.prototype.setupUpload_ = function () {
                                         fields.push(new recoil.db.ChangeSet.Set(path.appendName(name), null, obj[name]));
                                     }
                                 }
-                                me.notifyListeners(new recoil.db.ChangeSet.Add(path, fields));
+                                me.notifyListeners([new recoil.db.ChangeSet.Add(path, fields)], {});
                             });
                         }
                     });
