@@ -61,7 +61,7 @@ budget.filter.userMentor = function(context) {
  */
 budget.filter.isMentor = function(context) {
     let query = new recoil.db.Query();
-    return query.isIn(query.field(aurora.db.schema.tables.base.user.cols.id), [query.raw("SELECT ug.id FROM `user_group` ug, `group` tg, `group_permission` tgp, `permission` tp WHERE tp.name = 'mentor' and ug.groupid = tg.id and tgp.groupid = tg.id and tp.id = tgp.permissionid")]);
+    return query.isIn(query.field(aurora.db.schema.tables.base.user.cols.id), [query.raw("SELECT ug.userid FROM `user_group` ug, `group` tg, `group_permission` tgp, `permission` tp WHERE tp.name = 'mentor' and ug.groupid = tg.id and tgp.groupid = tg.id and tp.id = tgp.permissionid")]);
 };
 
 
@@ -71,7 +71,7 @@ budget.filter.isMentor = function(context) {
  */
 budget.filter.client = function(context) {
     let query = new recoil.db.Query();
-    return query.isIn(query.field(aurora.db.schema.tables.base.user.cols.id), [query.raw("SELECT ug.id FROM `user_group` ug, `group` tg WHERE tg.name = 'client' and ug.groupid = tg.id")]);
+    return query.isIn(query.field(aurora.db.schema.tables.base.user.cols.id), [query.raw("SELECT ug.userid FROM `user_group` ug, `group` tg WHERE tg.name = 'client' and ug.groupid = tg.id")]);
 };
 
 

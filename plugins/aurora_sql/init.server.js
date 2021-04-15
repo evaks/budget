@@ -43,3 +43,57 @@ aurora.db.schema.init.processDependants = function(dependants, depMap, done) {
     });
 
 };
+
+/**
+ * @param {!aurora.db.Pool} pool
+ * @param {function(!aurora.db.Pool,function(?))} updateFunc
+ * @param {function(?)} done
+ */
+aurora.db.schema.init.doUpdateDb = function(pool, updateFunc, done) {
+
+    let log = aurora.log.createModule('DBINIT-BASE');
+    log.info('Backing up database');
+    pool.backup(function(err, fname) {
+        if (err) {
+            log.error('Backing failed', err);
+            done(err);
+            return;
+        }
+        if (fname) {
+            // the database existed do restore if failed
+            log.info('Backed up to ', fname);
+            updateFunc(pool, function(err) {
+                if (err && fname) {
+                    pool.restore(fname, function(rbError) {
+                        done(rbError || err);
+                    });
+                }
+                else {
+                    done(null);
+                }
+            });
+
+        }
+        else {
+            pool.createDb(function(err) {
+                if (err) {
+                    done(err);
+                }
+                else {
+                    updateFunc(pool, function(rbError) {
+                        if (err) {
+                            pool.dropDb(function() {
+                                done(rbError);
+                            });
+                        }
+                        else {
+                            done(null);
+                        }
+                    });
+                }
+            });
+        }
+    });
+
+
+};

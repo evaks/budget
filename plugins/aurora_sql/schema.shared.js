@@ -35,7 +35,7 @@ aurora.db.SchemaType;
  * @typedef {{path:string,
  *            pk:!recoil.structs.table.ColumnKey,
  *            parentKey:(!recoil.structs.table.ColumnKey|undefined),
- *            refs:!Array<!aurora.db.schema.RefType>,  
+ *            refs:!Array<!aurora.db.schema.RefType>,
  *            autoPk:(boolean|undefined),
  *            access:(function(!aurora.db.access.SecurityContext,string):boolean|undefined),
  *            accessFilter:(function(!aurora.db.access.SecurityContext):!recoil.db.Query|undefined),

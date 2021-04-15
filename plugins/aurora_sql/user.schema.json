@@ -40,6 +40,7 @@
 	]
     },{
 	"name": "group",
+	"indexes": [{"unique": true, "columns": ["name"]}],
 	"initial": [{
 	    "name": "admin",
 	    "permission": [{"!select": {"cols": [{"to": "permissionid", "from": "id"}], "query": " FROM permission"}}]

@@ -478,7 +478,7 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
             fs.appendFileSync(out, '    name: ' + stringify(tablePath) + ',\n');
             fs.appendFileSync(out, '    path: ' + stringify(tablePath) + ',\n');
             fs.appendFileSync(out, '    refs: [],\n');
-            
+
             tablePathMap[data.tableName] = tablePath;
             if (!client) {
                 tableMap[data.tableName] = prefix + '.' + tName;
@@ -597,7 +597,7 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
         fs.appendFileSync(out, ',\n       type: ' + toStr(client && typeInfo.type == 'file' ? 'bigint' : typeInfo.type));
 
         let isRef = typeInfo.type === 'ref';
-        
+
         if (isRef) {
             refMap[prefix + '.' + typeInfo.table] = refMap[prefix + '.' + typeInfo.table] || [];
             refMap[prefix + '.' + typeInfo.table].push('{col:' + toStr(name) + ', table:' + prefix + '.' + fullTableName + ', nullable:' + (data.nullable === true) + '}');
@@ -805,11 +805,11 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
     fs.appendFileSync(out, '(function() {\n');
     // name path -> tableInfo
     for (let k in refMap) {
-        let entries =  refMap[k];
-        fs.appendFileSync(out, '    '+ k + '.info.refs = [\n');
+        let entries = refMap[k];
+        fs.appendFileSync(out, '    ' + k + '.info.refs = [\n');
         for (let i = 0; i < entries.length; i++) {
-            fs.appendFileSync(out, '        '+ entries[i]);
-            if (i != entries.length -1) {
+            fs.appendFileSync(out, '        ' + entries[i]);
+            if (i != entries.length - 1) {
                 fs.appendFileSync(out, ',');
             }
             fs.appendFileSync(out, '\n');
@@ -817,8 +817,8 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
         fs.appendFileSync(out, '    ];\n');
     }
     fs.appendFileSync(out, '})();\n');
-    
-    
+
+
     if (!client) {
         fs.appendFileSync(out, '(function(map) {\n');
         // name path -> tableInfo
@@ -949,17 +949,7 @@ function generateDbInit(def, ns, types, out) {
     fs.appendFileSync(out, '/**\n * @param {!aurora.db.Pool} pool\n');
     fs.appendFileSync(out, ' * @param {function(?)} cb\n */\n');
     fs.appendFileSync(out, prefix + '.updateDb = function (pool, cb) {\n');
-    fs.appendFileSync(out, '    let log = aurora.log.createModule(' + stringify('DBINIT-' + ns.toUpperCase(ns)) + ');\n');
-    fs.appendFileSync(out, '    log.info(\'Backing up database\');\n');
-    fs.appendFileSync(out, '    pool.backup(function (err, fname) {\n');
-    fs.appendFileSync(out, '        if (err) {\n');
-    fs.appendFileSync(out, '            log.error(\'Backing failed\', err);\n');
-    fs.appendFileSync(out, '            cb(err);\n');
-    fs.appendFileSync(out, '            return;\n');
-    fs.appendFileSync(out, '        }\n');
-    fs.appendFileSync(out, '        log.info(\'Backed up to \', fname);\n');
-    fs.appendFileSync(out, '        ' + prefix + '.updateDb_(pool, cb);\n');
-    fs.appendFileSync(out, '    });\n');
+    fs.appendFileSync(out, '    aurora.db.schema.init.doUpdateDb(pool, ' + prefix + '.updateDb_, cb);\n');
     fs.appendFileSync(out, '};\n\n');
     fs.appendFileSync(out, '/**\n * @private\n');
     fs.appendFileSync(out, ' * @param {!aurora.db.Pool} pool\n');
@@ -968,6 +958,7 @@ function generateDbInit(def, ns, types, out) {
 
     fs.appendFileSync(out, '    let log = aurora.log.createModule(' + stringify('DBINIT-' + ns.toUpperCase(ns)) + ');\n');
     fs.appendFileSync(out, '    let todoInserts = [];\n');
+    fs.appendFileSync(out, '    let tableResults = {};\n');
     fs.appendFileSync(out, '    const async = require(\'async\');\n');
 
     fs.appendFileSync(out, '    async.series([\n');
@@ -988,7 +979,7 @@ function generateDbInit(def, ns, types, out) {
             }
             tableInfo = {passwords: {}};
             fs.appendFileSync(out, '        function (callback) {\n            log.info(\'Creating table\', ' + stringify(tableName) + ');\n');
-            fs.appendFileSync(out, '            pool.createTable(' + stringify(tableName) + ', {\n');
+            fs.appendFileSync(out, '            let fields = {\n');
             if (parentCol) {
                 let parentType = getColType(parentCol, types);
                 fs.appendFileSync(out, '                ' + stringify(parentType.childKey) + ': {type: aurora.db.type.types.bigint}');
@@ -1040,9 +1031,10 @@ function generateDbInit(def, ns, types, out) {
 
         },
         endTable: function(name, data) {
-
-            fs.appendFileSync(out, '},\n');
+            let tableName = data.tableName;
+            fs.appendFileSync(out, '};\n');
             let first = true;
+            fs.appendFileSync(out, '            pool.createTable(' + stringify(tableName) + ', fields,\n');
             let indexes = [];
             if (data.indexes) {
                 indexes = data.indexes.map(function(el) {
@@ -1053,12 +1045,16 @@ function generateDbInit(def, ns, types, out) {
                     return res;
                 });
             }
-            fs.appendFileSync(out, '            ' + stringify(indexes) + ',\n');
-            fs.appendFileSync(out, '            {exists: true,');
+            fs.appendFileSync(out, '                ' + stringify(indexes) + ',\n');
+            fs.appendFileSync(out, '                {exists: true,');
             if (tableInfo.start != undefined) {
                 fs.appendFileSync(out, 'start: ' + stringify(tableInfo.start));
             }
-            fs.appendFileSync(out, '}, callback);}');
+            fs.appendFileSync(out, '},\n                function (err, existed, changes) {\n');
+            fs.appendFileSync(out, '                    tableResults[' + stringify(tableName) + '] = {fields, existed};\n');
+            fs.appendFileSync(out, '                    callback(err);\n');
+            fs.appendFileSync(out, '                });\n');
+            fs.appendFileSync(out, '        }');
         }
 
     });
@@ -1102,6 +1098,9 @@ function generateDbInit(def, ns, types, out) {
                 fs.appendFileSync(out, ',');
             }
             fs.appendFileSync(out, '\n' + padding + '        function(callback) {\n');
+            if (depth == 0) {
+                fs.appendFileSync(out, padding + '            if (tableResults[' + stringify(table) + '].existed) {callback(null); return;}\n');
+            }
 
             if (row['!select']) {
                 let info = row['!select'];

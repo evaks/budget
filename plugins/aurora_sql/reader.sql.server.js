@@ -575,7 +575,7 @@ aurora.db.sql.Reader.prototype.mkSelectSql_ = function(scope, colMap, cur, colum
             }
             for (let k in table.cols) {
                 let col = table.cols[k];
-                if (col !== table.info.pk &&  !columnFilter(path.slice(0).concat([k]), false)) {
+                if (col !== table.info.pk && !columnFilter(path.slice(0).concat([k]), false)) {
                     continue;
                 }
 
@@ -1210,8 +1210,8 @@ aurora.db.sql.Reader.prototype.deleteObjects = function(context, table, query, s
     // with a dependancy map
     let whereClause = null;
 
-    let referers = this.getChildTables_(table).map(function (v) {return {child: true, table: v};}).concat(aurora.db.schema.getReferences(table));
-    
+    let referers = this.getChildTables_(table).map(function(v) {return {child: true, table: v};}).concat(aurora.db.schema.getReferences(table));
+
     let filter = this.addSecurityFilter_(query, securityFilter);
     let scope = new recoil.db.DBQueryScope({}, new recoil.db.SQLQueryHelper(this), this.makeChildPathFunc(table));
     let me = this;

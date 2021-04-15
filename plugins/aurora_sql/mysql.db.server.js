@@ -93,6 +93,31 @@ aurora.db.mysql.Pool.prototype.addOptions = function(select, options) {
  * @suppress {checkTypes}
  */
 aurora.db.mysql.Pool.prototype.backup = function(cb) {
+    let me = this;
+    let database = this.options_['database'];
+    this.query('select 1 from `mysql`.`db` where ?db = db', {db: database}, function(err, res) {
+        if (err && err.code === 'ER_BAD_DB_ERROR') {
+            aurora.db.mysql.log.info('db does not exist failed no backup performed');
+            cb(null, null);
+        }
+        else if (err) {
+            cb(err, null);
+        }
+        else if (res.length == 0) {
+            cb(null, null);
+        }
+        else {
+            me.backup_(cb);
+        }
+    });
+};
+/**
+ * backs up the database
+ * @private
+ * @param {function(?,?string)} cb
+ * @suppress {checkTypes}
+ */
+aurora.db.mysql.Pool.prototype.backup_ = function(cb) {
     const { spawn } = require('child_process');
     const fs = require('fs');
     const path = require('path');
@@ -104,7 +129,6 @@ aurora.db.mysql.Pool.prototype.backup = function(cb) {
     write.on('ready', function() {
         let process = spawn('mysqldump', ['-u', me.options_['user'], '-p' + me.options_['password'], me.options_['database']]);
         process.stdout.on('data', (data) => {
-            console.log('writing');
             write.write(data);
         });
 
@@ -114,6 +138,7 @@ aurora.db.mysql.Pool.prototype.backup = function(cb) {
                 cb(e, null);
             }
         });
+
         process.on('exit', (code) => {
             if (code && !error) {
                 error = 'Process exited with code ' + code;
@@ -131,6 +156,99 @@ aurora.db.mysql.Pool.prototype.backup = function(cb) {
     write.on('finish', function () {
         cb(error, fname);
     });
+};
+
+/**
+ * @param {string} fname
+ * @param {function(?)} cb
+ */
+aurora.db.mysql.Pool.prototype.restore = function(fname, cb) {
+    const { spawn } = require('child_process');
+    const fs = require('fs');
+    let read = fs.createReadStream(fname);
+    let error = null;
+    let me = this;
+
+    let database = me.options_['database'];
+    let log = aurora.db.mysql.log;
+    log.info("*********************************** restoring database '"+ database +  "' from '" + fname + "'");
+    let runMysql = function (err) {
+        if (err) {
+            log.error("error dropping database", err);
+            cb(err);
+            return;
+        }
+        let p = spawn('mysql', ['-u', me.options_['user'], '-p' + me.options_['password'], database]);
+        
+            
+        p.on('error', function(e) {
+            if (!error) {
+                error = e;
+                cb(e);
+            }
+        });
+        
+        p.on('exit', (code) => {
+            console.log("done",code);
+            if (code && !error) {
+                    error = 'Process exited with code ' + code;
+                cb(error);
+            }
+            
+        });
+        read.pipe(p.stdin);
+    };
+
+
+    me.dropDb(
+        function (err) {
+            if (err) {
+                runMysql(err);
+            }
+            else {
+                me.query('create database ' + me.escapeId(database), runMysql);
+            }
+        });
+    
+};
+
+/**
+ * @param {function(?)} cb
+ */
+aurora.db.mysql.Pool.prototype.dropDb = function(cb) {
+    let me = this;
+    let database = me.options_['database'];
+    this.query(
+        'drop database IF EXISTS ' + me.escapeId(database), cb);
+};
+
+
+/**
+ * @param {function(?)} cb
+ */
+aurora.db.mysql.Pool.prototype.createDb = function(cb) {
+    let me = this;
+    let database = me.options_['database'];
+    console.log("create", this.options_);
+    let mysqlOpts = goog.object.clone(this.options_);
+    mysqlOpts['database']= 'mysql';
+    console.log("create", this.options_);
+
+
+    this.mysql_.createPool(mysqlOpts).query(
+        'create database ' + me.escapeId(database),
+        function(err) {
+            if (err) {
+                cb(err);
+            }
+            else {
+                
+                me.pool_ = me.mysql_.createPool(me.options_);
+                cb(err);
+            }
+        });
+
+
 };
 
 /**
@@ -361,13 +479,12 @@ aurora.db.mysql.Pool.prototype.insert = function(table, values, callback) {
         break;
     }
     let query = 'INSERT INTO ' + this.escapeId(table) + (hasValues ? ' SET ?values' : ' VALUES ()');
-    console.log("insert values", query, values);
     this.query(
         query,
         {values: values},
         function(error, results, fields) {
             if (error) {
-                console.log("query error", error, query);
+                aurora.db.mysql.log.info("query error", error, query);
             }
             
             callback(error, /** @type {?aurora.db.type.InsertDef} */ (results));
@@ -612,46 +729,98 @@ aurora.db.mysql.Pool.prototype.transaction = function(callback, doneFunc) {
 
 };
 
+/**
+ * @param {!Object<string,aurora.db.type.ColumnDef>} field
+ * @return {string}
+ */
+aurora.db.mysql.Pool.makeType = function (field) {
+    if (field.type === aurora.db.type.types.bigint) {
+        return 'BIGINT';
+    }
+    if (field.type === aurora.db.type.types.boolean) {
+        return 'TINYINT';
+    }
+    
+    if (field.type === aurora.db.type.types.varchar) {
+        return 'VARCHAR(' + field.length + ')';
+    }
+    if (field.type === aurora.db.type.types.password) {
+        return 'VARBINARY(' + aurora.db.Pool.passwordColSize() + ')';
+    }
+    
+    if (field.type === aurora.db.type.types.int) {
+        return 'INT';
+    }
 
+    if (field.type === aurora.db.type.types.json) {
+        return 'JSON';
+    }
+    if (field.type === aurora.db.type.types.blob) {
+        return 'BLOB';
+    }
+    
+    throw 'Unknown type ' + field.type;
+};
+
+
+/**
+ * @const
+ * @private
+ */
+aurora.db.mysql.Pool.dbTypeMap_ = {
+    'bigint': 'bigint(20)',
+    'int': 'int(11)',
+    'tinyint': 'tinyint(4)'
+};
+
+/**
+ * @private
+ * @param {!Object<string,aurora.db.type.ColumnDef>} field
+ * @return {string}
+ */
+aurora.db.mysql.Pool.makeDbType_ = function (field) {
+    let t = aurora.db.mysql.Pool.makeType(field).toLowerCase();
+    let mapped = aurora.db.mysql.Pool.dbTypeMap_[t];
+    return mapped == undefined ? t : mapped;
+};
+
+/**
+ * @private
+ * @param {string} name
+ * @param {!Object<string,aurora.db.type.ColumnDef>} field
+ * @return {string}
+ */
+
+aurora.db.mysql.Pool.prototype.makeFieldDef_ = function (name, field) {
+    let makeType = aurora.db.mysql.Pool.makeType;
+    let sql = this.escapeId(name) + ' ' + makeType(field);
+    sql += ' ' + (field.nullable ? '' : 'NOT ') + 'NULL';
+    if (field.default != undefined) {
+        sql += ' DEFAULT ' + this.escape(field.default);
+    }
+    if (field.pk) {
+        if (field.auto === false) {
+            sql += ' PRIMARY KEY';
+        }
+        else {
+            sql += ' AUTO_INCREMENT PRIMARY KEY';
+        }
+    }
+    return sql;
+};
 /**
  * @param {string} table
  * @param {!Object<string,aurora.db.type.ColumnDef>} fields
  * @param {!Array<!aurora.db.type.IndexDef>} indexes
  * @param {!aurora.db.type.TableOptions} options
- * @param {function(?)} callback (error)
+ * @param {function(?, boolean, !aurora.db.mysql.Pool.TableChanges)} callback (error, existed, array of added columns)
  */
 
 aurora.db.mysql.Pool.prototype.createTable = function(table, fields, indexes, options, callback) {
-    let sql = 'CREATE ' + (options.temp ? 'TEMPORARY ' : '') + 'TABLE ' + (options.exists ? 'IF NOT EXISTS ' : '') + this.escapeId(table) + ' (';
 
-    let makeType = function(field) {
-        if (field.type === aurora.db.type.types.bigint) {
-            return 'BIGINT';
-        }
-        if (field.type === aurora.db.type.types.boolean) {
-            return 'TINYINT';
-        }
+    let makeType = aurora.db.mysql.Pool.makeType;
 
-        if (field.type === aurora.db.type.types.varchar) {
-            return 'VARCHAR(' + field.length + ')';
-        }
-        if (field.type === aurora.db.type.types.password) {
-            return 'VARBINARY(' + aurora.db.Pool.passwordColSize() + ')';
-        }
-
-        if (field.type === aurora.db.type.types.int) {
-            return 'INT';
-        }
-
-        if (field.type === aurora.db.type.types.json) {
-            return 'JSON';
-        }
-        if (field.type === aurora.db.type.types.blob) {
-            return 'BLOB';
-        }
-
-        throw 'Unknown type ' + field.type;
-    };
+    let sql = 'CREATE ' + (options.temp ? 'TEMPORARY ' : '') + 'TABLE ' + this.escapeId(table) + ' (';
 
     let first = true;
     for (let name in fields) {
@@ -660,19 +829,7 @@ aurora.db.mysql.Pool.prototype.createTable = function(table, fields, indexes, op
         if (!first) {
             sql += ',';
         }
-        sql += '\n  ' + this.escapeId(name) + ' ' + makeType(field);
-        sql += ' ' + (field.nullable ? '' : 'NOT ') + 'NULL';
-        if (field.default != undefined) {
-            sql += ' DEFAULT ' + this.escape(field.default);
-        }
-        if (field.pk) {
-            if (field.auto === false) {
-                sql += ' PRIMARY KEY';
-            }
-            else {
-                sql += ' AUTO_INCREMENT PRIMARY KEY';
-            }
-        }
+        sql += '\n  ' + this.makeFieldDef_(name, field);
         first = false;
     }
     let me = this;
@@ -684,12 +841,154 @@ aurora.db.mysql.Pool.prototype.createTable = function(table, fields, indexes, op
         }
         sql += 'INDEX ' + indexName + '(' + index.columns.map(me.escapeId.bind(me)).join(',') + ')';
     });
-
     sql += ')';
     if (options.start != undefined) {
         sql += ' AUTO_INCREMENT = ' + me.escape(options.start);
     }
-    this.query(sql, callback);
+
+    if (options.exists) {
+        this.getTableChanges(table, fields, indexes, function (err, changes) {
+            if (err) {
+                callback(err, false, changes);
+            }
+            else if (changes.isNew) {
+                // table does not exist just create it
+                me.query(sql, function (err) {
+                    callback(err, false, changes);
+                });
+            }
+            else if (changes.hasChanges) {
+
+                me.applyTableChanges(table, fields, changes, function (err) {
+                    callback(err, true, changes);
+                });
+            }
+            else {
+                callback(null, true, changes);
+            }
+        });
+            
+    }
+    else {
+        this.query(sql, callback);
+    }
+};
+
+/**
+ * @typedef {{isNew:boolean, hasChanges: boolean, added: !Array, modified: !Array, removed: !Array<string>}}
+ */
+aurora.db.mysql.Pool.TableChanges;
+
+/**
+ * @param {string} table
+ * @param {!Object<string,aurora.db.type.ColumnDef>} fields
+ * @param {!aurora.db.mysql.Pool.TableChanges} changes
+ * @param {function(?)} callback
+*/
+aurora.db.mysql.Pool.prototype.applyTableChanges = function(table, fields, changes, callback) {
+    if (!changes.hasChanges) {
+        callback(null);
+        return;
+    }
+    const async = require('async');
+    let me = this;
+    async.waterfall([
+        function doAdds (done) {
+
+            async.eachSeries(changes.added, function (fieldName, eachCallback) {
+
+                me.query('ALTER TABLE ' + me.escapeId(table) + ' ADD ' + me.makeFieldDef_(fieldName, fields[fieldName]) + '', eachCallback);
+
+            },function (err) {
+                done(err);
+            });
+        },
+
+        function doModifies (done) {
+
+            async.eachSeries(changes.modified, function (fieldName, eachCallback) {
+                let name = fieldName['from']['name'];
+                let to = fieldName['to'];                
+                me.query('ALTER TABLE ' + me.escapeId(table) + ' CHANGE ' + name + ' ' +  me.makeFieldDef_(to.Field, fields[to.Field]), eachCallback);
+                
+            },function (err) {
+                done(err);
+            });
+        },
+
+        function doRemoves (done) {
+            async.eachSeries(changes.removed, function (fieldName, eachCallback) {
+                me.query('ALTER TABLE ' + me.escapeId(table) + ' DROP ' + me.escapeId(fieldName), eachCallback);
+            },function (err) {
+                done(err);
+            });
+        }],
+        callback);
+    
+};
+
+/**
+ * @param {string} table
+ * @param {!Object<string,aurora.db.type.ColumnDef>} fields
+ * @param {!Array<!aurora.db.type.IndexDef>} indexes
+ * @param {function(?, !aurora.db.mysql.Pool.TableChanges)} callback (error, changes)
+ */
+aurora.db.mysql.Pool.prototype.getTableChanges = function(table, fields, indexes, callback) {
+    let me = this;
+    let makeTypeDb = aurora.db.mysql.Pool.makeDbType_;
+    this.query('SHOW COLUMNS FROM ' + this.escapeId(table), function (err, curFields) {
+        if (err && err.code === 'ER_NO_SUCH_TABLE') {
+            callback(null, {isNew: true, hasChanges: true, added: [], modified: [], removed: []});
+        }
+        else if (err) {
+            callback(err, {isNew: false, hasChanges: true, added: [], modified: [], removed: []});
+        }
+        else {
+            let addFields = [];
+            let modifyFields = [];
+            let removeFields = [];
+            let curFieldsObj = {};
+
+            for (let i = 0; i < curFields.length; i++) {
+                let curField = curFields[i];
+                let newField = fields[curField.Field];
+
+                curFieldsObj[curField.Field] = curField;
+
+                if (newField) {
+                    let defValue = newField.default == undefined ? null : '' + newField.default;
+                    if ((curField.Null === 'YES') == !!newField.nullable
+                        && curField.Type == makeTypeDb(newField)
+                        && curField['Default'] === defValue) {
+                        // do nothing
+                    }
+                    else {
+                        modifyFields.push({from: {name: curField.Field, type: newField}, to: curField});
+                    }
+                    
+                }
+                else {
+                    removeFields.push(curField.Field);
+                }
+            }
+
+            for(let f in fields){
+                
+                if(!curFieldsObj[f]) {
+                    addFields.push(f);
+                }
+            }
+
+            if (addFields.length || modifyFields.length || removeFields.length) {
+
+                let info = {isNew: false, hasChanges: true, added: addFields, modified: modifyFields, removed: removeFields};
+                callback(null, info);
+            }
+            else {
+                callback(null, {isNew: false, hasChanges: false, added: [], modified: [], removed: []});
+            }
+        }
+    });
 };
 
 /**

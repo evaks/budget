@@ -4,4 +4,4 @@ generated/
 *~
 package-lock.json
 package.json
-backup.sql
+*.orig

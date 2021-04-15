@@ -199,7 +199,7 @@ aurora.db.Pool.prototype.update = function(table, keys, values, callback) {};
  * @param {!Object<string,aurora.db.type.ColumnDef>} fields
  * @param {!Array<aurora.db.type.IndexDef>} indexes
  * @param {!aurora.db.type.TableOptions} options
- * @param {function(?)} callback (error)
+ * @param {function(?, boolean, !aurora.db.mysql.Pool.TableChanges)} callback (error, existed, array of added columns)
  */
 
 aurora.db.Pool.prototype.createTable = function(table, fields, indexes, options, callback) {};
@@ -424,3 +424,23 @@ aurora.db.Pool.prototype.expression = function(exp) {};
  * @param {function(?, ?string)} cb
  */
 aurora.db.Pool.prototype.backup = function(cb) {};
+
+
+/**
+ * restores a database from a backup file
+ * @param {string} fname
+ * @param {function(?)} cb
+ */
+aurora.db.Pool.prototype.restore = function(fname, cb) {};
+
+
+/**
+ * @param {function(?)} cb
+ */
+aurora.db.Pool.prototype.dropDb = function(cb) {};
+
+
+/**
+ * @param {function(?)} cb
+ */
+aurora.db.Pool.prototype.createDb = function(cb) {};
