@@ -84,3 +84,15 @@ aurora.messages.PROFILE = recoil.ui.message.getParamMsg('Profile');
  * @final
  */
 aurora.messages.BUDGETS = recoil.ui.message.getParamMsg('Budgets');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+aurora.messages.ADD = recoil.ui.message.getParamMsg('Add');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+aurora.messages.REMOVE = recoil.ui.message.getParamMsg('Remove');

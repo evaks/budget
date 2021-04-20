@@ -81,7 +81,7 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
         newRow.addCellMeta(confirmPasswordCK, {immediate: true});
         return newRow;
     };
-
+    let secContext = aurora.permissions.getContext(scope);
     let createDialogTable = function(sample, userB, groupCol) {
         return recoil.frp.util.memoryOnlyB(frp.liftB(function(user, extraDataCols) {
             var mTable = user.createEmpty([], [confirmPasswordCK].concat(extraDataCols));
@@ -117,11 +117,13 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
         return query.containsAll(query.field(col), val);
     };
     let resetPasswordCol = new recoil.structs.table.ColumnKey('reset-password');
-    let tableWidget = new aurora.widgets.PagedTable(scope, userT, PAGE_SIZE, function(scope, sourceB) {
+    let tableWidget = new aurora.widgets.PagedTable(scope, userT, PAGE_SIZE, function(scope, sourceB, selectedB) {
         return aurora.ui.ErrorWidget.createTable(
             scope,
-            frp.liftBI(function(tbl, groupCol, extraCols, extraDataCols) {
+            frp.liftBI(function(tbl, groupCol, extraCols, extraDataCols, secContext) {
+                console.log("sec", secContext);
                 let res = tbl.createEmpty([], [resetPasswordCol].concat(extraDataCols));
+                res.addMeta({remove: {text: budget.messages.REMOVE_USER.toString(), confirm: 5000}});
                 let columns = new recoil.ui.widgets.TableMetaData();
                 columns.add(userT.cols.username, 'User Name');
                 columns.add(userT.cols.firstName, 'First Name');
@@ -162,6 +164,10 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
                 tbl.forEach(function(row) {
                     let mrow = row.unfreeze();
                     mrow.set(resetPasswordCol, null);
+                    if (row.get(userT.cols.id).db == secContext.userid) {
+                        mrow.addRowMeta({removeEnabled: new recoil.ui.BoolWithExplanation(false)});
+                    }
+                                     
                     extraCols.forEach(function(info) {
                         if (info.hasOwnProperty('value')) {
                             mrow.set(info.key, info.value(row));
@@ -265,7 +271,7 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
                         sourceB.set(res.freeze());
                     }
                 }
-            },sourceB, groupsB, extraColsB, extraDataColsB));
+            },sourceB, groupsB, extraColsB, extraDataColsB,  secContext));
     }, function(scope, headerB) {
         return frp.liftBI(function(header, extraCols) {
             let res = header.createEmpty();

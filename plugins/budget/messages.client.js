@@ -672,3 +672,9 @@ budget.messages.MAP_ADDRESS = recoil.ui.message.getParamMsg('Map Address');
  * @final
  */
 budget.messages.UNSCHEDULE_TO_EDIT = recoil.ui.message.getParamMsg('Unschedule to edit');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.REMOVE_USER = recoil.ui.message.getParamMsg('Remove User');

@@ -142,6 +142,8 @@ aurora.widgets.PagedTable = function(scope, tableT, pageSize, factory, headerFac
     }, serverDataTableB, lastGoodDataTableB);
 
     let tableSizeB = ns.createKeyedValue(scope, tableT.key, filtersB, new recoil.db.QueryOptions({count: true}));
+    let tableWidget = new recoil.ui.widgets.table.PagedTableWidget(scope, true);
+    let selectedB = tableWidget.createSelected();
     let tableB = factory(scope, dataTableB);
 
     let addCallbackB = frp.createCallback(function() {
@@ -151,8 +153,8 @@ aurora.widgets.PagedTable = function(scope, tableT, pageSize, factory, headerFac
     }, tableB);
 
 
-    let addText = goog.dom.createDom('span', {}, 'Add User');
-    let removeText = goog.dom.createDom('span', {}, 'Remove User');
+    let addText = goog.dom.createDom('span', {}, aurora.messages.ADD.toString());
+    let removeText = goog.dom.createDom('span', {},  aurora.messages.REMOVE.toString());
 
     let addB = recoil.frp.struct.extend(
         frp, {text: addText},
@@ -161,8 +163,7 @@ aurora.widgets.PagedTable = function(scope, tableT, pageSize, factory, headerFac
         }, tableB), {action: addCallbackB}
     );
 
-    let tableWidget = new recoil.ui.widgets.table.PagedTableWidget(scope, true);
-    let selectedB = tableWidget.createSelected();
+
     let removeCallbackB = frp.createCallback(function() {
         let res = tableB.get().createEmpty();
         let selected = selectedB.get();
@@ -177,9 +178,22 @@ aurora.widgets.PagedTable = function(scope, tableT, pageSize, factory, headerFac
 
     let removeB = recoil.frp.struct.extend(
         frp, {text: removeText},
-        frp.liftB(function(tbl) {
-            return tbl.getMeta().remove || {};
-        }, tableB), {action: removeCallbackB}
+        
+        frp.liftB(function(tbl, selected) {
+            
+            let res = tbl.getMeta().remove || {};
+            res.enabled = selected.length ? recoil.ui.BoolWithExplanation.TRUE : recoil.ui.BoolWithExplanation.FALSE;
+            selected.forEach(function (key) {
+                let row = tbl.getRow(key);
+                if (row) {
+                    if (row.getMeta().removeEnabled != undefined) {
+                        res.enabled = res.enabled.and(row.getMeta().removeEnabled);
+                    }
+                }
+            });
+            
+            return res;
+        }, tableB, selectedB), {action: removeCallbackB}
     );
 
 

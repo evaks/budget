@@ -470,7 +470,7 @@ tr.budget-total td, td.budget-total {
 
 div.side-list-page {
     display: flex;
-    height: calc(100vh - 60px);
+    height: calc(100vh - 50px);
     width: 100vw;
     overflow-x: hidden;
     overflow-y: auto;
