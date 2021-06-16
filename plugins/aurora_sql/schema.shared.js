@@ -35,7 +35,7 @@ aurora.db.SchemaType;
  * @typedef {{path:string,
  *            pk:!recoil.structs.table.ColumnKey,
  *            parentKey:(!recoil.structs.table.ColumnKey|undefined),
- *            refs:!Array<!aurora.db.schema.RefType>,  
+ *            refs:!Array<!aurora.db.schema.RefType>,
  *            autoPk:(boolean|undefined),
  *            access:(function(!aurora.db.access.SecurityContext,string):boolean|undefined),
  *            accessFilter:(function(!aurora.db.access.SecurityContext):!recoil.db.Query|undefined),
@@ -410,13 +410,14 @@ aurora.db.Schema = function() {};
 /**
  * makes a scope from the path so queries can execute on the object
  * @param {!recoil.db.ChangeSet.Path} path
+ * @param {Object} context
  * @param {?} object
  * @return {!recoil.db.QueryScope}
  */
 
-aurora.db.Schema.prototype.makeQueryScope = function(path, object) {
+aurora.db.Schema.prototype.makeQueryScope = function(path, context, object) {
     var def = /** @type {aurora.db.schema.TableType} */ (this.getContainerDef(path));
-    return new aurora.db.schema.TableQueryScope(object, def, aurora.db.schema);
+    return new aurora.db.schema.TableQueryScope(context, object, def, aurora.db.schema);
 
 };
 
@@ -771,16 +772,18 @@ aurora.db.schema.tables.sec.permissions.key = new recoil.db.BasicType([], aurora
 /**
  * @extends {recoil.db.QueryScope}
  * @constructor
+ * @param {Object} context
  * @param {Object} map
  * @param {!aurora.db.schema.TableType} table
  * @param {!aurora.db.SchemaType} schema
  * @param {!recoil.db.QueryHelper=} opt_helper
  */
-aurora.db.schema.TableQueryScope = function(map, table, schema, opt_helper) {
+aurora.db.schema.TableQueryScope = function(context, map, table, schema, opt_helper) {
     recoil.db.QueryScope.call(this, map, opt_helper);
     this.basePath_ = table.info.path.split('/');
     this.schema_ = schema;
     this.obj_ = map;
+    this.context_ = context;
 };
 goog.inherits(aurora.db.schema.TableQueryScope, recoil.db.QueryScope);
 
@@ -790,7 +793,6 @@ goog.inherits(aurora.db.schema.TableQueryScope, recoil.db.QueryScope);
  * @return {*}
  */
 aurora.db.schema.TableQueryScope.prototype.get = function(inParts) {
-
     if (inParts.length === 0) {
         return undefined;
     }
@@ -815,9 +817,16 @@ aurora.db.schema.TableQueryScope.prototype.get = function(inParts) {
         for (let i = this.basePath_.length; cur && i < parts.length; i++) {
             cur = cur[parts[i]];
         }
-       return cur ? cur[col.getName()] : undefined;
+        let res = cur ? cur[col.getName()] : undefined;
+        if (res instanceof aurora.db.PrimaryKey) {
+            return res.db;
+        }
+        return res;
     }
 
-    return aurora.db.schema.TableQueryScope.superClass_.get.call(this, inParts);
+    let res = aurora.db.schema.TableQueryScope.superClass_.get.call(this, inParts);
+    if (res instanceof aurora.db.PrimaryKey) {
+        return res.db;
+    }
 };
 

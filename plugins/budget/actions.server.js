@@ -7,22 +7,24 @@ goog.require('config');
 goog.require('recoil.db.Query');
 
 /**
+ * @param {!aurora.db.Coms} coms
  * @param {!aurora.db.access.SecurityContext} context
  * @param {!aurora.db.Reader} reader
  * @param {!Array} inputs
  * @param {function (?, !Array)} callback (error, outputs)
  */
-budget.actions.checkUsername = function(context, reader, inputs, callback) {
+budget.actions.checkUsername = function(coms, context, reader, inputs, callback) {
 
 };
 
 /**
+ * @param {!aurora.db.Coms} coms
  * @param {!aurora.db.access.SecurityContext} context
  * @param {!aurora.db.Reader} reader
  * @param {!Array} inputs
  * @param {function (?, !Array)} callback (error, outputs)
  */
-budget.actions.suggestUsername = function(context, reader, inputs, callback) {
+budget.actions.suggestUsername = function(coms, context, reader, inputs, callback) {
     let failCb = function(err) {callback(err, []);};
 
     if (inputs instanceof Array) {
@@ -38,6 +40,11 @@ budget.actions.suggestUsername = function(context, reader, inputs, callback) {
         // don't allow specification of primary key
 
         let username = object[userT.cols.username.getName()];
+        if (username && typeof(username) !== 'string') {
+            callback('invalid username', []);
+            // error here we use username length in sql
+            return;
+        }
         let firstName = object[userT.cols.firstName.getName()];
         let lastName = object[userT.cols.lastName.getName()];
 
@@ -73,7 +80,8 @@ budget.actions.suggestUsername = function(context, reader, inputs, callback) {
             }
             username = username.replace(/[0-9+]$/, '');
             username = username.replace(/\^|\$|\*|\+|\?|\||\(|\)|\\|\{|\}|\[|\]/g, '_');
-            reader.query('SELECT max(cast(substring(username,1 + 1) as UNSIGNED )) username FROM `user` WHERE username rlike ?username', {'username': username.replace(/\./g, '\\.') + '[0-9]*'}, function(err, result) {
+            console.log('SELECT max(cast(substring(username,'+ (username.length + 1) + ' ) as UNSIGNED )) username FROM `user` WHERE username rlike ?username', username.replace(/\./g, '\\.') + '[0-9]*');
+            reader.query('SELECT max(cast(substring(username,?len) as UNSIGNED )) username FROM `user` WHERE username rlike ?username', {'len': (username.length + 1) , 'username': username.replace(/\./g, '\\.') + '[0-9]*'}, function(err, result) {
                 if (err) {
                     callback(err, []);
                 }
@@ -154,12 +162,13 @@ budget.actions.getEmailTransporterInfo_ = function(secContext, callback) {
 };
 
 /**
+ * @param {!aurora.db.Coms} coms
  * @param {!aurora.db.access.SecurityContext} context
  * @param {!aurora.db.Reader} reader
  * @param {!Array} inputs
  * @param {function (?, !Array)} callback (error, outputs)
  */
-budget.actions.requestResetPassword = function(context, reader, inputs, callback) {
+budget.actions.requestResetPassword = function(coms, context, reader, inputs, callback) {
     let fixError = function(err) {
         if (err && err.response) {
             return err.response;
@@ -432,18 +441,20 @@ budget.actions.getApptUsers_ = function(context, reader, mentorid, userid, email
 
 };
 /**
+ * @param {!aurora.db.Coms} coms
  * @param {!aurora.db.access.SecurityContext} context
  * @param {!aurora.db.Reader} reader
  * @param {?number} apptId
  * @param {number} mentorid
  * @param {?number} userid
  * @param {?string} email
- * @param {?string} name
+ * @param {?string} firstName
+ * @param {?string} lastName
  * @param {number} time
  * @param {number} length
  * @param {function (?, !Array)} callback (error, outputs)
  */
-budget.actions.scheduleAppointment = function(context, reader, apptId, mentorid, userid, email, name, time, length, callback) {
+budget.actions.scheduleAppointment = function(coms, context, reader, apptId, mentorid, userid, email, firstName, lastName, time, length, callback) {
     let mod = 'SCHEDULE';
     let log = aurora.log.createModule(mod);
     let userT = aurora.db.schema.tables.base.user;
@@ -471,6 +482,7 @@ budget.actions.scheduleAppointment = function(context, reader, apptId, mentorid,
         }
     }
     let uuid = null;
+    let name = ((firstName || '') + (lastName || '')).trim();
     budget.actions.getApptUsers_(context, reader, mentorid, userid, email, name, function(err, mentorObj, userObj) {
         if (err) {
             callback(err, []);
@@ -517,8 +529,7 @@ budget.actions.scheduleAppointment = function(context, reader, apptId, mentorid,
 
                 budget.actions.sendAppointmentEmail_(context, /** @type {!Object} */ (mentorObj), /** @type {!Object} */ (userObj), time, length, null, function(err, val) {
                     if (change) {
-                        console.log('sending changes 1', change.path().toString());
-                        aurora.db.Coms.instance.notifyListeners([change], {}, function() {
+                        coms.notifyListeners([change], {}, function() {
                             callback(err, val);
                         });
                     }
@@ -535,12 +546,13 @@ budget.actions.scheduleAppointment = function(context, reader, apptId, mentorid,
 };
 
 /**
+ * @param {!aurora.db.Coms} coms
  * @param {!aurora.db.access.SecurityContext} context
  * @param {!aurora.db.Reader} reader
  * @param {number} apptid
  * @param {function (?, !Array)} callback (error, outputs)
  */
-budget.actions.unscheduleAppointment = function(context, reader, apptid, callback) {
+budget.actions.unscheduleAppointment = function(coms, context, reader, apptid, callback) {
     let apptT = aurora.db.schema.tables.base.appointments;
     let query = new recoil.db.Query();
 
@@ -615,7 +627,7 @@ budget.actions.unscheduleAppointment = function(context, reader, apptid, callbac
                 }
                 if (change) {
                     console.log('sending changes', change.path().toString());
-                    aurora.db.Coms.instance.notifyListeners([change], {}, function() {
+                    coms.notifyListeners([change], {}, function() {
                         console.log('action done');
                         callback(err, []);
                     });
@@ -630,6 +642,7 @@ budget.actions.unscheduleAppointment = function(context, reader, apptid, callbac
 };
 
 /**
+ * @param {!aurora.db.Coms} coms
  * @param {!aurora.db.access.SecurityContext} context
  * @param {!aurora.db.Reader} reader
  * @param {number} uid
@@ -637,7 +650,7 @@ budget.actions.unscheduleAppointment = function(context, reader, apptid, callbac
  * @param {string} password
  * @param {function(?, !Array)} callback (error, outputs)
  */
-budget.actions.doResetPassword = function(context, reader, uid, secret, password, callback) {
+budget.actions.doResetPassword = function(coms, context, reader, uid, secret, password, callback) {
     let mod = 'RESET-PASSWORD';
     let log = aurora.log.createModule(mod);
 
@@ -668,12 +681,13 @@ budget.actions.doResetPassword = function(context, reader, uid, secret, password
 };
 
 /**
+ * @param {!aurora.db.Coms} coms
  * @param {!aurora.db.access.SecurityContext} context
  * @param {!aurora.db.Reader} reader
  * @param {!Array} inputs
  * @param {function (?, !Array)} callback (error, outputs)
  */
-budget.actions.register = function(context, reader, inputs, callback) {
+budget.actions.register = function(coms, context, reader, inputs, callback) {
     let userT = aurora.db.schema.tables.base.user;
     let groupT = aurora.db.schema.tables.base.group;
     let failCb = function(err) {callback(err, []);};
@@ -733,7 +747,13 @@ budget.actions.register = function(context, reader, inputs, callback) {
                             }
                             else {
                                 reader.insert({}, userT, object, function(err, res) {
-                                    callback(err ? 'Unable to create user' : null, err ? null : res.insertId);
+                                    if (err) {
+                                        callback('Unable to create user', null);
+                                    }
+                                    else {
+                                        console.log('schedule', object);
+                                        callback(null, res.insertId);
+                                    }
                                 });
                             }
 
@@ -755,7 +775,7 @@ budget.actions.register = function(context, reader, inputs, callback) {
         };
 
         if (!username || username.trim().length === 0) {
-            budget.actions.suggestUsername(context, reader, inputs, function(err, outputs) {
+            budget.actions.suggestUsername(coms, context, reader, inputs, function(err, outputs) {
                 if (err) {
                     callback(err, []);
                 }

@@ -40,12 +40,13 @@ budget.widgets.Bookings = function(scope) {
     let availT = aurora.db.schema.tables.base.mentor_availablity;
     let milliPerDay = budget.widgets.BusinessHours.MILLI_PER_DAY;
     let today = new Date();
+    let userT = aurora.db.schema.tables.base.user;
     today.setHours(0, 0, 0, 0);
     this.curDateB_ = frp.createB(recoil.ui.widgets.DateWidget2.convertDateToLocal(today));
     let clientT = aurora.db.schema.tables.base.client;
-
+    let msg = budget.messages;
     var clientCK = new recoil.structs.table.ColumnKey('link');
-    let clientCol = new aurora.columns.Link(clientCK, '');
+    let clientCol = new aurora.columns.Link(clientCK, msg.USERNAME);
 
     let mentorsB = scope.getDb().get(mentorT.key);
     this.appointmentsB_ = frp.switchB(frp.liftB(function(date) {
@@ -60,6 +61,29 @@ budget.widgets.Bookings = function(scope) {
 
     }, this.curDateB_));
 
+    let cache = {};
+    let userListB = frp.switchB(frp.liftB(function(appointments) {
+        let ids = [];
+        appointments.forEach(function(appt) {
+            if (appt.get(appointmentsT.cols.userid)) {
+                ids.push(appt.get(appointmentsT.cols.userid).db);
+            }
+        });
+        let key = ids.join(',');
+        if (!cache[key]) {
+            let query = new recoil.db.Query();
+            cache[key] = scope.getDb().get(userT.key, query.isIn(query.field(userT.cols.id), ids));
+        }
+        return cache[key];
+
+    }, this.appointmentsB_));
+    let userMapB = recoil.frp.Util.lastGood(frp.liftB(function(list) {
+        let res = {};
+        list.forEach(function(row) {
+            res[row.get(userT.cols.id).db] = row.get(userT.cols.username);
+        });
+        return res;
+    }, userListB));
     this.holidaysB_ = frp.switchB(frp.liftB(function(date) {
         let query = new recoil.db.Query();
         let startTime = recoil.ui.widgets.DateWidget2.convertLocaleDate(date).getTime();
@@ -117,7 +141,7 @@ budget.widgets.Bookings = function(scope) {
     }, mentorsB);
     let idMap = {};
     let getId = function(mentor, time) {
-        let key = mentor + ':' + time;
+        let key = mentor + ':' + time.getTime();
         let res = idMap[key];
         if (!res) {
             res = appointmentsT.info.pk.getDefault();
@@ -125,6 +149,13 @@ budget.widgets.Bookings = function(scope) {
         }
         return res;
 
+    };
+    let newUser = function() {
+        return cd('em', {class: 'appt-new-user'}, cd('i', {class: 'far fa-plus-square'}), ' create');
+    };
+
+    let existingUser = function(uname) {
+        return cd('em', {class: 'appt-existing-user'}, cd('i', {class: 'fas fa-edit'}), ' ' + uname);
     };
     let searchIcon = function() {
         let res = cd('i', 'fas fa-search');
@@ -139,8 +170,44 @@ budget.widgets.Bookings = function(scope) {
         return cd('i', {class: 'fas fa-spin fa-spinner'});
     }});
 
+    let keepKeys = function(tableB) {
+        let frp = tableB.frp();
+        let keyMap = {};
+        return frp.liftBI(function(t) {
+            let res = t.createEmpty();
+            let pk = t.getKeyColumns()[0];
+            let newMap = {};
 
-    let tableB = frp.liftBI(function(site, holidays, appointments, avail, startDate, mentorConverter) {
+            t.forEachModify(function(row, pks) {
+                let pkVal = keyMap[pks[0].mem];
+
+                if (pkVal) {
+                    pkVal.src = pks[0];
+                }
+                else {
+                    pkVal = {src: pks[0], dst: pks[0]};
+                }
+                newMap[pks[0].mem] = pkVal;
+                row.set(pk, pkVal.dst);
+                res.addRow(row);
+            });
+            keyMap = newMap;
+            return res.freeze();
+        }, function(t) {
+            let res = t.createEmpty();
+            let pk = t.getKeyColumns()[0];
+            t.forEachModify(function(row, pks) {
+                let pkVal = keyMap[pks[0].mem];
+                if (pkVal) {
+                    row.set(pk, pkVal.src);
+                }
+                res.addRow(row);
+            });
+            tableB.set(res.freeze());
+
+        }, tableB);
+    };
+    let tableB = keepKeys(frp.liftBI(function(site, holidays, appointments, avail, startDate, mentorConverter, userMap) {
         // this reuses the some columns so we can get the meta data
         let table = appointments.createEmpty([], [START_COL, SEARCH_COL, clientCK]);
         // make the key an array of [time, mentor] we get the right order
@@ -152,11 +219,13 @@ budget.widgets.Bookings = function(scope) {
         let apptMap = budget.widgets.Bookings.makeAppointmentMap_(avail, holidays, appointments, startTime, endTime);
 
         let columns = new recoil.ui.widgets.TableMetaData();
+        // columns.add(appointmentsT.cols.id, '#');
         columns.addColumn(new recoil.ui.columns.Time(START_COL, 'Time'));
         columns.add(appointmentsT.cols.mentorid, 'Mentor');
         columns.addColumn(clientCol);
-        columns.add(appointmentsT.cols.name, 'Client Name');
-        columns.add(appointmentsT.cols.address, 'Client Address');
+        columns.add(appointmentsT.cols.firstName, msg.FIRST_NAME);
+        columns.add(appointmentsT.cols.lastName, msg.LAST_NAME);
+        columns.add(appointmentsT.cols.address, budget.messages.ADDRESS);
         columns.add(appointmentsT.cols.email, 'Client Email');
         columns.add(appointmentsT.cols.phone, mess.PHONE, {displayLength: 7});
         columns.addColumn(new recoil.ui.widgets.table.ButtonColumn(SEARCH_COL, 'Search'));
@@ -169,12 +238,12 @@ budget.widgets.Bookings = function(scope) {
         columns.add(appointmentsT.cols.showed, 'Came', {displayLength: 20});
         table.addColumnMeta(START_COL, {editable: false});
         table.addColumnMeta(appointmentsT.cols.mentorid, {editable: false, converter: mentorConverter});
-        table.addColumnMeta(appointmentsT.cols.name, {displayLength: 20});
+        table.addColumnMeta(appointmentsT.cols.firstName, {displayLength: 10});
+        table.addColumnMeta(appointmentsT.cols.lastName, {displayLength: 10});
         table.addColumnMeta(appointmentsT.cols.address, {displayLength: 20});
         table.addColumnMeta(appointmentsT.cols.email, {displayLength: 20});
         table.addColumnMeta(appointmentsT.cols.scheduled, {type: 'boolean'});
 
-        console.log('appts', appointments.toDebugObj());
         let pos = 0;
         let prevDay = null;
         apptMap.inOrderTraverse(function(entry) {
@@ -190,11 +259,14 @@ budget.widgets.Bookings = function(scope) {
                 row.addRowMeta({cellDecorator: null});
 
                 row.set(appointmentsT.cols.start, entry.key[0]);
-                row.set(START_COL, recoil.ui.widgets.DateWidget2.convertDateToLocal(today));
+                let key = recoil.ui.widgets.DateWidget2.convertDateToLocal(today);
+
+                row.set(START_COL, key);
                 row.set(SEARCH_COL, null);
                 row.set(appointmentsT.cols.stop, null);
                 row.set(appointmentsT.cols.mentorid, entry.key[1]);
-                row.set(appointmentsT.cols.name, '');
+                row.set(appointmentsT.cols.firstName, '');
+                row.set(appointmentsT.cols.lastName, '');
                 row.set(appointmentsT.cols.address, '');
                 row.set(appointmentsT.cols.email, '');
                 row.set(appointmentsT.cols.phone, '');
@@ -217,7 +289,8 @@ budget.widgets.Bookings = function(scope) {
                 row.set(appointmentsT.cols.stop, entry.stop);
                 row.set(appointmentsT.cols.mentorid, entry.key[1]);
                 row.set(SEARCH_COL, null);
-                row.set(appointmentsT.cols.name, '');
+                row.set(appointmentsT.cols.firstName, '');
+                row.set(appointmentsT.cols.lastName, '');
                 row.set(appointmentsT.cols.address, '');
                 row.set(appointmentsT.cols.email, '');
                 row.set(appointmentsT.cols.phone, '');
@@ -235,11 +308,26 @@ budget.widgets.Bookings = function(scope) {
                     row.set(SEARCH_COL, null);
                     row.set(START_COL, recoil.ui.widgets.TimeWidget.convertTimeToLocal(new Date(row.get(appointmentsT.cols.start))));
                     row.set(appointmentsT.cols.mentorid, row.get(appointmentsT.cols.mentorid).db);
-                    row.set(clientCK, userid ? '/client?id=' + userid.db : null);
+                    row.set(clientCK, userid ? '/client?id=' + userid.db : '/client/new?data=' + encodeURI(JSON.stringify(
+                        {
+                            firstName: row.get(appointmentsT.cols.firstName),
+                            lastName: row.get(appointmentsT.cols.lastName),
+                            phone: row.get(appointmentsT.cols.phone),
+                            address: row.get(appointmentsT.cols.address),
+                            email: row.get(appointmentsT.cols.email),
+                            schedule: row.get(appointmentsT.cols.id).db,
+                        }
+                    )));
+                    if (userid) {
+                        row.addCellMeta(clientCK, {text: userMap[userid.db] || 'unknown', formatter: existingUser});
+                    }
+                    else {
+                        row.addCellMeta(clientCK, {formatter: newUser});
+                    }
                     row.set(appointmentsT.cols.scheduled, row.get(appointmentsT.cols.scheduled) !== null);
                     row.addCellMeta(appointmentsT.cols.scheduled, {editable: true});
                     if (row.get(appointmentsT.cols.scheduled)) {
-                        let cols = [appointmentsT.cols.name, appointmentsT.cols.phone, SEARCH_COL,
+                        let cols = [appointmentsT.cols.firstName, appointmentsT.cols.lastName, appointmentsT.cols.phone, SEARCH_COL,
                                     appointmentsT.cols.address, appointmentsT.cols.email,
                                     clientT.cols.phone];
 
@@ -267,9 +355,8 @@ budget.widgets.Bookings = function(scope) {
             if (row.get(SEARCH_COL)) {
                 let searchRow = new recoil.structs.table.MutableTableRow(-1);
                 searchRow.set(clientT.cols.username, '');
-                let nameParts = (row.get(aKeys.name) || '').split(' ');
-                searchRow.set(clientT.cols.firstName, (nameParts[0] || '').trim());
-                searchRow.set(clientT.cols.lastName, nameParts.slice(1).map(function(v) {return v.trim();}).join(' ')); // leave hopefull we wil all an index on first concat last
+                searchRow.set(clientT.cols.firstName, row.get(aKeys.firstName));
+                searchRow.set(clientT.cols.lastName, row.get(aKeys.lastName));
                 searchRow.set(clientT.cols.email, row.get(aKeys.email));
                 searchRow.set(clientT.cols.address, row.get(aKeys.address));
                 searchRow.set(clientT.cols.phone, row.get(aKeys.phone));
@@ -336,8 +423,8 @@ budget.widgets.Bookings = function(scope) {
                         let res = tbl.unfreeze();
                         let columns = new recoil.ui.widgets.TableMetaData();
                         columns.add(clientT.cols.username, 'User Name', {displayLength: 10});
-                        columns.add(clientT.cols.firstName, 'First Name', {displayLength: 10});
-                        columns.add(clientT.cols.lastName, 'Last Name', {displayLength: 10});
+                        columns.add(clientT.cols.firstName, msg.FIRST_NAME, {displayLength: 10});
+                        columns.add(clientT.cols.lastName, msg.LAST_NAME, {displayLength: 10});
                         columns.add(clientT.cols.email, 'Email', {displayLength: 20});
                                      columns.add(clientT.cols.phone, 'Phone', {displayLength: 7});
                         columns.add(clientT.cols.address, 'Address', {displayLength: 20});
@@ -354,7 +441,8 @@ budget.widgets.Bookings = function(scope) {
                         }
                     };
                     let addNewRow = function(newRow) {
-                        setIfNotBlank(newRow, aKeys.name, (selRow.get(clientT.cols.firstName) + ' ' + selRow.get(clientT.cols.lastName)).trim());
+                        setIfNotBlank(newRow, aKeys.firstName, selRow.get(clientT.cols.firstName) || '');
+                        setIfNotBlank(newRow, aKeys.lastName, selRow.get(clientT.cols.lastName));
                         setIfNotBlank(newRow, aKeys.email, selRow.get(clientT.cols.email));
                         setIfNotBlank(newRow, aKeys.phone, selRow.get(clientT.cols.phone));
                         setIfNotBlank(newRow, aKeys.address, selRow.get(clientT.cols.address));
@@ -387,7 +475,7 @@ budget.widgets.Bookings = function(scope) {
                 },me.appointmentsB_), 'Select', 'Find Client', undefined, queryB);
                 dialog.show(true);
             }
-            let relColumns = [aKeys.name, aKeys.email, aKeys.phone, aKeys.address];
+            let relColumns = [aKeys.firstName, aKeys.lastName, aKeys.email, aKeys.phone, aKeys.address];
             let pk = row.get(aKeys.id);
             let blank = relColumns.reduce(function(total, col) {
                 if (!total) {
@@ -404,14 +492,15 @@ budget.widgets.Bookings = function(scope) {
             else {
                 let mrow = row.unfreeze();
                 let orig = origAppointments.getRow(pks);
-                if (orig && orig.get(aKeys.name) != row.get(aKeys.name)) {
+                if (orig && (orig.get(aKeys.firstName) != row.get(aKeys.firstName) || orig.get(aKeys.lastName) != row.get(aKeys.lastName))) {
                     mrow.set(aKeys.userid, null);
                 }
                 if (orig && (orig.get(aKeys.scheduled) !== null) != row.get(aKeys.scheduled)) {
                     if (row.get(aKeys.scheduled)) {
                         scheduleActionB.set({action: {
                             apptid: row.get(aKeys.id) ? row.get(aKeys.id).db : null,
-                            name: row.get(aKeys.name),
+                            firstName: row.get(aKeys.firstName) ,
+                            lastName: row.get(aKeys.lastName) ,
                             userid: row.get(aKeys.userid) ? row.get(aKeys.userid).db : null,
                             email: row.get(aKeys.email),
                             time: row.get(aKeys.start),
@@ -442,7 +531,7 @@ budget.widgets.Bookings = function(scope) {
             }
         });
         me.appointmentsB_.set(res.freeze());
-    }, this.siteB_, this.holidaysB_, this.appointmentsB_, this.availableB_, this.curDateB_, mentorConverterB, scheduleActionB, unscheduleActionB);
+    }, this.siteB_, this.holidaysB_, this.appointmentsB_, this.availableB_, this.curDateB_, mentorConverterB, userMapB, scheduleActionB, unscheduleActionB));
     this.tableWidget_.attachStruct(tableB);
     this.tableWidget_.getComponent().render(this.containerDiv_);
 

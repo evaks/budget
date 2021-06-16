@@ -93,6 +93,14 @@ aurora.db.Pool.mkSeqFunc = function(func, var_args) {
  */
 aurora.db.Pool.prototype.query = function(query, params, opt_callback) {};
 
+/**
+ * used for getting querys that have large result sets that shouldn't be stored in memory
+ * @param {string} query
+ * @param {!Object<string,?>} params (error, results, fields)
+ * @param {function(!Object, function())} rowCb
+ * @param {function(?)} doneCb
+ */
+aurora.db.Pool.prototype.queryLarge = function(query, params, rowCb, doneCb) {};
 
 /**
  * @param {string} table

@@ -478,7 +478,7 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
             fs.appendFileSync(out, '    name: ' + stringify(tablePath) + ',\n');
             fs.appendFileSync(out, '    path: ' + stringify(tablePath) + ',\n');
             fs.appendFileSync(out, '    refs: [],\n');
-            
+
             tablePathMap[data.tableName] = tablePath;
             if (!client) {
                 tableMap[data.tableName] = prefix + '.' + tName;
@@ -597,7 +597,7 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
         fs.appendFileSync(out, ',\n       type: ' + toStr(client && typeInfo.type == 'file' ? 'bigint' : typeInfo.type));
 
         let isRef = typeInfo.type === 'ref';
-        
+
         if (isRef) {
             refMap[prefix + '.' + typeInfo.table] = refMap[prefix + '.' + typeInfo.table] || [];
             refMap[prefix + '.' + typeInfo.table].push('{col:' + toStr(name) + ', table:' + prefix + '.' + fullTableName + ', nullable:' + (data.nullable === true) + '}');
@@ -805,11 +805,11 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
     fs.appendFileSync(out, '(function() {\n');
     // name path -> tableInfo
     for (let k in refMap) {
-        let entries =  refMap[k];
-        fs.appendFileSync(out, '    '+ k + '.info.refs = [\n');
+        let entries = refMap[k];
+        fs.appendFileSync(out, '    ' + k + '.info.refs = [\n');
         for (let i = 0; i < entries.length; i++) {
-            fs.appendFileSync(out, '        '+ entries[i]);
-            if (i != entries.length -1) {
+            fs.appendFileSync(out, '        ' + entries[i]);
+            if (i != entries.length - 1) {
                 fs.appendFileSync(out, ',');
             }
             fs.appendFileSync(out, '\n');
@@ -817,8 +817,8 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
         fs.appendFileSync(out, '    ];\n');
     }
     fs.appendFileSync(out, '})();\n');
-    
-    
+
+
     if (!client) {
         fs.appendFileSync(out, '(function(map) {\n');
         // name path -> tableInfo
@@ -953,12 +953,17 @@ function generateDbInit(def, ns, types, out) {
     fs.appendFileSync(out, '    log.info(\'Backing up database\');\n');
     fs.appendFileSync(out, '    pool.backup(function (err, fname) {\n');
     fs.appendFileSync(out, '        if (err) {\n');
-    fs.appendFileSync(out, '            log.error(\'Backing failed\', err);\n');
+    fs.appendFileSync(out, '            log.error(\'Backup failed\', err);\n');
     fs.appendFileSync(out, '            cb(err);\n');
     fs.appendFileSync(out, '            return;\n');
     fs.appendFileSync(out, '        }\n');
-    fs.appendFileSync(out, '        log.info(\'Backed up to \', fname);\n');
-    fs.appendFileSync(out, '        ' + prefix + '.updateDb_(pool, cb);\n');
+    fs.appendFileSync(out, '        if (fname !== null) {');
+    fs.appendFileSync(out, '            log.info(\'Backed up to \', fname);\n');
+    fs.appendFileSync(out, '            ' + prefix + '.updateDb_(pool, cb);\n');
+    fs.appendFileSync(out, '        } else { \n');
+    fs.appendFileSync(out, '            log.info(\'Database does not exist no backup needed\');\n');
+    fs.appendFileSync(out, '            pool.create(function (err) {if (err) {cb(err);} else {console.log("udb");' + prefix + '.updateDb_(pool, cb);}});\n');
+    fs.appendFileSync(out, '        }\n');
     fs.appendFileSync(out, '    });\n');
     fs.appendFileSync(out, '};\n\n');
     fs.appendFileSync(out, '/**\n * @private\n');
