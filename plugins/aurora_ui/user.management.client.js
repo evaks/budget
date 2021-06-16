@@ -121,7 +121,7 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
         return aurora.ui.ErrorWidget.createTable(
             scope,
             frp.liftBI(function(tbl, groupCol, extraCols, extraDataCols, secContext) {
-                console.log("sec", secContext);
+                console.log('sec', secContext);
                 let res = tbl.createEmpty([], [resetPasswordCol].concat(extraDataCols));
                 res.addMeta({remove: {text: budget.messages.REMOVE_USER.toString(), confirm: 5000}});
                 let columns = new recoil.ui.widgets.TableMetaData();
@@ -167,7 +167,7 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
                     if (row.get(userT.cols.id).db == secContext.userid) {
                         mrow.addRowMeta({removeEnabled: new recoil.ui.BoolWithExplanation(false)});
                     }
-                                     
+
                     extraCols.forEach(function(info) {
                         if (info.hasOwnProperty('value')) {
                             mrow.set(info.key, info.value(row));
@@ -271,7 +271,7 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
                         sourceB.set(res.freeze());
                     }
                 }
-            },sourceB, groupsB, extraColsB, extraDataColsB,  secContext));
+            },sourceB, groupsB, extraColsB, extraDataColsB, secContext));
     }, function(scope, headerB) {
         return frp.liftBI(function(header, extraCols) {
             let res = header.createEmpty();

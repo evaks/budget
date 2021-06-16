@@ -80,6 +80,12 @@ const makeSchema = function (schema) {
     for (let k in schema) {
         keyMap['/' + k] = makeTable(keyMap, '/' + k, schema[k], false, colMap);
     }
+    let pathToString = function (p) {
+        if (p instanceof recoil.db.ChangeSet.Path) {
+            return p.pathAsString();
+        }
+        return p;
+    };
 
     let res = {
         keyMap: keyMap,
@@ -104,7 +110,7 @@ const makeSchema = function (schema) {
             return keyMap[name.pathAsString()] || null;
         },
         getMetaByPath: function (name) {
-            let list = name.split('/');
+            let list = pathToString(name).split('/');
             let last = list.pop();
             let info = keyMap[list.join('/')];
             if (info)
@@ -229,7 +235,7 @@ let makeReader = function (schema) {
                 let objects = getTableObjects(table);
                 let res = [];
                 for (let key in objects) {
-                    if (query.eval(new QueryScope(objects[key].val, table, schema))) {
+                    if (query.eval(new QueryScope({}, objects[key].val, table, schema))) {
                         writes.push({type: 'update', table: table.info.table, id: BigInt(key), obj});
                     }
                 }
@@ -244,7 +250,7 @@ let makeReader = function (schema) {
                 let objects = getTableObjects(table);
                 let res = [];
                 for (let key in objects) {
-                    if (query.eval(new QueryScope(objects[key].val, table, schema))) {
+                    if (query.eval(new QueryScope({}, objects[key].val, table, schema))) {
                         writes.push({type: 'delete', table: table.info.table, id: BigInt(key)});
                         objects[key].remove();
                     }
@@ -261,7 +267,7 @@ let makeReader = function (schema) {
                 let objects = getTableObjects(table);
                 let res = [];
                 for (let key in objects) {
-                    if (query.eval(new QueryScope(objects[key].val, table, schema))) {
+                    if (query.eval(new QueryScope({}, objects[key].val, table, schema))) {
                         writes.push({type: 'deleteOne', table: table.info.table, id: BigInt(key)});
                         objects[key].remove();
                     }
@@ -295,10 +301,10 @@ let makeReader = function (schema) {
                 let res = [];
 
                 for (let key in objects) {
-                    if (query.eval(new QueryScope(objects[key], table, schema))) {
+
+                    if (query.eval(new QueryScope({}, objects[key], table, schema))) {
                         res.push(objects[key]);
                     }
-
                 }
                 callback(null, res);
             }, 1);

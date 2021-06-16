@@ -109,8 +109,15 @@ aurora.ui.ErrorWidget.prototype.updateValue_ = function(helper) {
                 else if (error.error.message) {
                     errors.push(recoil.ui.message.toMessage(error.error.message));
                 }
-                else {
+                else if (error.error.sqlMessage) {
+                    errors.push(recoil.ui.message.toMessage(error.error.sqlMessage));
+                }
+                else if (typeof (error.error) == 'string') {
+
                     errors.push(recoil.ui.message.toMessage(error.error));
+                }
+                else {
+                    errors.push(recoil.ui.message.toMessage(JSON.stringify(error.error)));
                 }
             }
             else if (error.message) {

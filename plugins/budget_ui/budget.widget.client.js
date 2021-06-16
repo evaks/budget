@@ -124,13 +124,15 @@ budget.widgets.Budget.prototype.createPrintB_ = function(budgetB, userB) {
             return goog.dom.createTextNode(val);
         }
     };
-    return frp.createCallback(function() {
-        var mywindow = window.open(undefined, undefined, 'height=400,width=600');
-        mywindow.document.write('<html><head><title>Budget</title><link rel="stylesheet" type="text/css" href="/images/print.css">');
-        mywindow.document.write('</head><body ><table  id="budget_table" style="width: 100%; height: 100%;">');
-        mywindow.document.write('</table></body></html>');
-        let user = userB.get();
-        let tbl = mywindow.document.getElementById('budget_table');
+    return frp.createCallback(
+        /** @suppress {checkTypes} */
+        function() {
+            var mywindow = window.open(undefined, undefined, undefined, 'height=400,width=600');
+            mywindow.document.write('<html><head><title>Budget</title><link rel="stylesheet" type="text/css" href="/images/print.css">');
+            mywindow.document.write('</head><body onload="doPrint()"><table  id="budget_table" style="width: 100%; height: 100%;">');
+            mywindow.document.write('</table></body></html>');
+            let user = userB.get();
+            let tbl = mywindow.document.getElementById('budget_table');
         let budget = budgetB.get();
         /***
          * @param {...?} var_args
@@ -375,8 +377,10 @@ budget.widgets.Budget.prototype.createPrintB_ = function(budgetB, userB) {
             let r = right[i] || [];
             addRow.apply(null, l.concat([{value: '', styles: ['mid']}]).concat(r));
         }
-
-        console.log('mywindow', tbl);
+        //mywindow.print();
+        mywindow.window.addEventListener('load', function() {mywindow.window.console.log('x');});
+        mywindow.addEventListener('load', function() {console.log('xxx');}, true);
+        console.log('mywindow', mywindow.window);
         /*
         budget.cell('A1').value(mess.BUDGET_PROTECTED.toString());
         budget.cell('J1').value(rich([{value: '', bold: true}, ' This budget is based']));
@@ -969,7 +973,9 @@ budget.widgets.Budget.prototype.attach = function(idB) {
                     return;
                 }
                 mrow.set(entryT.cols.type, type);
-                mrow.set(entryT.cols.description, row.get(entryT.cols.description) || '');
+                [entryT.cols.description, entryT.cols.notes, entryT.cols.value, entryT.cols.arrears, entryT.cols.owing].forEach(function(col) {
+                    mrow.set(col, row.get(col) || '');
+                });
                 mrow.set(entryT.cols.order, pos++);
                 res.addRow(mrow);
             });

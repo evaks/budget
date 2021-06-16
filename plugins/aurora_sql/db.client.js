@@ -853,7 +853,7 @@ aurora.db.Helper.prototype.updateEffectedTables = function(changes, currentError
     this.addChangesToIdMap_(idMap, changes, serverResults);
     idMap.inOrderTraverse(function(entry) {
         let pk = entry.key.lastKeys()[0];
-        let newPk = new aurora.db.PrimaryKey(entry.id);
+        let newPk = new aurora.db.PrimaryKey(entry.id, pk.mem);
         console.log('adding pk', pk, 'newPk', newPk);
         let tbl = aurora.db.schema.getTableByName(entry.key);
         let tblInfo = me.tblMap_.findFirst({key: tbl.key.uniqueId()});

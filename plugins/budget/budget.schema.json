@@ -100,7 +100,9 @@
 	    "indexes": [{"columns": ["stop"]},  {"columns": ["mentorid", "stop"]}, {"columns": ["userid", "stop"]}],
 	    "access": "aurora.db.access.basic([{'site-management':'crud'}, {'': 'r'}])",
 	    "accessFilter": [
-		{"" : "all"}
+		{"site-management" : "all"},
+		{"mentor" : "budget.filter.mentorAppointment"},
+		{"client": "budget.filter.userAppointment"}
 	    ],
 	    "columns": [
 		{ "name": "id", "type": "id"},
@@ -110,7 +112,8 @@
 		{ "name": "userid", "type": "ref(user)", "nullable": true},
 		{ "name": "start", "type": "datetime"},
 		{ "name": "stop", "type": "datetime", "nullable":true},
-		{ "name": "name", "type": "string(100)", "default": ""},
+		{ "name": "firstName", "type": "string(100)", "default": ""},
+		{ "name": "lastName", "type": "string(100)", "default": ""},
 		{ "name": "phone", "type": "Phone"},
 		{ "name": "email", "type": "string(128)"},
 		{ "name": "address", "type": "string(255)"}
@@ -224,7 +227,7 @@
 	    "inputs": [
 		{"name":"apptid", "type":"?bigint"},
 		{"name":"mentorid", "type":"bigint"}, {"name":"userid", "type": "?bigint"},
-		{"name":"email", "type": "string"}, {"name":"name", "type": "string"},
+		{"name":"email", "type": "string"}, {"name":"firstName", "type": "string"},{"name":"lastName", "type": "string"},
 		{"name":"time", "type": "number"}, {"name":"length", "type": "number"} ]
 	},
 	{

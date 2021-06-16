@@ -22,6 +22,9 @@ debug-server:
 client:
 	node aurora/build build.json client
 
+module-test:
+	node aurora/build build.json module-test
+
 .PHONY: debug-client
 debug-client:
 	node aurora/build build.json debug-client

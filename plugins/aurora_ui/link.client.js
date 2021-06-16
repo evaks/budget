@@ -23,16 +23,18 @@ aurora.ui.widgets.LinkWidget = function(scope) {
 /**
  * attachable behaviours for widget
  */
-aurora.ui.widgets.LinkWidget.options = recoil.ui.util.StandardOptions('value');
+aurora.ui.widgets.LinkWidget.options = recoil.ui.util.StandardOptions('value', {text: '', formatter: function(txt) {return txt;}});
 
 /**
  * @param {!recoil.frp.Behaviour<Object>|Object} options if this is undefined then use attache
  */
 aurora.ui.widgets.LinkWidget.prototype.attachStruct = function(options) {
     let frp = this.helper_.getFrp();
-    let bound = recoil.ui.widgets.InputWidget.options.bind(frp, options);
+    let bound = aurora.ui.widgets.LinkWidget.options.bind(frp, options);
     this.valueB_ = bound.value();
-    this.helper_.attach(this.valueB_);
+    this.textB_ = bound.text();
+    this.formatterB_ = bound.formatter();
+    this.helper_.attach(this.valueB_, this.textB_, this.formatterB_);
 };
 /**
  * @return {!goog.ui.Component}
@@ -48,6 +50,17 @@ aurora.ui.widgets.LinkWidget.prototype.getComponent = function() {
 aurora.ui.widgets.LinkWidget.prototype.updateValue_ = function(helper) {
     let value = helper.isGood() ? this.valueB_.get() : null;
     this.container_.href = value;
+    let text = helper.isGood() ? this.formatterB_.get()(this.textB_.get()) : '';
+    goog.dom.removeChildren(this.container_);
+    if (text instanceof Element) {
+        goog.dom.appendChild(this.container_, text);
+    }
+    else if (text && text != '') {
+        this.container_.innerText = text;
+    }
+    else {
+        this.container_.appendChild(goog.dom.createDom('div', {}));
+    }
     goog.style.setElementShown(this.container_, !!value);
 };
 

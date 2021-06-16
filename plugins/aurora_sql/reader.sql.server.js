@@ -861,6 +861,8 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
             callback(e, null);
         }
     };
+    console.log('process list x');
+
     processList(unreadTables, opt_options);
 };
 

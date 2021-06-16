@@ -854,3 +854,11 @@ div.budget-div:hover div {
     text-overflow: ellipsis;
     overflow: hidden;
 }
+
+.appt-new-user {
+    color: green;
+}
+
+.appt-existing-user {
+    color: blue;
+}

@@ -87,23 +87,63 @@ aurora.db.mysql.Pool.prototype.addOptions = function(select, options) {
     return select;
 };
 
+
+/**
+ * @param {function(?)} cb
+ * @suppress {checkTypes}
+ */
+aurora.db.mysql.Pool.prototype.dropDb = function(cb) {
+    let testOpts = goog.object.clone(this.options_);
+    testOpts['database'] = 'mysql';
+    let testCon = this.mysql_.createConnection(testOpts);
+    let database = this.options_['database'];
+    let me = this;
+    testCon.query('drop database ' + this.escapeId(database), function(err) {
+        testCon.destroy();
+        cb(err);
+    });
+
+};
+/**
+ * @param {function(?)} cb
+ * @suppress {checkTypes}
+ */
+aurora.db.mysql.Pool.prototype.createDb = function(cb) {
+    let testOpts = goog.object.clone(this.options_);
+    testOpts['database'] = 'mysql';
+    let testCon = this.mysql_.createConnection(testOpts);
+    let database = this.options_['database'];
+    let me = this;
+    testCon.query('create database ' + this.escapeId(database), function(err) {
+        testCon.destroy();
+        if (!err && me.pool_) {
+            // reinitialize the database it must have been an error before
+            me.pool_.end(function() {});
+            me.pool_ = me.mysql_.createPool(me.options_);
+        }
+        cb(err);
+    });
+};
 /**
  * backs up the database
  * @param {function(?,?string)} cb
  * @suppress {checkTypes}
  */
 aurora.db.mysql.Pool.prototype.backup = function(cb) {
-    let me = this;
+
+    // first check if the database even exists if it doesn't there is no need for a backup
+    let testOpts = goog.object.clone(this.options_);
+    testOpts['database'] = 'mysql';
+    let testCon = this.mysql_.createConnection(testOpts);
     let database = this.options_['database'];
-    this.query('select 1 from `mysql`.`db` where ?db = db', {db: database}, function(err, res) {
-        if (err && err.code === 'ER_BAD_DB_ERROR') {
-            aurora.db.mysql.log.info('db does not exist failed no backup performed');
-            cb(null, null);
-        }
-        else if (err) {
+    let me = this;
+    testCon.query('SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = ' + this.escape(database), function(err, rows) {
+        testCon.destroy();
+        if (err) {
             cb(err, null);
         }
-        else if (res.length == 0) {
+        else if (rows.length === 0) {
+            // no error but database
             cb(null, null);
         }
         else {
@@ -121,24 +161,25 @@ aurora.db.mysql.Pool.prototype.backup_ = function(cb) {
     const { spawn } = require('child_process');
     const fs = require('fs');
     const path = require('path');
-    const fname = path.join(this.options_['backup'] || '.', this.options_['database'] + '-' + new Date().toISOString().replace(/:/g, '_') + '.sql');
+    let me = this;
+    let database = this.options_['database'];
+    const fname = path.join(me.options_['backup'] || '.', database + '-' + new Date().toISOString().replace(/:/g, '_') + '.sql');
     let write = fs.createWriteStream(fname);
     let error = null;
-    let me = this;
     //
     write.on('ready', function() {
         let process = spawn('mysqldump', ['-u', me.options_['user'], '-p' + me.options_['password'], me.options_['database']]);
         process.stdout.on('data', (data) => {
             write.write(data);
         });
-
+        
         process.on('error', function(e) {
             if (!error) {
                 error = e;
                 cb(e, null);
             }
         });
-
+        
         process.on('exit', (code) => {
             if (code && !error) {
                 error = 'Process exited with code ' + code;
@@ -210,45 +251,6 @@ aurora.db.mysql.Pool.prototype.restore = function(fname, cb) {
             }
         });
     
-};
-
-/**
- * @param {function(?)} cb
- */
-aurora.db.mysql.Pool.prototype.dropDb = function(cb) {
-    let me = this;
-    let database = me.options_['database'];
-    this.query(
-        'drop database IF EXISTS ' + me.escapeId(database), cb);
-};
-
-
-/**
- * @param {function(?)} cb
- */
-aurora.db.mysql.Pool.prototype.createDb = function(cb) {
-    let me = this;
-    let database = me.options_['database'];
-    console.log("create", this.options_);
-    let mysqlOpts = goog.object.clone(this.options_);
-    mysqlOpts['database']= 'mysql';
-    console.log("create", this.options_);
-
-
-    this.mysql_.createPool(mysqlOpts).query(
-        'create database ' + me.escapeId(database),
-        function(err) {
-            if (err) {
-                cb(err);
-            }
-            else {
-                
-                me.pool_ = me.mysql_.createPool(me.options_);
-                cb(err);
-            }
-        });
-
-
 };
 
 /**
@@ -424,7 +426,7 @@ aurora.db.mysql.Pool.prototype.query = function(query, params, opt_callback) {
  * used for getting querys that have large result sets that shouldn't be stored in memory
  * @param {string} query
  * @param {!Object<string,?>} params (error, results, fields)
- * @param {function(Object, function())} rowCb
+ * @param {function(!Object, function())} rowCb
  * @param {function(?)} doneCb
  */
 aurora.db.mysql.Pool.prototype.queryLarge = function(query, params, rowCb, doneCb) {

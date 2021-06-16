@@ -1,0 +1,4 @@
+[
+"recoil/src/**.js",
+"!recoil/src/**test.js"
+]

@@ -33,6 +33,17 @@ budget.widgets.SignUp = function(scope, opt_userid) {
     let frp = scope.getFrp();
     let mess = budget.messages;
     let cd = goog.dom.createDom;
+    let info = {};
+
+    if (createClient) {
+        try {
+            let p = budget.widgets.BudgetList.getSearchParams()['data'];
+            info = JSON.parse(p[0]);
+        }
+        catch (e) {}
+    }
+
+
 
     let login = cd('div');
     let loginButton = new recoil.ui.widgets.ButtonWidget(scope);
@@ -62,6 +73,10 @@ budget.widgets.SignUp = function(scope, opt_userid) {
     for (let k in userT.meta) {
         let col = userT.meta[k].key;
         let meta = userT.meta[col.getName()];
+        if (info[col.getName()]) {
+            data[col.getName()] = info[col.getName()];
+            continue;
+        }
         if (meta.type === 'enum') {
             data[col.getName()] = null;
         }
@@ -107,7 +122,6 @@ budget.widgets.SignUp = function(scope, opt_userid) {
             });
             return res.freeze();
         }, function(tbl) {
-            console.log('setting table', tbl.toDebugObj());
             tableB.set(tbl);
         }, tableB, aurora.permissions.getContext(scope));
     };
@@ -349,6 +363,9 @@ budget.widgets.SignUp = function(scope, opt_userid) {
                     });
 
                 });
+                if (info.schedule) {
+                    inputs.push('schedule', info.schedule);
+                }
                 actionB.set(inputs);
             }, actionB, tableB),
         text: mess.SIGNUP,

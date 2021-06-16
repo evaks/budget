@@ -173,7 +173,6 @@ aurora.db.sql.ChangeWriter.getFileMetaByPath = function(schema, path) {
         // this could be a filename
         if (path.last().name() === 'name') {
             let parentTable = schema.getTableByName(path.parent());
-            console.log('getting file info');
             field = aurora.db.sql.ChangeWriter.hasFile_(parentTable);
             if (field) {
                 meta = schema.getMetaByPath(path.parent().appendName(field));
@@ -260,7 +259,6 @@ aurora.db.sql.ChangeWriter.prototype.applyChanges = function(changes, secContext
     // get the base paths of each change we need this in order to determine security
     // we trust nothing from the client
     for (let changeIdx = 0; changeIdx < changes.length; changeIdx++) {
-
         results.push({error: null});
         // first we need to get the base object ids so we can do a security check
         let change = changes[changeIdx];
@@ -696,7 +694,6 @@ aurora.db.sql.ChangeWriter.prototype.applyTransactionChanges_ = function(changeL
                                     let fileT = aurora.db.schema.tables.base.file_storage;
                                     let filePartT = fileT.parts;
                                     let fileId = obj[fileCol];
-                                    console.log('deleting file', fileId);
                                     reader.deleteOneLevel(context, filePartT, query.eq(filePartT.info.parentKey, query.val(fileId)), null, function(err) {
                                         if (err) {
                                             eachCallback(err);
@@ -863,7 +860,6 @@ aurora.db.sql.ChangeWriter.prototype.addAdd_ = function(objectPathMap, change, r
             if (meta && meta.type === 'ref') {
                 let table = this.schema_.getTableByName(meta.ref);
                 let pkName = table.info.pk.getName();
-                console.log('adding ref', name, val);
                 if (val != null) {
                     let refPath = recoil.db.ChangeSet.Path.fromString(table.info.path).setKeys(/** @type {!Array<string>} */ (table.info.keys), [val]);
                     entry.needsRefs.push(refPath);
@@ -1233,7 +1229,6 @@ aurora.db.sql.ChangeWriter.prototype.getPath_ = function(base, path) {
                 if (fileField) {
                     let res = {};
                     res[aurora.db.schema.tables.base.file_storage.info.pk.getName()] = curObj[fileField];
-                    console.log('get path', items[i].name(), res);
                     return res;
                 }
 

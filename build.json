@@ -28,6 +28,18 @@
 			  "plugins/recoil/recoil/src/ui/css/*.css","plugins/recoil/*.css"]
 	},
 	{
+	    "types": ["module-test"],
+	    "filename": "module-test.min.js",
+	    "searchExp": [".*\\.shared\\.js$", ".*schema\\.gen.server\\.js$"],
+	    "compiled": true,
+	    "externs" : ["externs/*.server.js","externs/**.shared.js"],
+	    "sourcesFile":"sources.module-test.json",
+	    "env":"CUSTOM",
+	    "nodejs":true,
+	    "sourceMapLocation":"local",
+	    "compilationLevel":"SIMPLE_OPTIMIZATIONS"
+	},
+	{
 	    "types": ["server"],
 	    "filename": "server.min.js",
 	    "searchExp": [".*\\.shared\\.js$", ".*\\.server\\.js$"],

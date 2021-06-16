@@ -17,7 +17,7 @@ aurora.db.createId = function(name) {
      * @type {function():!aurora.db.PrimaryKey}
      */
     let defFunc = function() {
-        return new aurora.db.PrimaryKey(null, seq.next());
+        return new aurora.db.PrimaryKey(null, -seq.next());
     };
     return new recoil.structs.table.ColumnKey(name, aurora.db.comparePk, undefined, undefined, defFunc);
 };
@@ -56,12 +56,21 @@ aurora.db.PrimaryKey.prototype.equals = function(other) {
 aurora.db.PrimaryKey.prototype.compare = function(other) {
     return other instanceof aurora.db.PrimaryKey ? aurora.db.comparePk(this, other) : -1;
 };
+
+/**
+ * @param {?} other
+ */
+aurora.db.PrimaryKey.prototype.setWeakCompare = function(other) {
+    this.weakCompare_ = true;
+};
+
 /**
  * @return {string}
  */
 aurora.db.PrimaryKey.prototype.toString = function() {
     return JSON.stringify([this.mem, this.db]);
 };
+
 
 /**
  * compares two primary keys

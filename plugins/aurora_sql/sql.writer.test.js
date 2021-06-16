@@ -157,7 +157,6 @@ test('check-password', done => {
     let mockReader = makeReader(schema);
     let cw = new ChangeWriter(schema, mockReader);
     mockReader.addObject('t1', {id: 1, name: 'fred','t1-list': [{id: BigInt(7), name: 'l1'}]});
-
     cw.applyChanges([
         new ChangeSet.Set(makePath('t1', 1, 'password'), null, 'apple'),
         new ChangeSet.Set(makePath('t1', 1, 't1-list', 7, 'password'), null, 'orange')
@@ -282,8 +281,8 @@ test('test-delete-reference', done => {
         expect(result[0].error).toBeFalsy();
         expect(result[1].error).toBeFalsy();
         let refId = (result[0] || {}).id;
-        expect(trans[0]).toStrictEqual({type: 'deleteOne', table: 'referer', id: BigInt(2)});
-        expect(trans[1]).toStrictEqual({type: 'deleteOne', table: 'a-ref', id: BigInt(1)});
+        expect(trans[0]).toStrictEqual({type: 'delete', table: 'referer', id: BigInt(2)});
+        expect(trans[1]).toStrictEqual({type: 'delete', table: 'a-ref', id: BigInt(1)});
 
         done();
     });
@@ -319,8 +318,8 @@ test('test-delete-objects', done => {
         expect(result.length).toBe(1);
         expect(result[0].error).toBeFalsy();
         expect(trans.length).toBe(2);
-        expect(trans[0]).toStrictEqual({type: 'deleteOne', table: 't1-list', id: BigInt(2)});
-        expect(trans[1]).toStrictEqual({type: 'deleteOne', table: 't1', id: BigInt(1)});
+        expect(trans[0]).toStrictEqual({type: 'delete', table: 't1-list', id: BigInt(2)});
+        expect(trans[1]).toStrictEqual({type: 'delete', table: 't1', id: BigInt(1)});
 
         done();
     });

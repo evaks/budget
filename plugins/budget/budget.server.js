@@ -18,9 +18,14 @@ goog.require('config');
 budget.Server = function() {
     let log = aurora.log.createModule('MAIN');
     let initDb = false;
+    let initTest = false;
     for (let i = 2; i < process.argv.length; i++) {
         if (process.argv[i] === '--init-db') {
             initDb = true;
+        }
+        if (process.argv[i] === '--init-test') {
+            initDb = true;
+            initTest = true;
         }
     }
     let dbAuth = null;
@@ -31,7 +36,7 @@ budget.Server = function() {
     }
     databases.forEach(function(database) {
         let driver = /** @type {?} */(eval(database['driver']));
-        let settings = database['settings'];
+        let settings = budget.Server.getSettings(initTest, database['settings']);
         let pool = new driver(settings);
 
         if (database['auth']) {
@@ -41,22 +46,37 @@ budget.Server = function() {
         }
         aurora.db.Pool.addPool(database['name'] || null, pool);
         if (initDb) {
-            log.info('Initializing database');
-            if (database['create-settings']) {
-                let createPool = new driver(database['create-settings']);
-                aurora.db.schema.init.base.updateDb(createPool, function(err) {
-                    createPool.createAppUser(settings, function(err) {
-                        if (err) {
-                            log.error('ERROR creating database', err);
-                        }
-                        aurora.startup.taskEnded('budget.Server.initDb');
+            let doInit = function() {
+                log.info('Initializing database');
+                if (database['create-settings']) {
+
+                    let createPool = new driver(budget.Server.getSettings(initTest, database['create-settings']));
+                    aurora.db.schema.init.base.updateDb(createPool, function(err) {
+                        createPool.createAppUser(settings, function(err) {
+                            if (err) {
+                                log.error('ERROR creating database', err);
+                            }
+                            aurora.startup.taskEnded('budget.Server.initDb');
+
+                        });
 
                     });
+                }
+                else {
+                    log.error('You must specify create-settings to create a database');
+                }
 
+            };
+            if (initTest) {
+                // if we are a test always drop the database
+                let createPool = new driver(budget.Server.getSettings(initTest, database['create-settings']));
+                createPool.dropDb(function(e) {
+                    console.log(e);
+                    doInit();
                 });
             }
             else {
-                log.error('You must specify create-settings to create a database');
+                doInit();
             }
         }
 
@@ -90,6 +110,20 @@ budget.Server.prototype.getReader = function() {
     return this.reader_;
 };
 
+/**
+ * modifies the settings so that it creates/connects to a test database
+ * @param {boolean} isTest
+ * @param {!Object} settings
+ * @return {!Object}
+ */
+budget.Server.getSettings = function(isTest, settings) {
+    if (isTest) {
+        var copy = goog.object.clone(settings);
+        copy['database'] = copy['database'] + '_test';
+        return copy;
+    }
+    return settings;
+};
 /**
  * @final
  */

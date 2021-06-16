@@ -154,7 +154,7 @@ aurora.widgets.PagedTable = function(scope, tableT, pageSize, factory, headerFac
 
 
     let addText = goog.dom.createDom('span', {}, aurora.messages.ADD.toString());
-    let removeText = goog.dom.createDom('span', {},  aurora.messages.REMOVE.toString());
+    let removeText = goog.dom.createDom('span', {}, aurora.messages.REMOVE.toString());
 
     let addB = recoil.frp.struct.extend(
         frp, {text: addText},
@@ -178,12 +178,12 @@ aurora.widgets.PagedTable = function(scope, tableT, pageSize, factory, headerFac
 
     let removeB = recoil.frp.struct.extend(
         frp, {text: removeText},
-        
+
         frp.liftB(function(tbl, selected) {
-            
+
             let res = tbl.getMeta().remove || {};
             res.enabled = selected.length ? recoil.ui.BoolWithExplanation.TRUE : recoil.ui.BoolWithExplanation.FALSE;
-            selected.forEach(function (key) {
+            selected.forEach(function(key) {
                 let row = tbl.getRow(key);
                 if (row) {
                     if (row.getMeta().removeEnabled != undefined) {
@@ -191,7 +191,7 @@ aurora.widgets.PagedTable = function(scope, tableT, pageSize, factory, headerFac
                     }
                 }
             });
-            
+
             return res;
         }, tableB, selectedB), {action: removeCallbackB}
     );
