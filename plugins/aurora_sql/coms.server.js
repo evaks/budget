@@ -317,7 +317,7 @@ aurora.db.Coms = function(authenticator) {
                                 me.channel_.send(response, e.clientId);
                                 return;
                             }
-                            action.func(secContext, reader, inputs, responseHandler);
+                            action.func(this, secContext, reader, inputs, responseHandler);
                         }
                         else {
                             if (recoil.util.map.size(inputs) !== expectedInputs.length) {
