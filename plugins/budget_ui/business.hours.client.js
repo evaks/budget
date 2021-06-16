@@ -214,7 +214,11 @@ budget.widgets.BusinessHours = function(scope, opt_type) {
         }
     });
 
-    this.helper_.attach(this.siteB_, this.siteIdB_, highlightedB, this.curDateB_, contentSizeB, this.holidaysB_, this.borderDimsB_, this.hoursTblB_, this.appointmentsB_, this.availableB_, this.contextB_);
+    this.selHelper_ = new recoil.ui.ComponentWidgetHelper(scope, this.component_, this, this.update_);
+
+    this.highlightedB_ = highlightedB;
+    this.contentSizeB_ = contentSizeB;
+    this.attachHelper_(null);
     let resizeObserver = new ResizeObserver(frp.accessTransFunc(function(e) {
         contentSizeB.set({width: Math.round(e[0].contentRect.width), height: Math.round(e[0].contentRect.height)});
         let style = getComputedStyle(me.highlightDiv_);
@@ -1922,6 +1926,35 @@ budget.widgets.BusinessHours.prototype.update_ = function(helper) {
 
     }
 };
+
+/**
+ * @param {recoil.frp.Behaviour<string>} selectionB
+ */
+budget.widgets.BusinessHours.prototype.attachHelper_ = function(selectionB) {
+
+    this.selAppB_ = selectionB;
+
+    let bs = [this.siteB_, this.siteIdB_, this.highlightedB_, this.curDateB_, this.contentSizeB_, this.holidaysB_, this.borderDimsB_, this.hoursTblB_, this.appointmentsB_, this.availableB_, this.contextB_];
+
+
+    if (selectionB) {
+        bs.push(selectionB);
+    }
+    this.helper_.attach.apply(this.helper_, bs);
+};
+
+/**
+ * @param {!recoil.frp.Behaviour<string>} selApp
+ * @param {(!recoil.ui.BoolWithExplanation|!recoil.frp.Behaviour<!recoil.ui.BoolWithExplanation>)=} opt_enabled
+ */
+budget.widgets.BusinessHours.prototype.attach = function(selApp, opt_enabled) {
+    var frp = this.helper_.getFrp();
+
+    this.selAppB_ = selApp;
+    this.attachHelper_(selApp);
+
+};
+
 /**
  * @return {!goog.ui.Component}
  */

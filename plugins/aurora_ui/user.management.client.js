@@ -117,7 +117,7 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
         return query.containsAll(query.field(col), val);
     };
     let resetPasswordCol = new recoil.structs.table.ColumnKey('reset-password');
-    let tableWidget = new aurora.widgets.PagedTable(scope, userT, PAGE_SIZE, function(scope, sourceB, selectedB) {
+    let tableWidget = new aurora.widgets.PagedTable(scope, userT, PAGE_SIZE, function(scope, sourceB) {
         return aurora.ui.ErrorWidget.createTable(
             scope,
             frp.liftBI(function(tbl, groupCol, extraCols, extraDataCols, secContext) {

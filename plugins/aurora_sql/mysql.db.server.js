@@ -172,14 +172,14 @@ aurora.db.mysql.Pool.prototype.backup_ = function(cb) {
         process.stdout.on('data', (data) => {
             write.write(data);
         });
-        
+
         process.on('error', function(e) {
             if (!error) {
                 error = e;
                 cb(e, null);
             }
         });
-        
+
         process.on('exit', (code) => {
             if (code && !error) {
                 error = 'Process exited with code ' + code;

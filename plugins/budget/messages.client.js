@@ -678,3 +678,9 @@ budget.messages.UNSCHEDULE_TO_EDIT = recoil.ui.message.getParamMsg('Unschedule t
  * @final
  */
 budget.messages.REMOVE_USER = recoil.ui.message.getParamMsg('Remove User');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.ADD_APPOINTMENT = recoil.ui.message.getParamMsg('Click to Add');

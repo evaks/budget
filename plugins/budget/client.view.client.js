@@ -28,13 +28,16 @@ budget.widgets.ClientView = function(scope) {
     let profileBodyDiv = cd('div', {class: 'profile-body-div'});
     let notesBodyDiv = cd('div', {class: 'notes-body-div'});
     let documentsBodyDiv = cd('div', {class: 'documents-body-div'});
-    let appointmentBodyDiv = cd('div', {});
+    let appointmentDiv = cd('div', {class: 'appointment-div'});
+    let appointmentBodyDiv = cd('div', {class: 'appointment-body-div'});
     let mess = budget.messages;
     let bodyDiv = cd('div', {class: 'body-div'}, budgetBodyDiv, profileBodyDiv, notesBodyDiv, documentsBodyDiv, appointmentBodyDiv);
     let notLoggedInDiv = cd('div', {class: 'not-logged-in'}, mess.NOT_LOGGED_IN.toString());
     let profileDiv = cd('div', {class: 'budget-edit-profile'}, aurora.messages.VIEW_EDIT_PROFILE.toString());
     let notesDiv = cd('div', {class: 'budget-edit-profile'}, mess.NOTES.toString());
     let documentsDiv = cd('div', {class: 'budget-edit-profile'}, mess.DOCUMENTS.toString());
+
+    let appointmentListWidget = new budget.widgets.AppointmentList(scope);
     let budgetListWidget = new budget.widgets.BudgetList(scope);
     let budgetWidget = new budget.widgets.Budget(scope);
     let screenB = recoil.ui.frp.LocalBehaviour.create(frp, '1', 'budget.client.menu.screen', 'profile', localStorage);
@@ -43,6 +46,8 @@ budget.widgets.ClientView = function(scope) {
     let showProfileB = logic.equal('profile', screenB);
     let showNotesB = logic.equal('notes', screenB);
     let showDocumentsB = logic.equal('documents', screenB);
+    let showAppointmentsB = logic.equal('appointment', screenB);
+
     let arrow = cd('span', {},'«');
     let secContextB = aurora.permissions.getContext(scope);
     let collapsedB = recoil.ui.frp.LocalBehaviour.create(frp, '1', 'budget.client.menu.collapsed', false, localStorage);
@@ -58,11 +63,17 @@ budget.widgets.ClientView = function(scope) {
     html.show(profileBodyDiv, showProfileB);
     html.show(notesBodyDiv, showNotesB);
     html.show(documentsBodyDiv, showDocumentsB);
+    html.show(appointmentBodyDiv, showAppointmentsB);
+
     html.class(profileDiv, recoil.frp.Chooser.if(showProfileB, 'recoil_table_selected budget-edit-profile', 'budget-edit-profile'));
     html.class(notesDiv, recoil.frp.Chooser.if(showNotesB, 'recoil_table_selected budget-edit-profile', 'budget-edit-profile'));
     html.class(documentsDiv, recoil.frp.Chooser.if(showDocumentsB, 'recoil_table_selected budget-edit-profile', 'budget-edit-profile'));
+
+    appointmentListWidget.getComponent().render(appointmentDiv);
     budgetListWidget.getComponent().render(budgetDiv);
     budgetWidget.getComponent().render(budgetBodyDiv);
+
+
     let idStr = budget.widgets.BudgetList.getUserId();
     let userId = budget.widgets.BudgetList.getUserId();
 
@@ -78,10 +89,15 @@ budget.widgets.ClientView = function(scope) {
     notesWidget.getComponent().render(notesBodyDiv);
     documentsWidget.getComponent().render(documentsBodyDiv);
 
+    let appointmentWidget = new budget.widgets.BusinessHours(scope, 'client');
+    appointmentWidget.getComponent().render(appointmentBodyDiv);
+
     let sideGroupsContainer =
         cd('div', {class: 'side-groups-container'},
-           cd('div', {}, cd('h2', {class: 'group-header'}, aurora.messages.PROFILE.toString()), profileDiv, notesDiv, documentsDiv),
-           cd('div', {}, cd('h2', {class: 'group-header'}, aurora.messages.APPOINTMENTS.toString())),
+           cd('div', {}, cd('h2', {class: 'group-header'}, aurora.messages.PROFILE.toString()),
+              profileDiv, notesDiv, documentsDiv),
+           cd('div', {class: 'appointments-list'},
+              cd('h2', {class: 'group-header'}, aurora.messages.APPOINTMENTS.toString()), appointmentDiv),
            cd('div', {class: 'budget-budget-list'},
               cd('h2', {class: 'group-header'}, aurora.messages.BUDGETS.toString()),
               budgetDiv));
@@ -127,7 +143,10 @@ budget.widgets.ClientView = function(scope) {
                        contentPanel, notLoggedInDiv);
 
     let selectedBugdetB = budgetListWidget.createSelected();
+    let selectedApptB = appointmentListWidget.createSelected();
+
     budgetWidget.attach(selectedBugdetB);
+    appointmentWidget.attach(selectedApptB);
 
     var helper = new recoil.ui.WidgetHelper(scope, container, null, function() {
         let val = selectedBugdetB.get();
@@ -146,11 +165,13 @@ budget.widgets.ClientView = function(scope) {
         return frp.accessTransFunc(function() {
             screenB.set(screen);
             selectedBugdetB.set([]);
-        }, screenB, selectedBugdetB);
+            selectedApptB.set([]);
+        }, screenB, selectedBugdetB, selectedApptB);
     };
     goog.events.listen(profileDiv, goog.events.EventType.CLICK, setScreen('profile'));
     goog.events.listen(notesDiv, goog.events.EventType.CLICK, setScreen('notes'));
     goog.events.listen(documentsDiv, goog.events.EventType.CLICK, setScreen('documents'));
+    goog.events.listen(appointmentDiv, goog.events.EventType.CLICK, setScreen('appointment'));
 
     sideControlEnable.setDispatchTransitionEvents(goog.ui.Component.State.ALL, true);
     goog.events.listen(

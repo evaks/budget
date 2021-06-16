@@ -859,6 +859,19 @@ div.budget-div:hover div {
     color: green;
 }
 
+.budget-appointment {
+    cursor: pointer;
+}
+
 .appt-existing-user {
     color: blue;
+}
+
+.budget-add-appointment-label {
+    color: #ffffff;
+    font-style: italic;
+}
+
+.budget-appointment table {
+    width: 100%;
 }
