@@ -51,10 +51,8 @@ aurora.db.Authenticator.prototype.validate = function(token, cred, data, cb) {
         cb(null);
         return;
     }
-    console.log('validating user ++++++++++++++++++++++++++++++++++++++++++++++++++==');
     reader.readObjectByKey({}, userT, [{col: userT.cols.username, value: cred.username}, {col: userT.cols.active, value: true}], null, function(err, user) {
         // hide errors
-        console.log('validating user read+++++++++++++++++++++++++++++++++++++++++++++++++++');
         let maxLocks = ((config['authentication'] || {})['maxTries'] || 3);
         let locktimeout = ((config['authentication'] || {})['lockoutMins'] || 15) * 60 * 1000;
 

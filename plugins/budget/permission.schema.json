@@ -160,7 +160,7 @@
 		{ "name": "documents", "type": "owned-list(userid)",
 		  "table": {
 		      "name": "user_documents",
-		      "access": "aurora.db.access.basic([{'mentor': 'crud'}, {'': 'cr'}])",
+		      "access": "aurora.db.access.basic([{'mentor': 'crud'}, {'': 'crud'}])",
 		      "columns": [
 			  {"name": "id", "type": "id"},
 			  {"name": "file", "type": "file"}

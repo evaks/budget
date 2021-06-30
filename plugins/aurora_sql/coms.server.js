@@ -131,7 +131,6 @@ aurora.db.Notify.prototype.forEachEffected = function(reader, change, callback) 
 
     let rootPath = new recoil.db.ChangeSet.Path(rootItems);
 
-    console.log('notifying listeners', rootPath.toString());
 
     let todoAddQueries = new goog.structs.AvlTree(recoil.util.object.compareKey);
 
@@ -145,12 +144,13 @@ aurora.db.Notify.prototype.forEachEffected = function(reader, change, callback) 
         // todo construct the table query scope
         this.map_.get(['path'], {path: rootPath.unsetKeys()}).forEach(function(entry) {
             // run through each query and
-            let context = me.contexts_[entry.client];
-            if (!aurora.db.schema.hasAccess(context, path, 'r')) {
+            let secContext = me.contexts_[entry.client];
+            if (!aurora.db.schema.hasAccess(secContext, path, 'r')) {
                 return;
             }
 
-            if (context) {
+            if (secContext) {
+                let readContext = aurora.db.Coms.makeReadContext(secContext);
                 // the path is different here because an add looks at the main path
 
                 let obj = me.addToObject(add);
@@ -159,14 +159,14 @@ aurora.db.Notify.prototype.forEachEffected = function(reader, change, callback) 
                     return;
                 }
                 let query = new recoil.db.Query();
-                let accessFilter = baseTable.info.accessFilter(context);
-                let scope = new aurora.db.Schema().makeQueryScope(rootPath, context, obj);
+                let accessFilter = baseTable.info.accessFilter(secContext);
+                let scope = new aurora.db.Schema().makeQueryScope(rootPath, readContext, obj);
                 let findQuery = query.and(accessFilter, entry.query.query);
                 if (findQuery.mayMatch(scope)) {
-                    callback(context, entry.client, rootPath, path, entry.query.key, entry.query.query);
+                    callback(secContext, entry.client, rootPath, path, entry.query.key, entry.query.query);
                     let q = new recoil.db.Query();
                     reader.readObjects(
-                        context, baseTable, q.and(entry.query.query, q.eq(q.field(baseTable.info.pk), q.val(change.path().lastKeys()[0]))),
+                        readContext, baseTable, q.and(entry.query.query, q.eq(q.field(baseTable.info.pk), q.val(change.path().lastKeys()[0]))),
                         null, function(err, results) {
                             if (!err && results.length === 1) {
                                 if (baseTable) {
@@ -522,14 +522,14 @@ aurora.db.Coms.doesChangeApplyToObject_ = function(baseTable, object, change) {
  * @param {?} key the key used to work out the table
  * @param {!recoil.db.Query} query the query return results for the table
  * @param {string} clientId
- * @param {!aurora.db.access.SecurityContext} context the security context of client
+ * @param {!aurora.db.access.SecurityContext} secContext the security context of client
  * @param {!aurora.db.schema.TableType} baseTable
  * @param {recoil.db.Query} accessFilter
  * @param {!Array<!recoil.db.ChangeSet.Path>} basePaths
  * @param {!Array<!recoil.db.ChangeSet.Change>} changes the changes applicable for this query
  * @param {function()} callback called when done
  */
-aurora.db.Coms.prototype.getSendableClients_ = function(sendClients, key, query, clientId, context, baseTable, accessFilter, basePaths, changes, callback) {
+aurora.db.Coms.prototype.getSendableClients_ = function(sendClients, key, query, clientId, secContext, baseTable, accessFilter, basePaths, changes, callback) {
 
     let reader = this.reader_;
     if (!reader) {
@@ -548,6 +548,8 @@ aurora.db.Coms.prototype.getSendableClients_ = function(sendClients, key, query,
     let q = new recoil.db.Query();
 
     let basePathKeys = basePaths.map(function(basePath) {return q.val(basePath.last().keys()[0]);});
+    let context = aurora.db.Coms.makeReadContext(secContext);
+
     reader.readObjects(
         context, baseTable, q.and(query, q.isIn(query.field(baseTable.info.pk), basePathKeys)),
         accessFilter,
@@ -571,17 +573,17 @@ aurora.db.Coms.prototype.getSendableClients_ = function(sendClients, key, query,
                                 catch (e) {
                                     // if the path doesn't exist then it is a internally made up path like file attributes so
                                     // for now its ok check the parent
-                                    return aurora.db.schema.hasAccess(context, path.parent(), 'r');
+                                    return aurora.db.schema.hasAccess(secContext, path.parent(), 'r');
                                 }
 
-                                return aurora.db.schema.hasAccess(context, path, 'r');
+                                return aurora.db.schema.hasAccess(secContext, path, 'r');
                             });
 
                             if (secureChange) {
                                 // it would be great just to send the change that the client was interested in but
                                 // for now will just resend the query that the change effected its simpler and safer
                                 // and will do for now, it deals with things like queries that filter limit options
-                                sendClients.safeFind({clientId: clientId, key: key, context: context, changes: []}).changes.push(secureChange);
+                                sendClients.safeFind({clientId: clientId, key: key, context: secContext, changes: []}).changes.push(secureChange);
                             }
 
                             break;
@@ -659,16 +661,15 @@ aurora.db.Coms.prototype.notifyListeners = function(changes, exclude, opt_done) 
 
 
     changes.forEach(function(change) {
-        me.notifies_.forEachEffected(/** @type {!aurora.db.sql.Reader}*/ (reader), change, function(context, clientid, basePath, path, key, query) {
+        me.notifies_.forEachEffected(/** @type {!aurora.db.sql.Reader}*/ (reader), change, function(secContext, clientid, basePath, path, key, query) {
             // if the client doesn't have access to read the field don't send
-            console.log('got change');
-            if (!aurora.db.schema.hasAccess(context, change.path(), 'r')) {
+            if (!aurora.db.schema.hasAccess(secContext, change.path(), 'r')) {
                 return;
             }
             let clientMap = todo.safeFind({key: key, query: query, clients: {}}).clients;
 
 
-            let clientInfo = recoil.util.map.safeGet(clientMap, clientid, {context: context, basePaths: [], changes: []});
+            let clientInfo = recoil.util.map.safeGet(clientMap, clientid, {context: secContext, basePaths: [], changes: []});
             clientInfo.changes.push(change);
             clientInfo.basePaths.push(basePath);
             // key is the json object to used to send data back for the query
@@ -786,7 +787,7 @@ aurora.db.Coms.prototype.doGetHelper_ = function(clientId, reader, secContext, n
     let me = this;
     let response = {'command': 'full', 'name': name, 'query': queryIn, 'options': optionsIn, 'value': null};
     let serializer = new aurora.db.Serializer;
-    let context = {'@userid': secContext.userid};
+    let context = aurora.db.Coms.makeReadContext(secContext);
 
     let start = new Date().getTime();
     if (name === secName) {
@@ -1114,7 +1115,6 @@ aurora.db.Coms.prototype.setupDownload_ = function () {
                 let reader = me.reader_;
                 // we know we are handing it here maybe or deal with it in the security check
                 let doneCalled = false;
-
                 me.authenticator_.getPermissions(state.token, request.socket, function (context) {
                     if (!aurora.db.schema.hasAccess(context, urlInfo.path, 'r')) {
                         // we don't exist the user has no access
@@ -1122,7 +1122,8 @@ aurora.db.Coms.prototype.setupDownload_ = function () {
                         log.warn("File Download Access Denied for ", context.userid);
                         return;
                     }
-                    reader.readObjectByKey(context, urlInfo.baseTable, urlInfo.keyValues, urlInfo.baseTable.info.accessFilter(context), function (err, object) {
+                    let readContext = aurora.db.Coms.makeReadContext(context);
+                    reader.readObjectByKey(readContext, urlInfo.baseTable, urlInfo.keyValues, urlInfo.baseTable.info.accessFilter(context), function (err, object) {
                         let fileInfo = me.findElement(object, urlInfo.base, urlInfo.path);
                         if (err || !fileInfo) {
                             done(undefined);
@@ -1170,6 +1171,14 @@ aurora.db.Coms.prototype.setupDownload_ = function () {
         });
 };
 /**
+ * @param {!Object} context
+ * @return {!Object}
+ */
+aurora.db.Coms.makeReadContext = function (context) {
+    return {'@userid': context.userid};
+};
+
+/**
  * sets up callback for uploads
  */
 aurora.db.Coms.prototype.setupUpload_ = function () {
@@ -1197,11 +1206,14 @@ aurora.db.Coms.prototype.setupUpload_ = function () {
                         log.warn("File Upload Access Denied for ", context.userid);
                         return;
                     }
+                    let readContext = aurora.db.Coms.makeReadContext(context);
+
+
                     let notifies = [];
                     // check we have create access on the column we are adding to
                     reader.transaction(function (reader, transDone) {
                         // check we can even see the row
-                        reader.readObjectByKey(context, urlInfo.baseTable, urlInfo.keyValues, urlInfo.baseTable.info.accessFilter(context), function (err, object) {
+                        reader.readObjectByKey(readContext, urlInfo.baseTable, urlInfo.keyValues, urlInfo.baseTable.info.accessFilter(context), function (err, object) {
                             // we know we are dealing with the request now
                             doneCalled = true;
                             let insertEl = me.findElement(object, urlInfo.base, urlInfo.path.parent());
@@ -1212,8 +1224,7 @@ aurora.db.Coms.prototype.setupUpload_ = function () {
                             done(false);
                                 
                             let parentId = insertEl[urlInfo.parentTable.info.pk.getName()];
-                            
-                            me.doUpload_(reader, context, request, response, function (err, inserted) {
+                            me.doUpload_(reader, readContext, request, response, function (err, inserted) {
                                 if (!err) {
                                     // insert the row in the referencing table so we can access the file
                                     let template = {};
@@ -1224,11 +1235,11 @@ aurora.db.Coms.prototype.setupUpload_ = function () {
                                         }
                                     }
                                     template[urlInfo.table.info.parentKey.getName()] = parentId;
-                                    
+                                    template['user'] = context.userid;
                                     async.eachSeries(inserted, function (insertedObj, callback) {
                                         let obj = Object.assign({}, insertedObj, template);
                                         obj[urlInfo.fileField] = insertedObj.id;
-                                        reader.insert(context, urlInfo.table, obj, function (err, insertRes) {
+                                        reader.insert(readContext, urlInfo.table, obj, function (err, insertRes) {
                                             if (!err) {
                                                 obj[urlInfo.table.info.pk.getName()] = insertRes.insertId + '';
                                                 notifies.push(obj);
@@ -1344,9 +1355,14 @@ aurora.db.Coms.ValSerializer.prototype.deserialize = function(path, val) {
         let meta = tbl.meta[path.last().name()];
         if (meta) {
             if (meta.type === 'id') {
-                return new aurora.db.PrimaryKey(
-                    val['db'] == undefined ? null : BigInt(val['db']),
-                    val['mem'] == undefined ? null : BigInt(val['mem']));
+                if (val) {
+                    return new aurora.db.PrimaryKey(
+                        val['db'] == undefined ? null : BigInt(val['db']),
+                        val['mem'] == undefined ? null : BigInt(val['mem']));
+                }
+                else {
+                    return new aurora.db.PrimaryKey(null, null);
+                }
             }
         }
     }

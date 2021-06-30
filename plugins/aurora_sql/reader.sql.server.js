@@ -861,8 +861,6 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
             callback(e, null);
         }
     };
-    console.log('process list x');
-
     processList(unreadTables, opt_options);
 };
 
@@ -997,6 +995,7 @@ aurora.db.sql.Reader.prototype.insert = function(context, table, object, callbac
                     row[name] = me.toDb_(meta, object[name]);
                 }
             }
+
             if (table.info.parentKey) {
                 row[table.info.parentKey.getName()] = parentId;
             }

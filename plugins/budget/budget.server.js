@@ -23,7 +23,7 @@ budget.Server = function() {
         if (process.argv[i] === '--init-db') {
             initDb = true;
         }
-        if (process.argv[i] === '--init-test') {
+        if (process.argv[i] === '--test') {
             initDb = true;
             initTest = true;
         }
@@ -50,7 +50,7 @@ budget.Server = function() {
                 log.info('Initializing database');
                 if (database['create-settings']) {
 
-                    let createPool = new driver(budget.Server.getSettings(initTest, database['create-settings']));
+                    let createPool = new driver(budget.Server.getSettings(initTest, database['create-settings'], true));
                     aurora.db.schema.init.base.updateDb(createPool, function(err) {
                         createPool.createAppUser(settings, function(err) {
                             if (err) {
@@ -69,9 +69,8 @@ budget.Server = function() {
             };
             if (initTest) {
                 // if we are a test always drop the database
-                let createPool = new driver(budget.Server.getSettings(initTest, database['create-settings']));
+                let createPool = new driver(budget.Server.getSettings(initTest, database['create-settings'], true));
                 createPool.dropDb(function(e) {
-                    console.log(e);
                     doInit();
                 });
             }
@@ -86,6 +85,20 @@ budget.Server = function() {
 
     //    inst.addDisallowedExp(/^\/user\//);
     auth.setLoginPath('/login'); // going here if the user is not in the session table will force them to login
+
+    if (initTest) {
+        // if we are doing a test allow a remote unauthorised shutdown of the server
+        aurora.http.addMidRequestCallback(
+            /^\/shutdown/,
+            function(state, done) {
+                log.info('Test server recieved shutdown request');
+                state.response.writeHead(200);
+                state.response.end();
+                setTimeout(function() {
+                    process.exit(0);
+                }, 1000);
+            });
+    }
 
     if (dbAuth) {
         new aurora.db.Coms(/** @type {!aurora.db.Authenticator} */ (dbAuth));
@@ -114,12 +127,16 @@ budget.Server.prototype.getReader = function() {
  * modifies the settings so that it creates/connects to a test database
  * @param {boolean} isTest
  * @param {!Object} settings
+ * @param {boolean=} opt_create
  * @return {!Object}
  */
-budget.Server.getSettings = function(isTest, settings) {
+budget.Server.getSettings = function(isTest, settings, opt_create) {
     if (isTest) {
         var copy = goog.object.clone(settings);
         copy['database'] = copy['database'] + '_test';
+        if (!opt_create) {
+            copy['user'] = copy['user'] + '_test';
+        }
         return copy;
     }
     return settings;

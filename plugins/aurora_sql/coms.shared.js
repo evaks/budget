@@ -1,4 +1,5 @@
 goog.provide('aurora.db.Serializer');
+goog.provide('aurora.db.ValueSerializor');
 
 goog.require('aurora.db.PrimaryKey');
 
@@ -91,3 +92,51 @@ aurora.db.Serializer.prototype.serializeValue = function(val) {
         value: value
     };
 };
+
+
+/**
+ * @constructor
+ * @implements {recoil.db.ChangeSet.ValueSerializor}
+ * allows override to serialize/deserialize values, eg buffers
+ */
+aurora.db.ValueSerializor = function() {
+};
+
+/**
+ * @suppress {checkTypes}
+ * @param {!recoil.db.ChangeSet.Path} path
+ * @param {?} val
+ * @return {?}
+ */
+aurora.db.ValueSerializor.prototype.serialize = function(path, val) {
+    if (typeof (val) === 'bigint') {
+        var def = new aurora.db.Schema().getContainerDef(path.parent());
+        return val.toString();
+    }
+    return val;
+};
+/**
+ * converts a path to an object that can be turned into json
+ * @param {!recoil.db.ChangeSet.Path} path
+ * @param {?} serialized
+ * @return {?}
+ */
+aurora.db.ValueSerializor.prototype.deserialize = function(path, serialized) {
+    var val = serialized;
+    var def = new aurora.db.Schema().getContainerDef(path.parent());
+    if (def && def.meta) {
+        var meta = def.meta[path.last().name()];
+        if (meta && val != null) {
+            if (['id', 'ref'].indexOf(meta.type) !== -1) {
+                return new aurora.db.PrimaryKey(BigInt(val));
+            }
+            if (['int64'].indexOf(meta.type) !== -1) {
+                return BigInt(val);
+            }
+        }
+    }
+
+
+    return serialized;
+};
+

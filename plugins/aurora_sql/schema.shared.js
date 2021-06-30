@@ -16,7 +16,6 @@ goog.provide('aurora.db.schema.prefixMap');
 goog.provide('aurora.db.schema.tables.sec.permissions');
 goog.require('aurora.db');
 goog.require('aurora.db.access');
-goog.require('aurora.log');
 goog.require('recoil.db.BasicType');
 goog.require('recoil.db.ChangeSet');
 goog.require('recoil.structs.table.ColumnKey');
@@ -246,7 +245,10 @@ aurora.db.schema.hasAccess = function(context, path, access) {
         if (tbl.info.access) {
             return tbl.info.access(context, access);
         }
-        let meta = tbl.meta[path.last().name];
+        let meta = tbl.meta[path.last().name()];
+        if (!meta) {
+            return false;
+        }
         if (meta.access) {
             return meta.access(context, access);
         }

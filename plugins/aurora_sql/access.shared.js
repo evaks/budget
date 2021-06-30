@@ -43,6 +43,15 @@ aurora.db.access.basic = function(permissions) {
     };
 };
 
+/**
+ * will not grant permission to anyone usefull for system tables
+ * @param {!aurora.db.access.SecurityContext} context
+ * @param {string} accessRight
+ * @return {boolean}
+ */
+aurora.db.access.create = function(context, accessRight) {
+    return accessRight === 'c';
+};
 
 /**
  * will not grant permission to anyone usefull for system tables

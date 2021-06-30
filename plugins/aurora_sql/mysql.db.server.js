@@ -480,6 +480,7 @@ aurora.db.mysql.Pool.prototype.insert = function(table, values, callback) {
         hasValues = true;
         break;
     }
+
     let query = 'INSERT INTO ' + this.escapeId(table) + (hasValues ? ' SET ?values' : ' VALUES ()');
     this.query(
         query,
@@ -815,7 +816,7 @@ aurora.db.mysql.Pool.prototype.makeFieldDef_ = function (name, field) {
  * @param {!Object<string,aurora.db.type.ColumnDef>} fields
  * @param {!Array<!aurora.db.type.IndexDef>} indexes
  * @param {!aurora.db.type.TableOptions} options
- * @param {function(?, boolean, !aurora.db.mysql.Pool.TableChanges)} callback (error, existed, array of added columns)
+ * @param {function(?, boolean, !aurora.db.Pool.TableChanges)} callback (error, existed, array of added columns)
  */
 
 aurora.db.mysql.Pool.prototype.createTable = function(table, fields, indexes, options, callback) {
@@ -876,15 +877,11 @@ aurora.db.mysql.Pool.prototype.createTable = function(table, fields, indexes, op
     }
 };
 
-/**
- * @typedef {{isNew:boolean, hasChanges: boolean, added: !Array, modified: !Array, removed: !Array<string>}}
- */
-aurora.db.mysql.Pool.TableChanges;
 
 /**
  * @param {string} table
  * @param {!Object<string,aurora.db.type.ColumnDef>} fields
- * @param {!aurora.db.mysql.Pool.TableChanges} changes
+ * @param {!aurora.db.Pool.TableChanges} changes
  * @param {function(?)} callback
 */
 aurora.db.mysql.Pool.prototype.applyTableChanges = function(table, fields, changes, callback) {
@@ -933,7 +930,7 @@ aurora.db.mysql.Pool.prototype.applyTableChanges = function(table, fields, chang
  * @param {string} table
  * @param {!Object<string,aurora.db.type.ColumnDef>} fields
  * @param {!Array<!aurora.db.type.IndexDef>} indexes
- * @param {function(?, !aurora.db.mysql.Pool.TableChanges)} callback (error, changes)
+ * @param {function(?, !aurora.db.Pool.TableChanges)} callback (error, changes)
  */
 aurora.db.mysql.Pool.prototype.getTableChanges = function(table, fields, indexes, callback) {
     let me = this;

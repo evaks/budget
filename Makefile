@@ -1,10 +1,14 @@
 .DEFAULT_GOAL := build
 
-build:
+
+build-code:
 	rm -rf output
 	rm -rf generated
 	mkdir output
 	node aurora/build build.json
+
+.PHONY: build
+build: build-code test module-test
 
 drop-db:
 	echo 'drop database budget; create database budget' | mysql --user=root --password=password
@@ -12,8 +16,13 @@ drop-db:
 create-db:
 	echo 'create database budget' | mysql --user=root --password=password
 
-server:
+output/server.min.js: $(wildcard plugins/**/*.server.js)  $(wildcard plugins/**/*.shared.js) $(wildcard aurora/plugins/**/*.server.js) $(wildcard aurora/plugins/**/*.shared.js) $(wildcard plugins/recoil/**/*.js) $(wildcard plugins/closure-library/**/*.js) $(wildcard **/*.schema.json)
 	node aurora/build build.json server
+
+.PHONY: server
+server: output/server.min.js
+	node aurora/build build.json server
+
 resources:
 	node aurora/build build.json resources
 debug-server:
@@ -22,8 +31,22 @@ debug-server:
 client:
 	node aurora/build build.json client
 
-module-test:
+output/module-test.min.js:
 	node aurora/build build.json module-test
+
+.PHONY: module-test
+module-test: output/module-test.min.js output/server.min.js
+	node output/server.min.js --test 1> /dev/null 2>  /dev/null &
+#	node output/server.min.js --test &
+ifndef UNIT_TEST
+	jest --config=mjest.config.js 
+else
+	jest --config=mjest.config.js -t '$(UNIT_TEST)'
+endif
+
+
+
+
 
 .PHONY: debug-client
 debug-client:

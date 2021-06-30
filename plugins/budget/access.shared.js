@@ -65,7 +65,7 @@ budget.filter.userMentor = function(context) {
 budget.filter.userAppointment = function(context) {
     let query = new recoil.db.Query();
 
-    return query.eq('@userid', 'id');
+    return query.eq('@userid', 'userid');
 };
 
 
@@ -76,7 +76,19 @@ budget.filter.userAppointment = function(context) {
 budget.filter.mentorAppointment = function(context) {
     let query = new recoil.db.Query();
 
-    return query.eq('@userid', 'mentorid');
+    let insertId = context['@insert-id'];
+
+    if (insertId != undefined) {
+        return query.and(
+            query.eq('@userid', 'mentorid'),
+            query.or(
+                query.isIn(query.field('userid'), [query.raw('(SELECT userid FROM `appointments` a0 where mentorid = ' + context.userid + ' AND id <> ' + insertId + ')')]),
+                query.isIn(query.field('userid'), [query.raw('(SELECT id FROM `user` a0 where mentorid = ' + context.userid + ')')])));
+    }
+    // if the mentor has had a scheduled with this user then they can view the users schedule
+    return query.or(
+        query.eq('@userid', 'mentorid'),
+        query.isIn(query.field('userid'), [query.raw('(SELECT id FROM `user` a0 where mentorid = ' + context.userid + ')')]));
 };
 
 

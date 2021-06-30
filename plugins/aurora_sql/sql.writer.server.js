@@ -193,9 +193,7 @@ aurora.db.sql.ChangeWriter.prototype.hasPermission_ = function(change, inSecCont
     let path = change.path();
     let access = 'r';
     let secContext = /** @type {!aurora.db.access.SecurityContext}*/(goog.object.clone(inSecContext));
-
     secContext.change = change;
-
     if (change instanceof recoil.db.ChangeSet.Set) {
         access = 'u';
         let meta = null;
@@ -218,6 +216,69 @@ aurora.db.sql.ChangeWriter.prototype.hasPermission_ = function(change, inSecCont
     }
     else if (change instanceof recoil.db.ChangeSet.Add) {
         access = 'c';
+        let me = this;
+        let checkDeps = function(dep) {
+            let secContext = /** @type {!aurora.db.access.SecurityContext}*/(goog.object.clone(inSecContext));
+            secContext.change = dep;
+            let path = dep.path();
+
+            if (dep instanceof recoil.db.ChangeSet.Set) {
+                let fileMeta = me.getFileMetaByPath(dep.path());
+                let meta = fileMeta.meta;
+                if (fileMeta.fileField || meta.type === 'file') {
+                    return false;
+                }
+                let allowed = meta.access ? meta.access(secContext, 'c') : null;
+                if (allowed == false) {
+                    return false;
+                }
+                return null;
+            }
+            else if (dep instanceof recoil.db.ChangeSet.Add) {
+                let tbl = me.schema_.getTableByName(path);
+                if (!tbl || !tbl.info || !tbl.meta) {
+                    return false;
+                }
+                for (let k in tbl.meta) {
+                    let m = tbl.meta[k];
+                    if (m.type === 'file') {
+                        return false;
+                    }
+                }
+                let allowed = tbl.info.access ? tbl.info.access(secContext, access) : null;
+                if (allowed === false) {
+                    return false;
+                }
+
+                if (path.length() > 1) {
+                    let ptbl = me.schema_.getTableByName(path.parent());
+                    if (ptbl) {
+                        let meta = ptbl.meta[path.last().name()];
+                    // parent access changes to update
+                        if (meta && meta.access && meta.access(secContext, access) === false) {
+                            return false;
+
+                        }
+                    }
+                }
+
+                for (let child of dep.dependants()) {
+                    if (checkDeps(child) === false) {
+                        return false;
+                    }
+                }
+                return null;
+            }
+            else {
+                return false;
+            }
+            // no need to check
+        };
+        if (checkDeps(change) === false) {
+            return false;
+        }
+
+
     }
     else if (change instanceof recoil.db.ChangeSet.Delete) {
         access = 'd';
@@ -226,11 +287,29 @@ aurora.db.sql.ChangeWriter.prototype.hasPermission_ = function(change, inSecCont
         return false; // unsupported access is not allowed
     }
 
+
     let tbl = this.schema_.getTableByName(path);
     while (tbl && path.length() > 0) {
         let allowed = tbl.info.access ? tbl.info.access(secContext, access) : null;
+        if (allowed || allowed == undefined) {
+            if (path.length() > 1) {
+                let ptbl = this.schema_.getTableByName(path.parent());
+                if (ptbl) {
+                    let meta = ptbl.meta[path.last().name()];
+                    // parent access changes to update
+                    if (meta && meta.access && meta.access(secContext, access) === false) {
+                        allowed = false;
+
+                    }
+                }
+            }
+        }
         if (allowed != undefined) {
             return allowed;
+        }
+        if (access == 'c' || access == 'd') {
+            // if create going up turns into an update
+            access = 'u';
         }
         path = path.parent();
         tbl = this.schema_.getTableByName(path);
@@ -276,7 +355,7 @@ aurora.db.sql.ChangeWriter.prototype.applyChanges = function(changes, secContext
         // found it, now we don't need to read items that are adds since they won't
         // exist in the database anyway however only adds that are base objects
         if (!me.hasPermission_(change, secContext)) {
-            me.log_.warn('Field Access Denied', change.path().toString());
+            me.log_.warn('Field Access Denied', change.path().toString(), 'user', secContext.userid);
             results[changeIdx] = {error: 'Access Denied'};
             continue;
         }
@@ -748,7 +827,11 @@ aurora.db.sql.ChangeWriter.prototype.applyTransactionChanges_ = function(changeL
             }
             else {
                 me.async_.eachSeries(addsToCheck, function(info, eachCallback) {
-                    let securityFilter = info.tbl.info.accessFilter(secContext);
+                    let secContextClone = goog.object.clone(secContext);
+                    secContextClone['@insert-id'] = info.id;
+
+                    let securityFilter = info.tbl.info.accessFilter(secContextClone);
+
                     reader.readObjectByKey(
                         context, info.tbl, [{col: info.tbl.info.pk, value: info.id}],
                         securityFilter,
@@ -1101,7 +1184,6 @@ aurora.db.sql.ChangeWriter.makeDependsOn = function(changes) {
     let addDeps = function(deps, v) {
         changes.forEach(function(dep) {
             if (dependsOn(v, dep)) {
-//                console.log(v.key.path.toString(), "depends on", dep.key.path.toString());
                 if (!deps.findFirst(dep)) {
                     deps.add(dep);
                     addDeps(deps, dep);

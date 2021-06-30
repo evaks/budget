@@ -207,7 +207,7 @@ aurora.db.Pool.prototype.update = function(table, keys, values, callback) {};
  * @param {!Object<string,aurora.db.type.ColumnDef>} fields
  * @param {!Array<aurora.db.type.IndexDef>} indexes
  * @param {!aurora.db.type.TableOptions} options
- * @param {function(?, boolean, !aurora.db.mysql.Pool.TableChanges)} callback (error, existed, array of added columns)
+ * @param {function(?, boolean, !aurora.db.Pool.TableChanges)} callback (error, existed, array of added columns)
  */
 
 aurora.db.Pool.prototype.createTable = function(table, fields, indexes, options, callback) {};
@@ -418,6 +418,11 @@ aurora.db.Pool.prototype.toJson = function(str) {};
 aurora.db.Pool.prototype.fromJson = function(str) {};
 
 
+
+/**
+ * @typedef {{isNew:boolean, hasChanges: boolean, added: !Array, modified: !Array, removed: !Array<string>}}
+ */
+aurora.db.Pool.TableChanges;
 
 /**
  * @param {string} exp

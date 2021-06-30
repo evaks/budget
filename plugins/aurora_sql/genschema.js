@@ -511,7 +511,9 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
             }
 
 
-            fs.appendFileSync(out, '    access: ' + access + ',\n');
+            if (stack[stack.length - 1].access) {
+                fs.appendFileSync(out, '    access: ' + access + ',\n');
+            }
             if (!client) {
                 // client will not be doing sql queries so not necessary
                 fs.appendFileSync(out, '    accessFilter: ');
