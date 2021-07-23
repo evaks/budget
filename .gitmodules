@@ -6,4 +6,4 @@
 	url = git@github.com:evaks/closure-library.git
 [submodule "aurora"]
 	path = aurora
-	url = ssh://git@nz-gitlab:2222/gui/aurora.git
+	url = git@github.com:Zysen/Aurora.git

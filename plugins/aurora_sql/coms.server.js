@@ -93,14 +93,35 @@ aurora.db.Notify.fixPath = function(path) {
     return path;
 };
 
+
+/**
+ * @param {!recoil.db.ChangeSet.Change} change
+ * @return {!recoil.db.ChangeSet.Change}
+ */
+
+aurora.db.Notify.prototype.fixPrimaryKeys = function (change) {
+    var itr = function (c) {
+        if (c instanceof recoil.db.ChangeSet.Set) {
+            var val = c.value();
+            if (val instanceof aurora.db.PrimaryKey) {
+                return new recoil.db.ChangeSet.Set(c.path(), c.orig(), val.db);
+            }
+        }
+        return change;
+    };
+//    console.log("change", change.forEachChange(itr).dependants());
+    return /** @type {!recoil.db.ChangeSet.Change}*/ (change.forEachChange(itr));
+};
 /**
  * @param {!recoil.db.ChangeSet.Add} add
  * @return {Object}
  */
 aurora.db.Notify.prototype.addToObject = function(add) {
+    add = /** @type {!recoil.db.ChangeSet.Add} */ (this.fixPrimaryKeys(add));
     let changeDb = new recoil.db.ChangeDb(new aurora.db.Schema());
 
     recoil.db.ChangeDbInterface.applyChanges(changeDb, new aurora.db.Schema(), [add]);
+    let res = changeDb.get(add.path());
     return changeDb.get(add.path());
 /*    if (t) {
         res[t.info.pk.getName] = path.lastKeys()[0];
@@ -142,6 +163,8 @@ aurora.db.Notify.prototype.forEachEffected = function(reader, change, callback) 
         let add = /** @type {!recoil.db.ChangeSet.Add} */ (change);
         let path = change.path();
         // todo construct the table query scope
+        // todo this is ineffecient since it has to run through each client that is registered to the root scope
+        
         this.map_.get(['path'], {path: rootPath.unsetKeys()}).forEach(function(entry) {
             // run through each query and
             let secContext = me.contexts_[entry.client];
@@ -162,7 +185,10 @@ aurora.db.Notify.prototype.forEachEffected = function(reader, change, callback) 
                 let accessFilter = baseTable.info.accessFilter(secContext);
                 let scope = new aurora.db.Schema().makeQueryScope(rootPath, readContext, obj);
                 let findQuery = query.and(accessFilter, entry.query.query);
+                console.log("checking match", findQuery.toString());
+
                 if (findQuery.mayMatch(scope)) {
+                    console.log("found match", entry.client);
                     callback(secContext, entry.client, rootPath, path, entry.query.key, entry.query.query);
                     let q = new recoil.db.Query();
                     reader.readObjects(
@@ -536,6 +562,24 @@ aurora.db.Coms.prototype.getSendableClients_ = function(sendClients, key, query,
         callback();
         return;
     }
+
+    let newChanges = [];
+
+    // deletes are just applicable they will not be in the database
+    changes.forEach(function (change) {
+        if (change instanceof recoil.db.ChangeSet.Delete) {
+            sendClients.safeFind({clientId: clientId, key: key, context: secContext, changes: []}).changes.push(change);
+            
+        }
+        else {
+            newChanges.push(change);
+        }
+    });
+    if (newChanges.length == 0) {
+        callback();
+        return;
+    }
+    changes = newChanges;
     let prefixLen = baseTable.info.path.split('/').length - 1;
     let columnFilters = changes.map(function(change) {
         let path = change.path().toStringArray();
@@ -550,11 +594,13 @@ aurora.db.Coms.prototype.getSendableClients_ = function(sendClients, key, query,
     let basePathKeys = basePaths.map(function(basePath) {return q.val(basePath.last().keys()[0]);});
     let context = aurora.db.Coms.makeReadContext(secContext);
 
+    //
+    // we are not going to read deletes so
+    
     reader.readObjects(
         context, baseTable, q.and(query, q.isIn(query.field(baseTable.info.pk), basePathKeys)),
         accessFilter,
         function(err, results) {
-
             if (!err) {
                 // check if path exists in the results to see if path exists in objects if so we need to the update
 
@@ -562,22 +608,31 @@ aurora.db.Coms.prototype.getSendableClients_ = function(sendClients, key, query,
                     for (let j = 0; j < changes.length; j++) {
 
                         let change = changes[j];
+
                         if (aurora.db.Coms.doesChangeApplyToObject_(baseTable, results[i], change)) {
                             let secureChange = change.filter(function(path) {
+                                let tbl = aurora.db.schema.getTableByName(path);
+                                if (tbl) {
+                                    return aurora.db.schema.hasAccess(secContext, path, 'r');
+                                }
                                 try {
+
                                     let meta = aurora.db.schema.getMetaByPath(path.pathAsString());
                                     if (meta.type === 'password') {
                                         return false;
                                     }
                                 }
                                 catch (e) {
+                                    console.log("error in path", e, path.toString());
                                     // if the path doesn't exist then it is a internally made up path like file attributes so
                                     // for now its ok check the parent
                                     return aurora.db.schema.hasAccess(secContext, path.parent(), 'r');
                                 }
 
+                                console.log("has access", aurora.db.schema.hasAccess(secContext, path, 'r'));
                                 return aurora.db.schema.hasAccess(secContext, path, 'r');
                             });
+                            console.log("changes applies", !!secureChange);
 
                             if (secureChange) {
                                 // it would be great just to send the change that the client was interested in but
@@ -616,6 +671,7 @@ aurora.db.Coms.prototype.notifyListeners = function(changes, exclude, opt_done) 
     let readObjectQueue = async.queue(function(data, callback) {
         if (data.done) {
             let todo = sendClients.getCount();
+            console.log("sendable clients", todo);
             if (todo == 0) {
                 if (opt_done) {
                     opt_done();
@@ -623,7 +679,9 @@ aurora.db.Coms.prototype.notifyListeners = function(changes, exclude, opt_done) 
             }
             else {
                 sendClients.inOrderTraverse(function(info) {
+                    console.log("sending client changes", info.clientId);
                     me.doGetHelper_(info.clientId, reader, info.context, info.key.name, info.key.query, info.key.options, function() {
+                        console.log("sent client changes", info.clientId);
                         todo--;
                         if (todo === 0 && opt_done) {
                             opt_done();
@@ -668,7 +726,7 @@ aurora.db.Coms.prototype.notifyListeners = function(changes, exclude, opt_done) 
             }
             let clientMap = todo.safeFind({key: key, query: query, clients: {}}).clients;
 
-
+            console.log('change stuff', clientid, basePath.toString());
             let clientInfo = recoil.util.map.safeGet(clientMap, clientid, {context: secContext, basePaths: [], changes: []});
             clientInfo.changes.push(change);
             clientInfo.basePaths.push(basePath);
@@ -687,6 +745,7 @@ aurora.db.Coms.prototype.notifyListeners = function(changes, exclude, opt_done) 
             if (exclude[clientId]) {
                 continue;
             }
+
             let clientInfo = item.clients[clientId];
             readObjectQueue.push({context: clientInfo.context, clientId: clientId, basePaths: clientInfo.basePaths, key: item.key, query: item.query, changes: clientInfo.changes});
         }
@@ -1354,7 +1413,7 @@ aurora.db.Coms.ValSerializer.prototype.deserialize = function(path, val) {
     if (tbl) {
         let meta = tbl.meta[path.last().name()];
         if (meta) {
-            if (meta.type === 'id') {
+            if (meta.type === 'id' || meta.type === 'ref') {
                 if (val) {
                     return new aurora.db.PrimaryKey(
                         val['db'] == undefined ? null : BigInt(val['db']),
