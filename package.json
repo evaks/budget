@@ -1,0 +1,17 @@
+{
+  "dependencies": {
+    "async": "^3.2.0",
+    "ics": "^2.31.0",
+    "mime": "^2.5.2",
+    "modern-syslog": "^1.2.0",
+    "moment": "^2.29.1",
+    "multiparty": "^4.2.2",
+    "mysql": "^2.18.1",
+    "node-forge": "^0.10.0",
+    "nodemailer": "^6.6.3",
+    "websocket": "^1.0.34"
+  },
+  "devDependencies": {
+    "jest": "^27.0.6"
+  }
+}
