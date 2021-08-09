@@ -15,7 +15,8 @@ drop-db:
 create-db:
 	echo 'create database budget' | mysql --user=root --password=password
 
-output/server.min.js: node_modules $(wildcard plugins/**/*.server.js)  $(wildcard plugins/**/*.shared.js) $(wildcard aurora/plugins/**/*.server.js) $(wildcard aurora/plugins/**/*.shared.js) $(wildcard plugins/recoil/**/*.js) $(wildcard plugins/closure-library/**/*.js) $(wildcard **/*.schema.json)
+
+output/server.min.js: node_modules $(wildcard plugins/**/*.server.js)  $(wildcard plugins/**/*.shared.js) $(wildcard aurora/plugins/**/*.server.js) $(wildcard aurora/plugins/**/*.shared.js) $(wildcard plugins/recoil/**/*.js) $(wildcard plugins/closure-library/**/*.js) $(wildcard plugins/**/*.schema.json)
 	node aurora/build build.json server
 
 .PHONY: server
@@ -30,7 +31,7 @@ debug-server: node_modules
 client: node_modules
 	node aurora/build build.json client
 
-output/module-test.min.js:
+output/module-test.min.js: $(wildcard plugins/**/*.server.js)  $(wildcard plugins/**/*.shared.js) $(wildcard aurora/plugins/**/*.server.js) $(wildcard aurora/plugins/**/*.shared.js) $(wildcard plugins/recoil/**/*.js) $(wildcard plugins/closure-library/**/*.js) $(wildcard plugins/**/*.schema.json)
 	node aurora/build build.json module-test
 
 .PHONY: module-test
@@ -72,6 +73,12 @@ else
 	node_modules/.bin/jest --testPathIgnorePatterns plugins/closure-library -t '$(UNIT_TEST)'
 endif
 
+
 node_modules:
 	npm install
+
+
+.PHONY: install-modules
+install-modules:
+	npm install node-forge mime modern-syslog websocket async mysql moment nodemailer multiparty ics glob
 

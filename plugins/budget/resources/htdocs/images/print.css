@@ -1,7 +1,8 @@
 @media print{
 
-    @page {size: landscape}
+    @page {size: landscape; margin: 0px;}
     body {
+	margin: 1.6cm 1cm 1.6cm 1cm;
 	/* IE4-8 and 9 (deprecated). */
 	filter: Gray();
 	/* SVG version for IE10, Chrome 17, FF3.5, 
@@ -9,9 +10,13 @@
 	filter: url('#grayscale'); 
 	/* CSS3 filter, at the moment Webkit only. Prefix it for
        future implementations */      
-	-webkit-filter: grayscale(100%); 
+	-webkit-filter: grayscale(100%);
+	-webkit-print-color-adjust: exact;
+	color-adjust: exact;
 	filter: grayscale(100%); /* future-proof */
     }
+    height: 100%; width: 100%; 
+	
 }
 
 .budget-print-num-col {

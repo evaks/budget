@@ -14,7 +14,9 @@ goog.require('recoil.structs.MultiKeyMap');
  */
 aurora.db.Notify = function() {
     this.map_ = new recoil.structs.MultiKeyMap([{col: 'query', compare: recoil.util.object.compareKey},'path', 'client']);
+    this.addMap_ = new goog.structs.AvlTree(recoil.util.object.compareKey);
     this.contexts_ = {};
+    this.log_ = aurora.log.createModule('DBNOTIFY');
 };
 
 /**
@@ -26,20 +28,66 @@ aurora.db.Notify.prototype.updateClientContext = function(clientid, context) {
 };
 
 /**
+ * @typedef {{client:string,query:{key:?,query:?}, secFilter:recoil.db.Query, secContext: !aurora.db.access.SecurityContext, readContext: Object}}
+ */
+aurora.db.Notify.EntryType;
+/**
+ * @param {!aurora.db.Notify.EntryType} entry
+ * @return {?Array<Object<string,?>>}
+ */
+aurora.db.Notify.prototype.makeLookup_ = function(entry) {
+    let findQuery = entry.secFilter ? new recoil.db.Query().and(entry.secFilter, entry.query.query) : entry.query.query;
+    let scope = new aurora.db.Schema().makeLookupScope(entry.path, entry.readContext, {});
+    let lookups = findQuery.makeLookup(scope);
+    if (lookups && lookups.length == 0) {
+        lookups = [{}];
+    }
+    if (!lookups) {
+        return lookups;
+    }
+    return lookups.map(function(v) {
+        let res = {};
+        for (let k in v) {
+            res[k] = aurora.db.Notify.fixInt(v[k]);
+        }
+        return res;
+    });
+};
+
+/**
  * @param {string} clientid
  * @param {Object} key
  * @param {aurora.db.schema.TableType} table
- * @param {recoil.db.Query} query
+ * @param {!recoil.db.Query} query
+ * @param {recoil.db.Query} secFilter
+ * @param {!aurora.db.access.SecurityContext} secContext the security context of client
+ * @param {Object} readContext
  * @return {!aurora.db.Notify.ObjectMap}
  */
-aurora.db.Notify.prototype.addQuery = function(clientid, key, table, query) {
+aurora.db.Notify.prototype.addQuery = function(clientid, key, table, query, secFilter, secContext, readContext) {
 
 
+    let path = recoil.db.ChangeSet.Path.fromString(key.name);
 
-    let entry = {query: {key: key, query: query}, client: clientid, path: recoil.db.ChangeSet.Path.fromString(key.name)};
+    let entry = {query: {key: key, query: query}, client: clientid, path: path, secContext, readContext, secFilter};
     this.map_.add(entry);
     let objectMap = new aurora.db.Notify.ObjectMap(table, this.map_, entry);
     this.map_.add(entry);
+
+
+    let lookups = this.makeLookup_(entry);
+    if (lookups) {
+        let addEntry = this.addMap_.safeFind({key: path.unsetKeys(), columns: new goog.structs.AvlTree(recoil.util.object.compareKey)});
+        lookups.forEach(function(lookup) {
+            if (lookup) {
+                let key = Object.keys(lookup).sort();
+                let lookups = addEntry.columns.safeFind({key: key, lookups: new goog.structs.AvlTree(recoil.util.object.compareKey)});
+                lookups.lookups.safeFind({key: lookup, entries: []}).entries.push(entry);
+            }
+        });
+
+    }
+
     return objectMap;
 
 };
@@ -50,14 +98,84 @@ aurora.db.Notify.prototype.addQuery = function(clientid, key, table, query) {
  */
 aurora.db.Notify.prototype.removeQuery = function(clientid, key) {
     let entry = {query: {key: key}, client: clientid};
-    this.map_.removeIntersection(['query', 'client'], entry);
+    this.removeNotifies_(['query', 'client'], entry);
+
 };
 
+/**
+ * @private
+ * @param {!Array<string>} keys
+ * @param {Object} object
+ */
+aurora.db.Notify.prototype.removeNotifies_ = function(keys, object) {
+    var me = this;
+    this.map_.get(keys, object).forEach(function(entry) {
+        let doRemove = false;
+        let tableAdds = me.addMap_.findFirst({key: entry.path});
+        if (tableAdds) {
+            let lookups = me.makeLookup_(/** @type {!aurora.db.Notify.EntryType} */ (entry)) || [];
+            lookups.forEach(function(lookup) {
+
+                let key = Object.keys(lookup).sort();
+                let colSetEntries = tableAdds.columns.findFirst({key: key});
+
+                if (colSetEntries) {
+                    var entries = colSetEntries.lookups.findFirst({key: lookup});
+                    if (entries) {
+
+                        for (let i = entries.entries.length; i >= 0; i--) {
+                            if (recoil.util.isEqual(entries.entries[i], entry)) {
+                                entries.entries.splice(i, 1);
+                            }
+                        }
+                        if (entries.entries.length === 0) {
+                            colSetEntries.lookups.remove({key: lookup});
+                            if (colSetEntries.lookups.getCount() === 0) {
+                                tableAdds.columns.remove({key: key});
+                            }
+                        }
+
+                    }
+                }
+            });
+            if (tableAdds.columns.getCount() === 0) {
+                me.addMap_.remove({key: entry.path});
+            }
+
+        }
+
+
+    });
+    this.map_.removeIntersection(keys, object);
+
+    let colCount = 0;
+    let lookupCount = 0;
+    let entriesCount = 0;
+    /*
+    this.log_.error('this is ineffient comment out');
+    me.addMap_.inOrderTraverse(function (e1) {
+        colCount += e1.columns.getCount();
+        e1.columns.inOrderTraverse(function (e2) {
+            lookupCount += e2.lookups.getCount();
+            e2.lookups.inOrderTraverse(function (e3) {
+                entriesCount += e3.entries.length;
+            });
+        });
+    });
+
+    console.log("addMap", me.addMap_.getCount());
+    console.log("colCount", colCount);
+    console.log("lookupCount", lookupCount);
+    console.log("entriesCount", entriesCount);
+    */
+
+};
 /**
  * @param {string} clientid
  */
 aurora.db.Notify.prototype.removeClient = function(clientid) {
-    this.map_.removeIntersection(['client'], {client: clientid});
+
+    this.removeNotifies_(['client'], {client: clientid});
     delete this.contexts_[clientid];
 };
 
@@ -66,7 +184,7 @@ aurora.db.Notify.prototype.removeClient = function(clientid) {
  * @param {recoil.db.ChangeSet.Path} path
  */
 aurora.db.Notify.prototype.removePath = function(path) {
-    this.map_.removeIntersection(['path'], {path: aurora.db.Notify.fixPath(path)});
+    this.removeNotifies_(['path'], {path: aurora.db.Notify.fixPath(path)});
 };
 
 /**
@@ -99,14 +217,23 @@ aurora.db.Notify.fixPath = function(path) {
  * @return {!recoil.db.ChangeSet.Change}
  */
 
-aurora.db.Notify.prototype.fixPrimaryKeys = function (change) {
-    var itr = function (c) {
+aurora.db.Notify.prototype.fixPrimaryKeys = function(change) {
+    var itr = function(c) {
+        let newPath = /** @type {!recoil.db.ChangeSet.Path} */ (aurora.db.Notify.fixPath(c.path()));
         if (c instanceof recoil.db.ChangeSet.Set) {
             var val = c.value();
             if (val instanceof aurora.db.PrimaryKey) {
-                return new recoil.db.ChangeSet.Set(c.path(), c.orig(), val.db);
+                return new recoil.db.ChangeSet.Set(newPath, c.orig(), val.db);
             }
+            return new recoil.db.ChangeSet.Set(newPath, c.orig(), val);
         }
+        else if (c instanceof recoil.db.ChangeSet.Add) {
+            return new recoil.db.ChangeSet.Add(newPath, c.dependants());
+        }
+        else if (c instanceof recoil.db.ChangeSet.Delete) {
+            return new recoil.db.ChangeSet.Delete(newPath, c.orig());
+        }
+
         return change;
     };
 //    console.log("change", change.forEachChange(itr).dependants());
@@ -119,10 +246,9 @@ aurora.db.Notify.prototype.fixPrimaryKeys = function (change) {
 aurora.db.Notify.prototype.addToObject = function(add) {
     add = /** @type {!recoil.db.ChangeSet.Add} */ (this.fixPrimaryKeys(add));
     let changeDb = new recoil.db.ChangeDb(new aurora.db.Schema());
-
     recoil.db.ChangeDbInterface.applyChanges(changeDb, new aurora.db.Schema(), [add]);
     let res = changeDb.get(add.path());
-    return changeDb.get(add.path());
+    return res;
 /*    if (t) {
         res[t.info.pk.getName] = path.lastKeys()[0];
         add.dependants().forEach(function (change) {
@@ -130,6 +256,96 @@ aurora.db.Notify.prototype.addToObject = function(add) {
 
         });
     }*/
+};
+
+/**
+ * @param {?} v
+ * @return {?}
+ */
+aurora.db.Notify.fixInt = function(v) {
+    if (typeof (v) === 'number' && Math.floor(v) === v) {
+        return BigInt(v);
+    }
+    return v;
+};
+
+/**
+ * @private
+ * @param {?} obj
+ * @param {!Array<string>} cols a list of string paths into object seperated by /
+ * @return {!Object<string,?>} a map of values of the object that match the path
+ */
+aurora.db.Notify.makeColMap_ = function(obj, cols) {
+    let res = {};
+
+    function getCol(obj, parts, idx) {
+        if (idx >= parts.length) {
+
+            return aurora.db.Notify.fixInt(obj);
+        }
+        if (!obj) {
+            return undefined;
+        }
+
+        return getCol(obj[parts[idx]], parts, idx + 1);
+    }
+
+    cols.forEach(function(col) {
+        res[col] = getCol(obj, col.split('/'), 0);
+    });
+    return res;
+};
+/**
+ * @param {!aurora.db.Reader} reader
+ * @param {!recoil.db.ChangeSet.Add} add
+ * @param {!recoil.db.ChangeSet.Path} rootPath
+ * @param {function(!aurora.db.access.SecurityContext, string, !recoil.db.ChangeSet.Path, !recoil.db.ChangeSet.Path, ?, recoil.db.Query)} callback
+ * @return {function(?)}
+ */
+
+aurora.db.Notify.prototype.notifyAddEntry_ = function(reader, add, rootPath, callback) {
+    let me = this;
+    let path = add.path();
+
+    return function(entry) {
+        // run through each query and
+        let secContext = me.contexts_[entry.client];
+        if (!aurora.db.schema.hasAccess(secContext, path, 'r')) {
+            return;
+        }
+
+        if (secContext) {
+            let readContext = aurora.db.Coms.makeReadContext(secContext);
+            // the path is different here because an add looks at the main path
+
+            let obj = me.addToObject(add);
+            let baseTable = aurora.db.schema.getTableByName(add.path());
+            if (!baseTable && baseTable.info.accessFilterFunc) {
+                return;
+            }
+            let query = new recoil.db.Query();
+            let accessFilter = baseTable.info.accessFilter(secContext);
+            let scope = new aurora.db.Schema().makeQueryScope(rootPath, readContext, obj);
+            let findQuery = query.and(accessFilter, entry.query.query);
+            if (findQuery.mayMatch(scope)) {
+                callback(secContext, entry.client, rootPath, path, entry.query.key, entry.query.query);
+                let q = new recoil.db.Query();
+                reader.readObjects(
+                    readContext, baseTable, q.and(entry.query.query, q.eq(q.field(baseTable.info.pk), q.val(add.path().lastKeys()[0]))),
+                    null, function(err, results) {
+                        if (!err && results.length === 1) {
+                            if (baseTable) {
+                                let oMap = new aurora.db.Notify.ObjectMap(baseTable, me.map_, /** @type {?} */ (entry));
+                                oMap.addObject(results[0]);
+                            }
+                        }
+                    });
+            }
+        }
+
+
+
+    };
 };
 /**
  * @param {!aurora.db.Reader} reader
@@ -151,61 +367,28 @@ aurora.db.Notify.prototype.forEachEffected = function(reader, change, callback) 
     }
 
     let rootPath = new recoil.db.ChangeSet.Path(rootItems);
-
-
     let todoAddQueries = new goog.structs.AvlTree(recoil.util.object.compareKey);
-
-
     let me = this;
 
     if (change instanceof recoil.db.ChangeSet.Add && change.path().size() == rootPath.size()) {
         // only base items adds need to be added to the pathmap and may cause queries to update
-        let add = /** @type {!recoil.db.ChangeSet.Add} */ (change);
-        let path = change.path();
         // todo construct the table query scope
         // todo this is ineffecient since it has to run through each client that is registered to the root scope
-        
-        this.map_.get(['path'], {path: rootPath.unsetKeys()}).forEach(function(entry) {
-            // run through each query and
-            let secContext = me.contexts_[entry.client];
-            if (!aurora.db.schema.hasAccess(secContext, path, 'r')) {
-                return;
-            }
+        let add = /** @type {!recoil.db.ChangeSet.Add} */ (change);
+        let entry = this.addMap_.findFirst({key: rootPath.unsetKeys()});
+        if (entry) {
+            let columnSets = entry.columns;
+            let obj = me.addToObject(add);
+            columnSets.inOrderTraverse(function(colEntry) {
 
-            if (secContext) {
-                let readContext = aurora.db.Coms.makeReadContext(secContext);
-                // the path is different here because an add looks at the main path
-
-                let obj = me.addToObject(add);
-                let baseTable = aurora.db.schema.getTableByName(change.path());
-                if (!baseTable && baseTable.info.accessFilterFunc) {
-                    return;
+                let colMap = aurora.db.Notify.makeColMap_(obj, colEntry.key);
+                let lookups = colEntry.lookups.findFirst({key: colMap});
+                if (lookups) {
+                    lookups.entries.forEach(me.notifyAddEntry_(reader, add, rootPath, callback));
                 }
-                let query = new recoil.db.Query();
-                let accessFilter = baseTable.info.accessFilter(secContext);
-                let scope = new aurora.db.Schema().makeQueryScope(rootPath, readContext, obj);
-                let findQuery = query.and(accessFilter, entry.query.query);
-                console.log("checking match", findQuery.toString());
+            });
 
-                if (findQuery.mayMatch(scope)) {
-                    console.log("found match", entry.client);
-                    callback(secContext, entry.client, rootPath, path, entry.query.key, entry.query.query);
-                    let q = new recoil.db.Query();
-                    reader.readObjects(
-                        readContext, baseTable, q.and(entry.query.query, q.eq(q.field(baseTable.info.pk), q.val(change.path().lastKeys()[0]))),
-                        null, function(err, results) {
-                            if (!err && results.length === 1) {
-                                if (baseTable) {
-                                    let oMap = new aurora.db.Notify.ObjectMap(baseTable, me.map_, /** @type {?} */ (entry));
-                                    oMap.addObject(results[0]);
-                                }
-                            }
-                        });
-                }
-            }
-
-
-        });
+        }
         return;
 
     }
@@ -566,10 +749,10 @@ aurora.db.Coms.prototype.getSendableClients_ = function(sendClients, key, query,
     let newChanges = [];
 
     // deletes are just applicable they will not be in the database
-    changes.forEach(function (change) {
+    changes.forEach(function(change) {
         if (change instanceof recoil.db.ChangeSet.Delete) {
             sendClients.safeFind({clientId: clientId, key: key, context: secContext, changes: []}).changes.push(change);
-            
+
         }
         else {
             newChanges.push(change);
@@ -596,7 +779,7 @@ aurora.db.Coms.prototype.getSendableClients_ = function(sendClients, key, query,
 
     //
     // we are not going to read deletes so
-    
+
     reader.readObjects(
         context, baseTable, q.and(query, q.isIn(query.field(baseTable.info.pk), basePathKeys)),
         accessFilter,
@@ -623,17 +806,13 @@ aurora.db.Coms.prototype.getSendableClients_ = function(sendClients, key, query,
                                     }
                                 }
                                 catch (e) {
-                                    console.log("error in path", e, path.toString());
                                     // if the path doesn't exist then it is a internally made up path like file attributes so
                                     // for now its ok check the parent
                                     return aurora.db.schema.hasAccess(secContext, path.parent(), 'r');
                                 }
 
-                                console.log("has access", aurora.db.schema.hasAccess(secContext, path, 'r'));
                                 return aurora.db.schema.hasAccess(secContext, path, 'r');
                             });
-                            console.log("changes applies", !!secureChange);
-
                             if (secureChange) {
                                 // it would be great just to send the change that the client was interested in but
                                 // for now will just resend the query that the change effected its simpler and safer
@@ -671,7 +850,6 @@ aurora.db.Coms.prototype.notifyListeners = function(changes, exclude, opt_done) 
     let readObjectQueue = async.queue(function(data, callback) {
         if (data.done) {
             let todo = sendClients.getCount();
-            console.log("sendable clients", todo);
             if (todo == 0) {
                 if (opt_done) {
                     opt_done();
@@ -679,9 +857,7 @@ aurora.db.Coms.prototype.notifyListeners = function(changes, exclude, opt_done) 
             }
             else {
                 sendClients.inOrderTraverse(function(info) {
-                    console.log("sending client changes", info.clientId);
                     me.doGetHelper_(info.clientId, reader, info.context, info.key.name, info.key.query, info.key.options, function() {
-                        console.log("sent client changes", info.clientId);
                         todo--;
                         if (todo === 0 && opt_done) {
                             opt_done();
@@ -726,7 +902,6 @@ aurora.db.Coms.prototype.notifyListeners = function(changes, exclude, opt_done) 
             }
             let clientMap = todo.safeFind({key: key, query: query, clients: {}}).clients;
 
-            console.log('change stuff', clientid, basePath.toString());
             let clientInfo = recoil.util.map.safeGet(clientMap, clientid, {context: secContext, basePaths: [], changes: []});
             clientInfo.changes.push(change);
             clientInfo.basePaths.push(basePath);
@@ -877,7 +1052,7 @@ aurora.db.Coms.prototype.doGetHelper_ = function(clientId, reader, secContext, n
                 }
                 else {
                     if (options && !options.isCount()) {
-                        let notifyQuery = me.notifies_.addQuery(clientId, {name: name, query: queryIn, options: optionsIn}, secInfo.table, query);
+                        let notifyQuery = me.notifies_.addQuery(clientId, {name: name, query: queryIn, options: optionsIn}, secInfo.table, query, secInfo.accessFilter, secContext, context);
                         data = data.filter(function(dataItem) {
                             let objContext = /** @type {!aurora.db.access.SecurityContext}*/ (goog.object.clone(secContext));
                             objContext.object = dataItem;

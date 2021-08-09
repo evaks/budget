@@ -40,13 +40,15 @@
 			"protocol": "http",
 			"websocket":true,
 			"httpsRedirect":8443,
-			"strictTransportSecurity":31536000
+		    "strictTransportSecurity":31536000
 		},
-		{
-			"port": 8443,
-			"protocol": "https",
-			"websocket":true
-		}
+	    {
+		"port": 8443,
+		"protocol": "https",
+		"websocket":true,
+		"certFile": "../letsencrypt/config/live/*/cert.pem",
+		"keyFile": "../letsencrypt/config/live/*/privkey.pem"
+	    }
 	],
 	"hostname": "www.budgetservice.org.nz",
 	"directoryBrowsing": false,

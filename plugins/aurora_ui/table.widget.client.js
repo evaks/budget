@@ -131,10 +131,10 @@ aurora.widgets.TableWidget.createMovableSizable = function(tableB, opt_movable) 
 
     let rowDecoratorFunc = function(pks) {
         let rowDecorator = function() {
-            let div = goog.dom.createDom('tr', {draggable: true});
+            let div = goog.dom.createDom('tr', {});
             div.dragId = rowDecoratorFunc;
+
             goog.events.listen(div, [goog.events.EventType.DRAGSTART], function(e) {
-                console.log('dragging pks', pks);
                 dragRow = div;
                 dragItem = pks;
                 dragId = rowDecoratorFunc;
@@ -148,6 +148,16 @@ aurora.widgets.TableWidget.createMovableSizable = function(tableB, opt_movable) 
                 if (dragItem) {
                     highlightDragRow(after, div);
                 }
+            });
+            goog.events.listen(div, [goog.events.EventType.MOUSEDOWN], function(e) {
+                // fix firefox bug that breaks cursor in input boxes when focusable
+                if (e.target && e.target.tagName !== 'INPUT') {
+                    div.setAttribute('draggable', 'true');
+                }
+            });
+            goog.events.listen(div, [goog.events.EventType.MOUSEUP], function(e) {
+                // fix firefox bug that breaks cursor in input boxes when focusable
+                div.setAttribute('draggable', 'false');
             });
             goog.events.listen(div, [goog.events.EventType.MOUSEOUT], function(e) {
                 highlightDragRow(false, null);
@@ -232,6 +242,7 @@ aurora.widgets.TableWidget.createMovableSizable = function(tableB, opt_movable) 
                 highlightDragRow(false, null);
 
             });
+
             return new recoil.ui.RenderedDecorator(
                 rowDecorator,
                 div);

@@ -423,6 +423,21 @@ aurora.db.Schema.prototype.makeQueryScope = function(path, context, object) {
 
 };
 
+
+/**
+ * makes a scope from the path so queries can execute on the object
+ * @param {!recoil.db.ChangeSet.Path} path
+ * @param {Object} context
+ * @param {?} object
+ * @return {!recoil.db.QueryScope}
+ */
+
+aurora.db.Schema.prototype.makeLookupScope = function(path, context, object) {
+    var def = /** @type {aurora.db.schema.TableType} */ (this.getContainerDef(path));
+    return new aurora.db.schema.LookupScope(context, object, def, aurora.db.schema);
+
+};
+
 /**
  * @param {recoil.db.ChangeSet.Path} path
  * @return {!Array<string>} the children
@@ -790,6 +805,8 @@ aurora.db.schema.TableQueryScope = function(context, map, table, schema, opt_hel
 goog.inherits(aurora.db.schema.TableQueryScope, recoil.db.QueryScope);
 
 
+
+
 /**
  * @param {Array<string|!recoil.structs.table.ColumnKey>} inParts indexes to get the object
  * @return {*}
@@ -831,4 +848,69 @@ aurora.db.schema.TableQueryScope.prototype.get = function(inParts) {
         return res.db;
     }
 };
+
+
+/**
+ * @extends {recoil.db.QueryScope}
+ * @constructor
+ * @param {Object} context
+ * @param {Object} map
+ * @param {!aurora.db.schema.TableType} table
+ * @param {!aurora.db.SchemaType} schema
+ * @param {!recoil.db.QueryHelper=} opt_helper
+ */
+aurora.db.schema.LookupScope = function(context, map, table, schema, opt_helper) {
+    recoil.db.QueryScope.call(this, map, opt_helper);
+    this.basePath_ = table.info.path.split('/');
+    this.schema_ = schema;
+    this.obj_ = map;
+    this.context_ = context;
+};
+goog.inherits(aurora.db.schema.LookupScope, aurora.db.schema.TableQueryScope);
+
+/**
+ * @param {Array<string|!recoil.structs.table.ColumnKey>} inParts indexes to get the object
+ * @return {*}
+ */
+
+aurora.db.schema.LookupScope.prototype.get = function(inParts) {
+    if (inParts.length === 0) {
+        return undefined;
+    }
+    if (inParts.length == 1 && inParts[0] instanceof recoil.structs.table.ColumnKey) {
+        let col = /** @type {!recoil.structs.table.ColumnKey} */ (inParts[0]);
+        let tbl = this.schema_.getParentTable(col);
+        if (!tbl) {
+            return undefined;
+        }
+        let parts = tbl.info.path.split('/');
+        if (this.basePath_.length > parts.length) {
+            return undefined;
+        }
+
+        // doesn't work with lists
+        console.log('input colkey table', parts, this.basePath_);
+        for (let i = 0; i < this.basePath_.length; i++) {
+            if (parts[i] !== this.basePath_[i]) {
+                console.log("parts don't match", parts[i], this.basePath_[i]);
+                return undefined;
+            }
+        }
+
+        let res = {};
+        let newPath = parts.splice(this.basePath_.length);
+        newPath.push(col.getName());
+        res[newPath.join('/')] = recoil.db.expr.FIELD;
+        console.log('returning', res);
+        return res;
+
+    }
+    let res = {};
+    res[inParts.join('/')] = recoil.db.expr.FIELD;
+
+    return res;
+    // still need to do getting context fields
+//    let res = aurora.db.schema.TableQueryScope.superClass_.get.call(this, inParts);
+};
+
 

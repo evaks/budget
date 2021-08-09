@@ -124,16 +124,9 @@ budget.widgets.Budget.prototype.createPrintB_ = function(budgetB, userB) {
             return goog.dom.createTextNode(val);
         }
     };
-    return frp.createCallback(
-        /** @suppress {checkTypes} */
-        function() {
-            var mywindow = window.open(undefined, undefined, undefined, 'height=400,width=600');
-            mywindow.document.write('<html><head><title>Budget</title><link rel="stylesheet" type="text/css" href="/images/print.css">');
-            mywindow.document.write('</head><body onload="doPrint()"><table  id="budget_table" style="width: 100%; height: 100%;">');
-            mywindow.document.write('</table></body></html>');
-            let user = userB.get();
-            let tbl = mywindow.document.getElementById('budget_table');
-        let budget = budgetB.get();
+
+    function makePrintTable(mywindow, tbl, user, budget, style) {
+
         /***
          * @param {...?} var_args
          */
@@ -330,7 +323,7 @@ budget.widgets.Budget.prototype.createPrintB_ = function(budgetB, userB) {
         household.push([
             {value: '', styles: ['bold', 'border', 'border-left']},
             {value: mess.DEDUCT_B_C_FROM_TOTAL_A.toRichText(htmlFormatter), styles: ['border'], span: 2},
-                    {value: (totals[EntryType.income] - totals[EntryType.household] + totals[EntryType.debt]) / 100, styles: ['border']}]);
+            {value: (totals[EntryType.income] - totals[EntryType.household] + totals[EntryType.debt]) / 100, styles: ['border']}]);
 
 
         household.push([]);
@@ -377,16 +370,54 @@ budget.widgets.Budget.prototype.createPrintB_ = function(budgetB, userB) {
             let r = right[i] || [];
             addRow.apply(null, l.concat([{value: '', styles: ['mid']}]).concat(r));
         }
-        //mywindow.print();
-        mywindow.window.addEventListener('load', function() {mywindow.window.console.log('x');});
-        mywindow.addEventListener('load', function() {console.log('xxx');}, true);
-        console.log('mywindow', mywindow.window);
+
+        mywindow.window.onafterprint = (event) => {setInterval(function() {mywindow.close();}, 1000);};
+        mywindow.print();
+
         /*
-        budget.cell('A1').value(mess.BUDGET_PROTECTED.toString());
-        budget.cell('J1').value(rich([{value: '', bold: true}, ' This budget is based']));
-        budget.cell('A2').value(mess.SERVICE_NAME.toString().toUpperCase() + ' ph: 04 5666357');
-        budget.range('A2:D2').merged(true).style('horizontalAlignment', 'right');*/
-    }, budgetB, userB);
+          budget.cell('A1').value(mess.BUDGET_PROTECTED.toString());
+          budget.cell('J1').value(rich([{value: '', bold: true}, ' This budget is based']));
+          budget.cell('A2').value(mess.SERVICE_NAME.toString().toUpperCase() + ' ph: 04 5666357');
+          budget.range('A2:D2').merged(true).style('horizontalAlignment', 'right');*/
+    }
+
+    function printSheet(user, budget, style) {
+        /** @suppress {checkTypes} */
+        var mywindow = window.open(undefined, undefined, undefined, 'height=400,width=600');
+        mywindow.document.write('<html><head><title>Budget</title>');
+        mywindow.document.write('<link rel="stylesheet" type="text/css" href="/images/print.css">');
+//
+        mywindow.document.write('<style>' + style + '</style>');
+        mywindow.document.write('</head><body onload="doPrint()"><table  id="budget_table" style="width: 100%; height: 100%;">');
+        mywindow.document.write('</table></body></html>');
+
+        let checkDocReady = function() {
+            let tbl = mywindow.document.getElementById('budget_table');
+            if (!tbl) {
+                setTimeout(checkDocReady, 1000);
+            }
+            else {
+                makePrintTable(mywindow, tbl, user, budget, style);
+            }
+        };
+        checkDocReady();
+
+
+
+    }
+
+    return frp.createCallback(
+        function() {
+            let user = userB.get();
+            let budget = budgetB.get();
+            // we have to do this otherwize the print will happen before the style sheet loads
+            goog.net.XhrIo.send('/images/print.css', function(e) {
+                let xhr = e.target;
+                if (xhr.isSuccess()) {
+                    printSheet(user, budget, xhr.getResponseText());
+                }
+            });
+        }, budgetB, userB);
 };
 
 /**

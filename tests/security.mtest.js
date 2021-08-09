@@ -686,8 +686,32 @@ it('security-appointments', async () => {
 it('query-fieldmap', () => {
     const query = new recoil.db.Query();
     // check null
-//    query.and(query.eq(
+    console.log( new aurora.db.Schema().makeQueryScope);
+    let scope = new aurora.db.Schema().makeLookupScope(recoil.db.ChangeSet.Path.fromString(tables.budget.info.path), {}, {});
+
+    expect(query.eq(query.field('id'), query.val(1)).makeLookup(scope)).toEqual([{'id': 1}]);
+    expect(query.eq(query.field(['id']), query.val(1)).makeLookup(scope)).toEqual([{'id': 1}]);
+    expect(query.eq(query.field([tables.budget.cols.id]), query.val(1)).makeLookup(scope)).toEqual([{'id': 1}]);
+
+    expect(
+        query.and(
+            query.eq(query.field(['id']), query.val(1)),
+            query.eq(query.field(['id']), query.val(1)),
+        ).makeLookup(scope)).toEqual([{'id': 1}]);
+
+    expect(
+        query.and(
+            query.eq(query.field(['id']), query.val(1)),
+            query.eq(query.field(['id']), query.val(2)),
+        ).makeLookup(scope)).toBeNull();
+
     
+    expect(
+        query.or(
+            query.eq(query.field(['id']), query.val(1)),
+            query.eq(query.field(['id']), query.val(2)),
+        ).makeLookup(scope).sort(recoil.util.compare)).toEqual([{id: 2}, {id:1}].sort(recoil.util.compare));
+
 });
 
 
