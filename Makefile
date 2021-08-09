@@ -82,3 +82,20 @@ node_modules:
 install-modules:
 	npm install node-forge mime modern-syslog websocket async mysql moment nodemailer multiparty ics glob
 
+ip-tables:
+	sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8080
+	sudo iptables -t nat -A PREROUTING -p tcp --dport 443 -j REDIRECT --to-port 8443
+
+certbot-install:
+	sudo snap install core; sudo snap refresh core
+	sudo apt-get remove certbot
+	sudo snap install --classic certbot
+	sudo ln -s /snap/bin/certbot /usr/bin/certbot
+
+certbot:
+	certbot certonly --webroot --config-dir letsencrypt/config --work-dir letsencrypt/work --logs-dir letsencrypt/log --webroot-path output/resources/htdocs --cert-path letsencrypt/certs --cert-path letsencrypt/certs/cert.pem --key-path letsencrypt/certs/priv.pem
+
+certbot-remove:
+	certbot delete --config-dir letsencrypt/config --work-dir letsencrypt/work --logs-dir letsencrypt/log
+
+
