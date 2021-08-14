@@ -13842,15 +13842,15 @@ div.widget-selectize-container div.selectize-input.dropdown-active {
 .demo {
     position: fixed;
     text-orientation: upright;
-    transform: rotate(45deg);
+    transform: rotate(45deg)  translate(100px);
     text-align: center;
     width: 100%;
     font-size: 200pt;
     color: red;
-    z-index: -100;
-    margin-top: 200px;
-    -webkit-text-fill-color: white;
-    -webkit-text-stroke-width: 1px;
+    z-index: 3;
+    margin-top: 250px;
+    -webkit-text-fill-color: rgba(1,1,1,0); 
+    -webkit-text-stroke-width: 2px;
     -webkit-text-stroke-color: red;
 }
 

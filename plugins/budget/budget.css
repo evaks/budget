@@ -11,6 +11,7 @@ body {
     display: flex;
     width: 100vw;
     height: 300px;
+    z-index: 0;
 }
 
 .menu-container {
@@ -28,6 +29,11 @@ body {
     flex-direction: column;
     overflow: auto;
 }
+
+.content-body {
+    min-height: 100px;
+}
+
 .content.no-scroll {
     overflow: hidden;
 }
