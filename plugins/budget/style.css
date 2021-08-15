@@ -13827,6 +13827,7 @@ div.widget-selectize-container div.selectize-input.dropdown-active {
     width: 100%;
     font-size: 200pt;
     color: red;
+    pointer-events:none;
     z-index: 3;
     margin-top: 250px;
     -webkit-text-fill-color: rgba(1,1,1,0); 

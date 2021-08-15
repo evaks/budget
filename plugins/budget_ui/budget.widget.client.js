@@ -2,6 +2,7 @@ goog.provide('budget.widgets.Budget');
 
 goog.require('aurora.db.schema.tables.base.user');
 goog.require('aurora.widgets.TableWidget');
+goog.require('budget.Importer');
 goog.require('budget.messages');
 goog.require('goog.dom');
 goog.require('recoil.frp.logic');
@@ -10,6 +11,7 @@ goog.require('recoil.ui.BoolWithExplanation');
 goog.require('recoil.ui.columns.Expr');
 goog.require('recoil.ui.frp.LocalBehaviour');
 goog.require('recoil.ui.widgets.ButtonWidget');
+goog.require('recoil.ui.widgets.table.InputComboColumn');
 goog.require('recoil.ui.widgets.table.TableWidget');
 /**
  * @constructor
@@ -23,9 +25,43 @@ budget.widgets.Budget = function(scope) {
     let mess = budget.messages;
     let cd = goog.dom.createDom;
     this.exportWidget_ = new recoil.ui.widgets.ButtonWidget(scope);
+    this.importWidget_ = new recoil.ui.widgets.ButtonWidget(scope);
     this.printWidget_ = new recoil.ui.widgets.ButtonWidget(scope);
     let exportDiv = cd('div', {class: 'budget-export'});
     let printDiv = cd('div', {class: 'budget-export'});
+
+    let importInput = cd('input', {type: 'file', multiple: true, accept: '.csv,.qif,.ofx'});
+    let importDiv = cd('label', {class: 'budget-import custom-file-upload'},
+                       importInput, goog.dom.createDom('i', {class: 'budget-import'}, 'Import'));
+
+
+
+
+    importInput.addEventListener('click', function(e) {
+        importInput.value = null;
+    });
+    this.budgetB_ = null;
+    let me = this;
+    importInput.addEventListener('change', function(e) {
+        let todo = {};
+        let done = [];
+        for (let i = 0; i < importInput.files.length; i++) {
+            let file = importInput.files[i];
+            todo[i] = file;
+
+            let reader = new FileReader();
+            reader.onload = function(e) {
+                var contents = e.target.result;
+                done.push({file: todo[i], content: contents});
+                delete todo[i];
+                if (recoil.util.map.isEmpty(todo) && me.budgetB_) {
+                    budget.widgets.Budget.importFiles(scope, done, me.budgetB_);
+                }
+            };
+            reader.readAsText(file);
+        }
+    });
+
     this.exportWidget_.getComponent().render(exportDiv);
     this.printWidget_.getComponent().render(printDiv);
 
@@ -53,7 +89,7 @@ budget.widgets.Budget = function(scope) {
 
 
     this.readyContainer_ = cd(
-        'div', {class: 'budget-budget'}, cd('div', 'goog-inline-block', exportDiv, printDiv),
+        'div', {class: 'budget-budget'}, cd('div', 'goog-inline-block', /*importDiv,*/ exportDiv, printDiv),
         cd('div', {class: 'budget-header'}, mess.SERVICE_NAME.toString()),
         cd('div', {class: 'budget-subheader'}, 'Ph: 04 5666357'),
 
@@ -79,7 +115,6 @@ budget.widgets.Budget = function(scope) {
     let notSelectedContainer = cd('div', {class: 'budget-error'}, 'No Budget Selected');
     let container = cd('div', {}, this.readyContainer_, loadingContainer, errorContainer, notSelectedContainer);
 
-    let me = this;
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(container);
     this.helper_ = new recoil.ui.ComponentWidgetHelper(scope, this.component_, this, function(helper) {
         goog.style.setElementShown(loadingContainer, !helper.isGood() && helper.errors().length === 0);
@@ -92,6 +127,758 @@ budget.widgets.Budget = function(scope) {
     });
 };
 
+/**
+ * @param {!budget.WidgetScope} scope
+ * @param {!Node} content
+ * @param {string} headerName
+ * @param {string} okName
+ * @param {!recoil.frp.Behaviour} okEnabledB
+ * @param {!recoil.frp.Behaviour} actionB
+ */
+budget.widgets.Budget.makeDialog = function(scope, content, headerName, okName, okEnabledB, actionB) {
+    let frp = scope.getFrp();
+
+    var options = {
+        hasCloseX: true,
+        overlay: true,
+        body: content,
+        isModal: true,
+        clickToClose: true,
+        heading: {message: headerName, className: 'table-dialog-header'},
+        hasDefault: true,
+        finish: function(e) {
+            frp.accessTrans(function() {
+                if (okEnabledB.good() && okEnabledB.get().val()) {
+                    actionB.set(e);
+                }
+            }, actionB, okEnabledB);
+        }
+    };
+
+
+    let dialog = new goog.ui.Dialog();
+    aurora.widgets.TableDialog.setupButton(scope, dialog, okName, okEnabledB, actionB);
+
+    new recoil.ui.ComponentWidgetHelper(
+        scope, dialog, this,
+        /** @suppress {deprecated} */
+
+        function(helper) {
+            let buttonSet = new goog.ui.Dialog.ButtonSet();
+            if (helper.isGood()) {
+                buttonSet.addButton({key: 'ok', caption: okName}, true);
+                dialog.setButtonSet(buttonSet);
+                buttonSet.setButtonEnabled('ok', okEnabledB.get().val());
+            }
+
+    }).attach(okEnabledB);
+
+    dialog.setTitle(headerName);
+    dialog.getContentElement().appendChild(content);
+    goog.dom.setFocusableTabIndex(dialog.getTitleCloseElement(), false);
+
+    dialog.setVisible(true);
+    aurora.widgets.TableDialog.focusFirst(dialog);
+    setTimeout(function() {
+        dialog.reposition();
+    }, 0);
+};
+
+/**
+ * @param {string} txt
+ * @return {Array<Array<string>>}
+*/
+budget.widgets.Budget.parseCSV = function(txt) {
+    let lines = [];
+    let inQuote = false;
+    let curField = '';
+    let curLine = [];
+    for (let i = 0; i < txt.length; i++) {
+        let ch = txt[i];
+        if (!inQuote) {
+            if (ch == ',') {
+                curLine.push(curField);
+                curField = '';
+            }
+            else if (ch === '"') {
+                inQuote = true;
+            }
+            else if (ch == '\r' || ch === '\n') {
+                // end of line
+                if (ch === '\r' && txt[i + 1] === '\n') {
+                    i++;
+                }
+
+                if (curField.trim().length === 0 && curLine.length === 0) {
+                    // blank line just continue
+                    curField = '';
+                    continue;
+                }
+                else {
+                    curLine.push(curField);
+                    lines.push(curLine);
+                    curLine = [];
+                    curField = '';
+                }
+            }
+            else {
+                curField += ch;
+            }
+        }
+        else {
+            // we are in quotes
+            if (ch === '"') {
+                if (txt[i + 1] === '"') {
+                    i++;
+                    curField += '"';
+                }
+                else {
+                    inQuote = false;
+                }
+            }
+            else {
+                curField += ch;
+            }
+        }
+    }
+    return lines;
+};
+/**
+ * @param {string} name
+ * @param {string} content
+ * @param {?} data
+ * @return {boolean}
+ */
+budget.widgets.Budget.ASB_CSV = function(name, content, data) {
+    if (/\.csv$/i.test(name)) {
+        let headers = ['Date', 'Unique Id', 'Tran Type', 'Cheque Number', 'Payee', 'Memo', 'Amount'];
+
+        let lines = data.csv || budget.widgets.Budget.parseCSV(content);
+        if (lines[1][0].split(';')[0] === 'Bank 12') {
+            for (var i = 0; i < lines.length; i++) {
+                let line = lines[i];
+                if (line.length <= 1) {
+                    continue;
+                }
+
+                return recoil.util.object.isEqual(line, headers);
+            }
+
+        }
+    }
+    return false;
+};
+
+/**
+ * @param {boolean} visa
+ * @return {function(string,string,?):boolean}
+ */
+
+budget.widgets.Budget.ANZ_CSV = function(visa) {
+    return function(name, content, data) {
+        if (/\.csv$/i.test(name)) {
+            let lines = data.csv || budget.widgets.Budget.parseCSV(content);
+            let headers = visa ? ['Card', 'Type', 'Amount', 'Details', 'TransactionDate', 'ProcessedDate', 'ForeignCurrencyAmount', 'ConversionCharge'] :
+                ['Type', 'Details', 'Particulars', 'Code', 'Reference', 'Amount', 'Date', 'ForeignCurrencyAmount', 'ConversionCharge'];
+
+            if (recoil.util.object.isEqual(lines[0], headers)) {
+                return true;
+            }
+            // anz files do not always have a header
+            return lines[0].length == headers;
+
+        }
+        return false;
+    };
+};
+
+
+/**
+ * @param {string} name
+ * @param {string} content
+ * @param {?} data
+ * @return {boolean}
+ */
+budget.widgets.Budget.QIF = function(name, content, data) {
+    if (/\.qif$/i.test(name)) {
+        let lines = budget.widgets.Budget.QIF.parse(content);
+
+        return !!lines;
+    }
+    return false;
+
+};
+
+
+/**
+ * @param {string} v
+ * @return {?number} time in milli
+ */
+budget.widgets.Budget.QIF.parseDate_ = function(v) {
+    let m = moment(v, 'D/M/YYYY');
+    if (m.isValid()) {
+        return m.toDate().getTime();
+    }
+    return null;
+};
+/**
+ * @param {string} content
+ * @return {Array<!budget.ImportRow>}
+ */
+budget.widgets.Budget.QIF.parse = function(content) {
+    let cLines = content.split(/\r?\n/);
+    let types = {
+        'D': {field: 'date', parse: budget.widgets.Budget.QIF.parseDate_},
+        'T': {field: 'amount', parse: parseFloat},
+        'U': {field: 'amount', parse: parseFloat},
+        'M': {field: 'memo', parse: function(v) {return v;}},
+        'C': {field: null}, // cleared
+        'N': {field: null}, // check num
+        'P': {field: 'description', parse: function(v) {return v;}},
+        'A': {field: null}, // address of payee
+        'S': {field: null}, // split category
+        'E': {field: null}, // split memo
+        '%': {field: null}, // percent on splits
+        'Y': {field: null}, // security name
+        'I': {field: null}, // price
+        'Q': {field: null}, // quantiy of shares
+        'O': {field: null}, // commision cost
+        '$': {field: 'amount', parse: function(v) {return v;}}, // for transfers
+        'B': {field: null}, // budgeted amount
+        'X': {field: null}, // invoices
+    };
+
+
+
+
+
+    if (!/^!Type:/.test(cLines[0])) {
+        return null;
+    }
+
+    var curRecord = {};
+    var result = [];
+    for (var i = 1; i < cLines.length; i++) {
+        let line = cLines[i].trim();
+        if (line.trim().length === 0) {
+            continue;
+        }
+        if (line == '^') {
+            result.push(curRecord);
+            curRecord = {};
+        }
+        else {
+            let type = line[0];
+            let typeInfo = types[type];
+
+            if (!typeInfo) {
+                return null;
+            }
+            if (!typeInfo.field) {
+                continue;
+            }
+            let val = typeInfo.parse(line.substring(1));
+            if (val === null) {
+                return null;
+            }
+            curRecord[typeInfo.field] = val;
+        }
+
+    }
+    return result;
+
+
+
+};
+/**
+ * @param {string} name
+ * @param {string} content
+ * @param {?} data
+ * @return {boolean}
+ */
+budget.widgets.Budget.OFX = function(name, content, data) {
+    if (/\.ofx$/i.test(name)) {
+        let header = content.match(/\r?\n\r?\n/);
+        if (!header) {
+            return false;
+        }
+        let headerLines = header.input.split(/\r?\n/);
+        if (headerLines[0].indexOf('OFXHEADER') !== 0) {
+            return false;
+        }
+
+        //OFXHEADER:100
+        //DATA:OFXSGML
+        //VERSION:102
+        //SECURITY:NONE
+        //ENCODING:USASCII
+        //CHARSET:1252
+        //COMPRESSION:NONE
+        //OLDFILEUID:NONE
+        //NEWFILEUID:NONE
+        return true;
+    }
+    return false;
+
+};
+/**
+ * @param {!Array<{name:string,matcher:function(string,string,?):boolean}>} types
+ * @param {?} file
+ * @return {?number}
+ */
+budget.widgets.Budget.findImportFileMatch = function(types, file) {
+    file.data = {};
+    for (let i = 0; i < types.length; i++) {
+        try {
+            if (types[i].matcher(file.file.name, file.content, file.data)) {
+                return i;
+            }
+        }
+        catch (e) {
+            // matchers may throw that just means they don't match
+            console.log('match failed', e.message);
+        }
+    }
+    return null;
+};
+
+/**
+ * @param {!budget.WidgetScope} scope
+ * @param {!Array<!budget.ImportRow>} rows
+ * @param {!recoil.frp.Behaviour} budgetB
+ */
+budget.widgets.Budget.processFiles = function(scope, rows, budgetB) {
+    let ID = new recoil.structs.table.ColumnKey('id');
+    let DATE = new recoil.structs.table.ColumnKey('date');
+    let PARTICULARS = new recoil.structs.table.ColumnKey('particulars');
+    let REF = new recoil.structs.table.ColumnKey('reference');
+    let SPLIT = new recoil.structs.table.ColumnKey('split');
+    let AMOUNT = new recoil.structs.table.ColumnKey('amount');
+    let TYPE = new recoil.structs.table.ColumnKey('type');
+    let ORIG_TYPE = new recoil.structs.table.ColumnKey('orig-type');
+    let CATEGORY = new recoil.structs.table.ColumnKey('category');
+    let ORIG_CATEGORY = new recoil.structs.table.ColumnKey('orig-category');
+    let LINK = new recoil.structs.table.ColumnKey('link');
+    let budgetT = aurora.db.schema.tables.base.budget;
+    let entryT = budgetT.entries;
+    let EntryType = aurora.db.schema.getEnum(entryT.cols.type);
+    let descriptionMeta = aurora.db.schema.getMeta(entryT.cols.description);
+    let TYPES = {
+        SPLIT: 'Split',
+        INCOME: 'Income',
+        PAYMENT: 'Payment',
+        TRANSFER: 'Transfer',
+        DEBT: 'Debt'
+    };
+
+    let linkCellDecorator = function() {
+        return new recoil.ui.RenderedDecorator(
+            linkCellDecorator,
+            goog.dom.createDom('td', {class: 'budget-import-link'}));
+
+    };
+
+    let categoryCol = new recoil.ui.widgets.table.InputComboColumn(CATEGORY, 'Category', []);
+    let ns = budget.widgets.Budget;
+    var container = goog.dom.createDom('div', {class: 'dialog-table select-files'});
+    let frp = scope.getFrp();
+
+    let okEnabledB = frp.createB(recoil.ui.BoolWithExplanation.TRUE);
+    let baseTypes = [TYPES.INCOME, TYPES.PAYMENT, TYPES.TRANSFER, TYPES.DEBT];
+    var tbl = new recoil.structs.table.MutableTable([ID], [DATE, PARTICULARS, REF, CATEGORY, AMOUNT, SPLIT, TYPE, ORIG_TYPE, ORIG_CATEGORY, LINK]);
+
+
+    tbl.setMeta({'typeFactories': aurora.Client.typeFactories});
+    tbl.setColumnMeta(DATE, {type: 'date', editable: false});
+    tbl.setColumnMeta(PARTICULARS, {type: 'string', editable: false});
+    tbl.setColumnMeta(REF, {type: 'string', editable: false});
+    tbl.setColumnMeta(AMOUNT, {type: 'number', editable: false, displayLength: -1, min: -100000, max: 100000, step: 0.01});
+    tbl.setColumnMeta(TYPE, {type: 'select', list: [TYPES.SPLIT].concat(baseTypes)});
+    tbl.setColumnMeta(LINK, {type: 'boolean', cellDecorator: linkCellDecorator});
+    let linkMap = {};
+    let linkIdMap = {};
+    rows.sort(function(x, y) { return x.date - y.date;});
+    rows.forEach(function(item, i) {
+        let row = new recoil.structs.table.MutableTableRow(i);
+
+        row.set(ID, i + '');
+        row.set(DATE, recoil.ui.widgets.DateWidget2.convertDateToLocal(new Date(item.date)));
+        row.set(PARTICULARS, item.description);
+        row.set(REF, item.memo);
+        row.set(CATEGORY, '');
+        row.set(LINK, true);
+        row.set(TYPE, item.amount > 0 ? TYPES.INCOME : TYPES.PAYMENT);
+        row.set(ORIG_TYPE, row.get(TYPE));
+        row.set(ORIG_CATEGORY, '');
+        row.set(AMOUNT, item.amount);
+        row.set(SPLIT, false);
+        recoil.util.map.safeRecGet(linkMap, [item.description, item.memo], []).push(i);
+        tbl.addRow(row);
+    });
+
+    for (let desc in linkMap) {
+        for (let memo in linkMap[desc]) {
+            let arr = linkMap[desc][memo];
+            if (arr.length > 0) {
+                for (let i = 0; i < arr.length; i++) {
+                    for (let j = 0; j < arr.length; j++) {
+                        if (j !== i) {
+                            recoil.util.map.safeRecGet(linkIdMap, [arr[i]], []).push(arr[j]);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let delSplitFactory = function(scope, cellB) {
+        let ico = goog.dom.createDom('i', {class: 'fas fa-minus-square'});
+        var frp = scope.getFrp();
+        var widget = new recoil.ui.widgets.ButtonWidget(scope);
+        var value = recoil.frp.table.TableCell.getValue(frp, cellB);
+        var meta = recoil.frp.table.TableCell.getMeta(frp, cellB);
+        widget.attachStruct(recoil.frp.struct.extend(frp, meta, {action: value, classes: ['aurora-icon-button'], text: ico}));
+        return widget;
+    };
+
+    let addSplitFactory = function(scope, cellB) {
+        let ico = goog.dom.createDom('i', {class: 'fas fa-plus-square'});
+        var frp = scope.getFrp();
+        var widget = new recoil.ui.widgets.ButtonWidget(scope);
+        var value = recoil.frp.table.TableCell.getValue(frp, cellB);
+        var meta = recoil.frp.table.TableCell.getMeta(frp, cellB);
+        widget.attachStruct(recoil.frp.struct.extend(frp, meta, {action: value, classes: ['aurora-icon-button'], text: ico}));
+        return widget;
+    };
+
+    let delSplitDisabled = new recoil.ui.BoolWithExplanation(false, budget.messages.YOU_MUST_HAVE_AT_LEAST_2_SPLITS);
+
+    let mappingsSourceB = frp.createB(tbl.freeze());
+    let mappingsB = frp.liftBI(function(tbl, budget) {
+        let columns = new recoil.ui.widgets.TableMetaData();
+
+        columns.add(DATE, 'Date');
+        columns.add(PARTICULARS, 'Particulars');
+        columns.add(REF, 'Reference');
+        columns.add(AMOUNT, 'Amount');
+        columns.add(TYPE, 'Type');
+        columns.addColumn(categoryCol);
+        columns.add(SPLIT, '');
+        columns.add(LINK, '');
+        let payments = [];
+        let income = [];
+        budget.forEach(function(budgetRow) {
+            let entries = budgetRow.get(budgetT.cols.entries);
+            entries.forEach(function(entry) {
+                if (!entry.description || entry.description.trim() === '') {
+                    return;
+                }
+                if (entry.type == EntryType.income) {
+                    income.push(entry.description);
+                }
+                else {
+                    payments.push(entry.description);
+                }
+            });
+        });
+
+        function removeDups(a) {
+            return a.sort((x, y) => x.localeCompare(y, undefined, {sensitivity: 'accent'})).filter(function(v, idx, arr) {return idx === 0 || v.localeCompare(arr[idx - 1], undefined, {sensitivity: 'accent'});});
+        }
+        payments = removeDups(payments);
+        income = removeDups(income);
+
+
+
+        let res = tbl.createEmpty();
+        let pos = 0;
+        let curSplit = null;
+        let subRows = [];
+        let amountLen = 1;
+        tbl.forEach(function(row, pks) {
+            let id = row.get(ID);
+            let amount = row.get(AMOUNT);
+            if (id.indexOf('.') === -1) {
+                amountLen = Math.max(amountLen, amount.toFixed(2).length);
+            }
+        });
+        function appendSplitRows() {
+            if (subRows.length > 0) {
+                let delEnabled = subRows.length > 2 ? recoil.ui.BoolWithExplanation.TRUE : delSplitDisabled;
+                for (let i = 0; i < subRows.length; i++) {
+                    let row = subRows[i];
+                    let last = i === (subRows.length - 1);
+                    row.setCellMeta(AMOUNT, {editable: !last, displayLength: last ? -1 : amountLen});
+                    row.addCellMeta(DATE, {cellWidgetFactory: null});
+                    row.addCellMeta(PARTICULARS, {cellWidgetFactory: null});
+                    row.addCellMeta(REF, {cellWidgetFactory: null});
+                    row.addCellMeta(TYPE, {list: baseTypes});
+                    row.addCellMeta(SPLIT, {cellWidgetFactory: delSplitFactory, enabled: delEnabled});
+                    res.addRow(row);
+                }
+                subRows = [];
+            }
+        }
+
+        tbl.forEachModify(function(row, pks) {
+            row.setPos(pos++);
+            let type = row.get(TYPE);
+            let id = row.get(ID);
+            let particulars = row.get(PARTICULARS);
+            let ref = row.get(REF);
+
+            row.set(ORIG_TYPE, row.get(TYPE));
+            row.set(ORIG_CATEGORY, row.get(CATEGORY));
+            row.addCellMeta(CATEGORY, {list: type === TYPES.INCOME ? income : payments, displayLength: 15, maxLength: descriptionMeta.maxLength});
+
+            if (curSplit !== null && id.indexOf(curSplit + '.') !== 0) {
+                appendSplitRows();
+            }
+            if (type === 'Split') {
+                row.addCellMeta(CATEGORY, {cellWidgetFactory: null});
+                row.addCellMeta(LINK, {cellWidgetFactory: null});
+                row.addCellMeta(SPLIT, {cellWidgetFactory: addSplitFactory});
+                curSplit = id;
+                res.addRow(row);
+            }
+            else if (curSplit !== null && id.indexOf('.') !== -1) {
+                row.addCellMeta(LINK, {cellWidgetFactory: null});
+                subRows.push(row);
+            }
+            else {
+                let links = recoil.util.map.safeRecGet(linkMap, [particulars, ref]);
+                if (!links || links.length < 2) {
+                    row.addCellMeta(LINK, {cellWidgetFactory: null});
+                }
+
+                row.addCellMeta(SPLIT, {cellWidgetFactory: null});
+                res.addRow(row);
+            }
+
+        });
+        appendSplitRows();
+
+        return columns.applyMeta(res);
+
+    }, function(v) {
+        let res = mappingsSourceB.get().createEmpty();
+        let removeSplit = null;
+        let splitRemaining = 0;
+        let pos = 0;
+        let prevSplit = null;
+        let addSplit = null;
+        function calcId(res, id) {
+            let i = 0;
+            while (res.getRow([id + '.' + i])) {
+                i++;
+            }
+            return id + '.' + i;
+        }
+        function addLastSplit() {
+            if (prevSplit && !removeSplit) {
+                if (addSplit !== null) {
+                    splitRemaining -= Math.round(prevSplit.get(AMOUNT) * 100);
+                    res.addRow(prevSplit);
+                    prevSplit.set(ID, calcId(res, addSplit));
+                    prevSplit.set(CATEGORY, '');
+                }
+
+                prevSplit.set(AMOUNT, splitRemaining / 100);
+                res.addRow(prevSplit);
+            }
+        }
+        let categoryOverride = {};
+
+        v.forEach(function(row) {
+            let origCat = row.get(ORIG_CATEGORY);
+            let cat = row.get(CATEGORY);
+            let id = row.get(ID);
+            let link = row.get(LINK);
+            if (origCat !== cat && linkIdMap[id] && link) {
+                linkIdMap[id].forEach(function(linkId) {
+                    categoryOverride[linkId] = cat;
+                });
+            }
+        });
+        v.forEachModify(function(row) {
+            let type = row.get(TYPE);
+            let origType = row.get(ORIG_TYPE);
+            let id = row.get(ID);
+            let isSplit = id.indexOf('.') !== -1;
+            let modifySplit = row.get(SPLIT);
+            row.set(SPLIT, null);
+
+            if (type !== TYPES.SPLIT && row.get(LINK) && categoryOverride[id] !== undefined) {
+                row.set(CATEGORY, categoryOverride[id]);
+            }
+
+            // clear out cell meta
+            res.forEachColumn(function(col) {
+                row.setCellMeta(col, {});
+            });
+
+            row.setPos(pos++);
+            let amount = row.get(AMOUNT);
+            if (prevSplit && !removeSplit) {
+                if (!isSplit) {
+                    addLastSplit();
+                }
+                else {
+                    splitRemaining -= Math.round(prevSplit.get(AMOUNT) * 100);
+                    res.addRow(prevSplit);
+                }
+
+            }
+            if (!isSplit) {
+                addSplit = null;
+            }
+            prevSplit = null;
+            if (type === TYPES.SPLIT) {
+                splitRemaining = Math.round(amount * 100);
+
+            }
+            if (type !== origType && type === TYPES.SPLIT) {
+                res.addRow(row);
+                let subType = row.get(AMOUNT) > 0 ? TYPES.INCOME : TYPES.PAYMENT;
+
+                row.setPos(pos++);
+                row.set(CATEGORY, '');
+                row.set(TYPE, subType);
+                row.set(ORIG_TYPE, row.get(TYPE));
+
+                row.set(AMOUNT, 0);
+                row.set(ID, id + '.0');
+                res.addRow(row);
+                row.setPos(pos++);
+                row.set(ID, id + '.1');
+                row.set(AMOUNT, amount);
+                res.addRow(row);
+
+            }
+            else if (type !== origType && origType === TYPES.SPLIT) {
+                res.addRow(row);
+                removeSplit = id;
+            }
+            else {
+                if (!isSplit) {
+                    removeSplit = null;
+
+                }
+                if (removeSplit === null) {
+                    if (isSplit) {
+                        if (!modifySplit) {
+                            // remove the split
+                            prevSplit = row;
+                        }
+                    }
+                    else {
+                        if (type === TYPES.SPLIT && modifySplit) {
+                            addSplit = id;
+                        }
+                        res.addRow(row);
+                    }
+
+                }
+
+
+            }
+
+        });
+        addLastSplit();
+        mappingsSourceB.set(res.freeze());
+    }, mappingsSourceB, budgetB);
+    let mappingSelectedB = frp.createCallback(function() {
+        console.log('mappings selected');
+    }, mappingsB);
+
+    let tableWidget = new recoil.ui.widgets.table.TableWidget(scope);
+    tableWidget.attachStruct(mappingsB);
+    tableWidget.getComponent().render(container);
+
+    budget.widgets.Budget.makeDialog(scope, container, 'Select Categories', 'Ok', okEnabledB, mappingSelectedB);
+
+
+
+};
+/**
+ * @const
+ */
+budget.widgets.Budget.FILE_TYPES = (function() {
+    let ns = budget.widgets.Budget;
+    return [
+        {name: 'ASB (CSV)', matcher: budget.widgets.Budget.ASB_CSV },
+        {name: 'ANZ (CSV)', matcher: budget.widgets.Budget.ANZ_CSV(false)},
+        {name: 'ANZ Visa (CSV)', matcher: budget.widgets.Budget.ANZ_CSV(true)},
+        {name: 'OFX', matcher: budget.widgets.Budget.OFX},
+        {name: 'QIF', matcher: budget.widgets.Budget.QIF}
+    ];
+})();
+
+
+/**
+ * @param {!budget.WidgetScope} scope
+ * @param {!Array<{file:?,content:string}>} files
+ * @param {!recoil.frp.Behaviour} budgetB
+ */
+budget.widgets.Budget.importFiles = function(scope, files, budgetB) {
+    let columns = new recoil.ui.widgets.TableMetaData();
+    let ID = new recoil.structs.table.ColumnKey('id');
+    let NAME = new recoil.structs.table.ColumnKey('name');
+    let TYPE = new recoil.structs.table.ColumnKey('type');
+    let CONTENT = new recoil.structs.table.ColumnKey('content');
+    let ns = budget.widgets.Budget;
+    let types = budget.widgets.Budget.FILE_TYPES;
+    let typeMap = {};
+    let typeEnum = {};
+    types.forEach(function(x, idx) {
+        typeMap[idx] = x;
+        typeEnum[x.name] = idx;
+
+
+    });
+
+    var tbl = new recoil.structs.table.MutableTable([ID], [NAME, TYPE, CONTENT]);
+    tbl.setMeta({'typeFactories': aurora.Client.typeFactories});
+    tbl.setColumnMeta(NAME, {type: 'string', editable: false});
+    tbl.setColumnMeta(TYPE, {type: 'enum', list: types.map((x, id) => id), renderer: recoil.ui.renderers.MapRenderer(typeEnum, recoil.ui.messages.NONE)});
+    columns.add(NAME, 'File Name');
+    columns.add(TYPE, 'Type');
+    for (let i = 0; i < files.length; i++) {
+        let f = files[i];
+        let row = new recoil.structs.table.MutableTableRow(i);
+        row.set(ID, i);
+        row.set(NAME, f.file.name);
+        row.set(CONTENT, f.content);
+        row.set(TYPE, budget.widgets.Budget.findImportFileMatch(types, f));
+        tbl.addRow(row);
+
+    }
+    let frp = scope.getFrp();
+    let fileTypesB = frp.createB([]);
+    let typeTableB = frp.createB(columns.applyMeta(tbl));
+    let okEnabledB = frp.createB(recoil.ui.BoolWithExplanation.TRUE);
+
+    let typesSelectedB = frp.createCallback(function() {
+        let imports = [];
+        typeTableB.get().forEach(function(row) {
+            let fileRows = types[row.get(TYPE)].matcher.parse(row.get(CONTENT));
+            fileRows.forEach(function(r) {
+                imports.push(r);
+            });
+
+        });
+        budget.widgets.Budget.processFiles(scope, imports, budgetB);
+    }, typeTableB);
+
+    var container = goog.dom.createDom('div', {class: 'dialog-table select-files'});
+
+    let tableWidget = new recoil.ui.widgets.table.TableWidget(scope);
+    tableWidget.attachStruct(typeTableB);
+    tableWidget.getComponent().render(container);
+
+
+    budget.widgets.Budget.makeDialog(scope, container, 'Select File Types', 'Ok', okEnabledB, typesSelectedB);
+
+};
 /**
  * @private
  * @param {!recoil.frp.Behaviour} budgetB
@@ -435,6 +1222,23 @@ budget.widgets.Budget.prototype.getUserInfo_ = function(user) {
         res.address = (row.get(userT.cols.address) || '');
     });
     return res;
+};
+
+
+
+/**
+ * @private
+ * @param {!recoil.frp.Behaviour} budgetB
+ * @return {!recoil.frp.Behaviour}
+ */
+budget.widgets.Budget.prototype.importB_ = function(budgetB) {
+    let frp = this.scope_.getFrp();
+    let scope = this.scope_;
+
+    return frp.createCallback(
+        function(v) {
+            
+        }, budgetB);
 };
 
 /**
@@ -808,13 +1612,13 @@ budget.widgets.Budget.prototype.attach = function(idB) {
     totalNames[EntryType.debt] = 'Total Debts (C)';
     let noneB = frp.createB(null);
     let budgetB = frp.switchB(frp.liftB(function(id) {
-        console.log('switch to id', id);
         if (id.length < 1) {
             return noneB;
         }
         let query = new recoil.db.Query();
         return scope.getDb().get(budgetT.key, query.eq(budgetT.cols.id, query.val(id[0][0].db)));
     }, idB));
+    this.budgetB_ = budgetB;
     let query = new recoil.db.Query();
     let userId = budget.widgets.BudgetList.getUserId();
     let userB = scope.getDb().get(userT.key, query.eq(userT.cols.id, userId));

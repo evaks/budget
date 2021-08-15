@@ -247,7 +247,7 @@ aurora.db.schema.hasAccess = function(context, path, access) {
         let pTbl = aurora.db.schema.getTableByName(path.parent());
         if (pTbl) {
             let meta = pTbl.meta[path.last().name()];
-            
+
             if (!meta) {
                 return false;
             }

@@ -99,7 +99,7 @@ aurora.widgets.TableDialog = function(scope, table, callbackB, buttonName, valid
 
     this.dialog_ = new goog.ui.Dialog();
     this.dialog_.setTitle(headerName);
-    
+
     goog.dom.setFocusableTabIndex(this.dialog_.getTitleCloseElement(), false);
     aurora.widgets.TableDialog.setupButton(scope, this.dialog_, buttonNameB, addEnabledB, doAddB);
     var me = this;
@@ -208,21 +208,24 @@ aurora.widgets.TableDialog.mkCellError = function(pk, col, widgetFactory, opt_va
  * @param {!recoil.frp.Behaviour<!recoil.ui.BoolWithExplanation>|!recoil.ui.BoolWithExplanation} okEnabled
  * @param {!recoil.frp.Behaviour} actionB called when button pressed
  */
-aurora.widgets.TableDialog.setupButton = function (scope, dialog, buttonName, okEnabled, actionB) {
+aurora.widgets.TableDialog.setupButton = function(scope, dialog, buttonName, okEnabled, actionB) {
     let util = new recoil.frp.Util(scope.getFrp());
     let buttonNameB = util.toBehaviour(buttonName);
     let addEnabledB = util.toBehaviour(okEnabled);
     let frp = scope.getFrp();
-    
-    new recoil.ui.ComponentWidgetHelper(scope, dialog, this, function(helper) {
-        let buttonSet = new goog.ui.Dialog.ButtonSet();
-        if (helper.isGood()) {
-            buttonSet.addButton({key: 'ok', caption: buttonNameB.get()}, true);
-            dialog.setButtonSet(buttonSet);
-            buttonSet.setButtonEnabled('ok', addEnabledB.get().val());
-        }
- 
-    }).attach(buttonNameB, addEnabledB);
+
+    new recoil.ui.ComponentWidgetHelper(
+        scope, dialog, this,
+        /** @suppress {deprecated} */
+        function(helper) {
+            let buttonSet = new goog.ui.Dialog.ButtonSet();
+            if (helper.isGood()) {
+                buttonSet.addButton({key: 'ok', caption: buttonNameB.get()}, true);
+                dialog.setButtonSet(buttonSet);
+                buttonSet.setButtonEnabled('ok', addEnabledB.get().val());
+            }
+
+        }).attach(buttonNameB, addEnabledB);
 
     new recoil.ui.ComponentWidgetHelper(scope, dialog, null, function(helper) {
     }).attach(actionB);
