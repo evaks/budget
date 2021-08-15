@@ -225,7 +225,6 @@ aurora.db.schema.hasAccess = function(context, path, access) {
         }
         // could be just a column with no subtable so check the parent
         tbl = aurora.db.schema.getTableByName(path.parent());
-
         if (tbl === null) {
             return false;
         }
@@ -245,15 +244,20 @@ aurora.db.schema.hasAccess = function(context, path, access) {
         if (tbl.info.access) {
             return tbl.info.access(context, access);
         }
-        let meta = tbl.meta[path.last().name()];
-        if (!meta) {
-            return false;
-        }
-        if (meta.access) {
-            return meta.access(context, access);
+        let pTbl = aurora.db.schema.getTableByName(path.parent());
+        if (pTbl) {
+            let meta = pTbl.meta[path.last().name()];
+            
+            if (!meta) {
+                return false;
+            }
+            if (meta.access) {
+                return meta.access(context, access);
+            }
         }
         path = path.parent();
-        tbl = aurora.db.schema.getTableByName(path);
+        tbl = pTbl;
+
         // we are no longer deleting or adding we are updating
         if (access === 'c' || access == 'd') {
             access = 'u';
@@ -889,10 +893,8 @@ aurora.db.schema.LookupScope.prototype.get = function(inParts) {
         }
 
         // doesn't work with lists
-        console.log('input colkey table', parts, this.basePath_);
         for (let i = 0; i < this.basePath_.length; i++) {
             if (parts[i] !== this.basePath_[i]) {
-                console.log("parts don't match", parts[i], this.basePath_[i]);
                 return undefined;
             }
         }
@@ -901,7 +903,6 @@ aurora.db.schema.LookupScope.prototype.get = function(inParts) {
         let newPath = parts.splice(this.basePath_.length);
         newPath.push(col.getName());
         res[newPath.join('/')] = recoil.db.expr.FIELD;
-        console.log('returning', res);
         return res;
 
     }

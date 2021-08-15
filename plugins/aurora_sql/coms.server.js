@@ -909,7 +909,6 @@ aurora.db.Coms.prototype.notifyListeners = function(changes, exclude, opt_done) 
 
         });
 
-
         if (change instanceof recoil.db.ChangeSet.Delete) {
             me.notifies_.removePath(change.path());
         }

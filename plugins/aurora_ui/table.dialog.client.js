@@ -99,48 +99,11 @@ aurora.widgets.TableDialog = function(scope, table, callbackB, buttonName, valid
 
     this.dialog_ = new goog.ui.Dialog();
     this.dialog_.setTitle(headerName);
+    
     goog.dom.setFocusableTabIndex(this.dialog_.getTitleCloseElement(), false);
-
-    new recoil.ui.ComponentWidgetHelper(scope, this.dialog_, this, function(helper) {
-        let buttonSet = new goog.ui.Dialog.ButtonSet();
-        if (helper.isGood()) {
-            buttonSet.addButton({key: 'ok', caption: buttonNameB.get()}, true);
-            this.dialog_.setButtonSet(buttonSet);
-
-            buttonSet.setButtonEnabled('ok', addEnabledB.get().val());
-        }
-
-    }).attach(buttonNameB, addEnabledB);
-
-
+    aurora.widgets.TableDialog.setupButton(scope, this.dialog_, buttonNameB, addEnabledB, doAddB);
     var me = this;
 
-    new recoil.ui.ComponentWidgetHelper(scope, this.dialog_, this, function(helper) {
-    }).attach(doAddB);
-
-    let bgEscapeListener = function(e) {
-        if (me.dialog_.isEscapeToCancel() && e.keyCode == goog.events.KeyCodes.ESC) {
-            e.stopPropagation();
-            e.preventDefault();
-            me.dialog_.setVisible(false);
-        }
-    };
-    goog.events.listen(document, goog.events.EventType.KEYDOWN, bgEscapeListener);
-
-    goog.events.listen(this.dialog_, goog.ui.PopupBase.EventType.HIDE, function() {
-        me.dialog_.dispose();
-        goog.events.unlisten(document, goog.events.EventType.KEYDOWN, bgEscapeListener);
-    });
-
-    goog.events.listen(this.dialog_, goog.ui.Dialog.EventType.SELECT, function(e) {
-
-        frp.accessTrans(function() {
-            if (addEnabledB.good() && addEnabledB.get().val()) {
-                doAddB.set(e);
-            }
-        }, doAddB, addEnabledB);
-
-    });
 
     var showErrorB = frp.liftB(function(validator, tbl) {
         var myRow;
@@ -238,6 +201,58 @@ aurora.widgets.TableDialog.mkCellError = function(pk, col, widgetFactory, opt_va
     return {key: {pk: pk, col: col}, fact: widgetFactory, value: opt_val || []};
 };
 
+/**
+ * @param {!recoil.ui.WidgetScope} scope
+ * @param {!goog.ui.Dialog} dialog
+ * @param {!recoil.frp.Behaviour<string>|string} buttonName
+ * @param {!recoil.frp.Behaviour<!recoil.ui.BoolWithExplanation>|!recoil.ui.BoolWithExplanation} okEnabled
+ * @param {!recoil.frp.Behaviour} actionB called when button pressed
+ */
+aurora.widgets.TableDialog.setupButton = function (scope, dialog, buttonName, okEnabled, actionB) {
+    let util = new recoil.frp.Util(scope.getFrp());
+    let buttonNameB = util.toBehaviour(buttonName);
+    let addEnabledB = util.toBehaviour(okEnabled);
+    let frp = scope.getFrp();
+    
+    new recoil.ui.ComponentWidgetHelper(scope, dialog, this, function(helper) {
+        let buttonSet = new goog.ui.Dialog.ButtonSet();
+        if (helper.isGood()) {
+            buttonSet.addButton({key: 'ok', caption: buttonNameB.get()}, true);
+            dialog.setButtonSet(buttonSet);
+            buttonSet.setButtonEnabled('ok', addEnabledB.get().val());
+        }
+ 
+    }).attach(buttonNameB, addEnabledB);
+
+    new recoil.ui.ComponentWidgetHelper(scope, dialog, null, function(helper) {
+    }).attach(actionB);
+
+
+    let bgEscapeListener = function(e) {
+        if (dialog.isEscapeToCancel() && e.keyCode == goog.events.KeyCodes.ESC) {
+            e.stopPropagation();
+            e.preventDefault();
+            dialog.setVisible(false);
+        }
+    };
+    goog.events.listen(document, goog.events.EventType.KEYDOWN, bgEscapeListener);
+
+    goog.events.listen(dialog, goog.ui.PopupBase.EventType.HIDE, function() {
+        dialog.dispose();
+        goog.events.unlisten(document, goog.events.EventType.KEYDOWN, bgEscapeListener);
+    });
+
+    goog.events.listen(dialog, goog.ui.Dialog.EventType.SELECT, function(e) {
+
+        frp.accessTrans(function() {
+            if (addEnabledB.good() && addEnabledB.get().val()) {
+                actionB.set(e);
+            }
+        }, actionB, addEnabledB);
+
+    });
+
+};
 
 /**
  *
@@ -254,17 +269,22 @@ aurora.widgets.TableDialog.prototype.getComponent = function() {
 aurora.widgets.TableDialog.prototype.show = function(show) {
     this.dialog_.setVisible(show);
     if (show) {
-        goog.Timer.callOnce(function() {
-            let nodes = goog.dom.findNodes(this.dialog_.getContentElement(), function(node) {
-                return node instanceof Element && goog.dom.isFocusable(node);
-            });
-
-
-            if (nodes.length > 0) {
-                nodes[0].focus();
-            }
-        }, 0, this);
+        aurora.widgets.TableDialog.focusFirst(this.dialog_);
     }
+};
+
+/**
+ * @param {goog.ui.Dialog} dialog
+ */
+aurora.widgets.TableDialog.focusFirst = function(dialog) {
+    goog.Timer.callOnce(function() {
+        let nodes = goog.dom.findNodes(dialog.getContentElement(), function(node) {
+            return node instanceof Element && goog.dom.isFocusable(node);
+        });
+        if (nodes.length > 0) {
+            nodes[0].focus();
+        }
+    }, 0, null);
 };
 
 /**

@@ -245,3 +245,5 @@ BigDecimal.ROUND_DOWN = {};
 BigDecimal.ROUND_HALF_DOWN = {};
 BigDecimal.ROUND_HALF_UP = {};
 
+
+String.prototype.matchAll = function (regExp) {};
