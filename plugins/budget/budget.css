@@ -4,6 +4,41 @@ body {
 .content-inner th {
     color: #636363;
 }
+.mapDiv {
+    max-width: 100vw;
+    border: 1px solid black;
+
+}
+.mapDiv iframe{
+    max-width: 100vw;
+}
+
+
+.page-menu-hutt-city {
+    font-family: serif;
+    font-weight: bold;
+    font-size: 20pt;
+    color: #9cb866
+}
+
+@media only screen and (max-device-width: 720px) {
+    .page-menu div.goog-menu-button-caption {
+	font-size: 14pt;
+	padding: 0 2px;
+    }
+    .page-menu-hutt-city {
+	font-size: 16pt;
+	white-space: break-spaces;
+	width: 4em;
+	display: inline-block;
+	line-height: 16pt;
+	padding: 5px;
+    }
+    .page-menu-fin-mentor {
+	display: none;
+    }
+}
+
 .main-header {
     background-image: url(/images/Lower_Hutt_Panorama_at_night.jpg);
     background-repeat: no-repeat;
@@ -88,6 +123,7 @@ body {
     overflow: auto;
 }
 
+
 @media screen and (max-width: 540px) {
     .intro-message {
 	font-size: 18px;
@@ -151,12 +187,23 @@ body {
 
 }
 
+
 .intro-call a {
     color: white;
     font-style: italic;
     border-bottom: 1px solid;
 }
 
+@media only screen and (max-device-width: 480px) {
+    .intro-message {
+	padding: 10px 25px 10px 25px;
+    }
+    img.budget-logo {
+	max-width: 30vw;
+	height: unset;
+    }
+ 
+}
 
 img.budget-logo {
     height: 300px;
@@ -177,12 +224,6 @@ img.budget-logo {
     
 }
 
-.page-menu-hutt-city {
-    font-family: serif;
-    font-weight: bold;
-    font-size: 20pt;
-    color: #9cb866
-}
 
 .page-menu-fin-mentor {
     font-family: Arial;

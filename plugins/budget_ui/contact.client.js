@@ -21,10 +21,26 @@ budget.widgets.Contact = function(scope) {
     let mess = budget.messages;
     let cd = goog.dom.createDom;
     let siteT = aurora.db.schema.tables.base.site;
+    let html = new recoil.ui.HtmlHelper(scope);
     this.hoursT_ = siteT.regular;
 
     this.siteTblB_ = scope.getDb().get(siteT.key);
     this.hoursB_ = budget.Client.instance.createSubTableB(this.siteTblB_, frp.createB(/** @type {Array} **/ (null)), siteT.cols.regular);
+    
+    let getRow = function(tbl) {
+        let res = null;
+        tbl.forEach(function(r) {
+            res = r;
+        });
+        return res;
+
+    };
+
+    function getField(col) {
+        return frp.liftB(function (site) {
+            return getRow(site).get(col);
+        }, me.siteTblB_);
+    };
 
     let header = cd('h2', {class: 'page-heading'}, 'CONTACT US');
     let subHeader = cd('h3', {class: 'page-heading'}, 'Get in touch, we are here for you!');
@@ -38,6 +54,9 @@ budget.widgets.Contact = function(scope) {
     this.phone_ = cd('a', {class: 'phone'});
     this.email_ = cd('a', {class: 'email'});
     this.address_ = cd('td', {class: 'address'});
+    
+    html.innerText(this.address_, getField(siteT.cols.address));
+    
     this.officeHours_ = cd('table', {class: 'office-hours'});
 
     let phoneLabel = cd('td', {class: 'label'}, 'Phone');
@@ -94,10 +113,15 @@ budget.widgets.Contact.prototype.update_ = function(helper) {
         this.phone_.setAttribute('href', 'tel:' + site.get(siteT.cols.phone));
         this.email_.innerText = site.get(siteT.cols.email);
         this.email_.setAttribute('href', 'mailto:' + site.get(siteT.cols.email));
-        this.address_.innerText = site.get(siteT.cols.mapAddress);
 
 
-        this.map_.setAttribute('src', 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3001.46733756455!2d174.90554621601007!3d-41.211585143724555!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x6d38aa57748009a5%3A0x1654e6e37bbcdf1b!2s' + encodeURIComponent(site.get(siteT.cols.mapAddress)) + '!5e0!3m2!1sen!2snz!4v1595367482164!5m2!1sen!2snz');
+
+        let oldSrc = this.map_.getAttribute('src');
+        let newSrc = 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3001.46733756455!2d174.90554621601007!3d-41.211585143724555!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x6d38aa57748009a5%3A0x1654e6e37bbcdf1b!2s' + encodeURIComponent(site.get(siteT.cols.mapAddress)) + '!5e0!3m2!1sen!2snz!4v1595367482164!5m2!1sen!2snz';
+
+        if (oldSrc != newSrc) {
+            this.map_.setAttribute('src', newSrc);
+        }
         let days = [];
         let map = new goog.structs.AvlTree(recoil.util.object.compareKey);
         let format = new Intl.DateTimeFormat(undefined, {
@@ -203,7 +227,7 @@ budget.widgets.Contact.prototype.update_ = function(helper) {
 
             return recoil.ui.messages.join(res, budget.messages.X_COMMA_Y).toString();
         };
-
+        goog.dom.removeChildren(me.officeHours_);
         list.forEach(function(v) {
             let days = getDays(v.days);
             let hours = getHours(v.key);

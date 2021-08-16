@@ -8,7 +8,7 @@ div.budget-calendar:focus {
     outline-width: 0;
 }
 div.budget-calendar-day {
-    width: calc((100vw - 9em) / 7);
+    width: calc((100vw - 4em) / 7);
     display: flex;
     flex-direction: column;
     position: relative;
