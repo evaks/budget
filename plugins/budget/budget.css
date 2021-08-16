@@ -276,7 +276,12 @@ img.budget-logo {
 
 }
 
-
+.budget-dialog-info {
+    font-size: 14pt;
+    font-variant: small-caps;
+    color: green;
+}
+    
 h2.page-heading {
     font-weight: 700;
     color: #636363;
