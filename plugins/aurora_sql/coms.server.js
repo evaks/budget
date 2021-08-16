@@ -476,6 +476,7 @@ aurora.db.Coms = function(authenticator) {
      */
     this.channel_ = authenticator.getChannel(aurora.db.shared.PLUGIN_ID, aurora.db.shared.DATA, function(e, secContext) {
         let action = e && e.data && e.data['command'];
+        me.log_.info('recieve request', action, e.connection['remoteAddress']);
         let token = e.token;
         me.notifies_.updateClientContext(e.clientId, secContext);
         try {

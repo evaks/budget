@@ -21,7 +21,7 @@ output/server.min.js: node_modules $(wildcard plugins/**/*.server.js)  $(wildcar
 
 .PHONY: server
 server: output/server.min.js
-	node aurora/build build.json server
+
 
 resources: node_modules
 	node aurora/build build.json resources

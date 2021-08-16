@@ -26,7 +26,7 @@ budget.widgets.Contact = function(scope) {
 
     this.siteTblB_ = scope.getDb().get(siteT.key);
     this.hoursB_ = budget.Client.instance.createSubTableB(this.siteTblB_, frp.createB(/** @type {Array} **/ (null)), siteT.cols.regular);
-    
+
     let getRow = function(tbl) {
         let res = null;
         tbl.forEach(function(r) {
@@ -37,7 +37,7 @@ budget.widgets.Contact = function(scope) {
     };
 
     function getField(col) {
-        return frp.liftB(function (site) {
+        return frp.liftB(function(site) {
             return getRow(site).get(col);
         }, me.siteTblB_);
     }
@@ -54,9 +54,9 @@ budget.widgets.Contact = function(scope) {
     this.phone_ = cd('a', {class: 'phone'});
     this.email_ = cd('a', {class: 'email'});
     this.address_ = cd('td', {class: 'address'});
-    
+
     html.innerText(this.address_, getField(siteT.cols.address));
-    
+
     this.officeHours_ = cd('table', {class: 'office-hours'});
 
     let phoneLabel = cd('td', {class: 'label'}, 'Phone');
