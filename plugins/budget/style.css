@@ -13364,6 +13364,22 @@ button.button.apply:disabled {
 .selectize-control {
   position: relative;
 }
+
+.selectize-control.selectize-disabled {
+    pointer-events: none;
+    user-select: none;
+    cursor: not-allowed;
+}
+
+.selectize-control.selectize-disabled.multi .selectize-input [data-value].active {
+    background-color: grey;
+    background-image: linear-gradient(to bottom, #6e6e6e, #414141);
+}
+.selectize-control.selectize-disabled.multi .selectize-input [data-value] {
+    background-color: grey;
+    background-image: linear-gradient(to bottom, #6e6e6e, #414141);
+}
+
 .selectize-dropdown,
 .selectize-input,
 .selectize-input input {

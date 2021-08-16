@@ -40,7 +40,7 @@ budget.widgets.Contact = function(scope) {
         return frp.liftB(function (site) {
             return getRow(site).get(col);
         }, me.siteTblB_);
-    };
+    }
 
     let header = cd('h2', {class: 'page-heading'}, 'CONTACT US');
     let subHeader = cd('h3', {class: 'page-heading'}, 'Get in touch, we are here for you!');

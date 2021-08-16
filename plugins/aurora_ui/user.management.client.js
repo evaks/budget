@@ -166,6 +166,7 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
                     mrow.set(resetPasswordCol, null);
                     if (row.get(userT.cols.id).db == secContext.userid) {
                         mrow.addRowMeta({removeEnabled: new recoil.ui.BoolWithExplanation(false)});
+			mrow.addCellMeta(groupCol.getKey(), {editable: false, enabled: new recoil.ui.BoolWithExplanation(false)});
                     }
 
                     extraCols.forEach(function(info) {

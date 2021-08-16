@@ -176,6 +176,7 @@ aurora.widgets.Selectize.prototype.updateOptions_ = function(helper) {
         let defOptionRenderer = function(opt) {
                 return goog.dom.createTextNode(opt);
         };
+	goog.dom.classlist.enable(self.wrapper_, "selectize-disabled", self.isDisabled_());
         let renderOption = function(v) {
             let outer = createDom('div', {class: 'option'}, (settings.optionRenderer || defOptionRenderer) (v));
             goog.events.listen(outer, 'mouseenter', function() { self.onOptionHover.apply(self, arguments); });
@@ -2446,10 +2447,10 @@ aurora.widgets.Selectize.prototype.getComponent = function() {
  * @param {!recoil.ui.message.Message|string} name
  * @param {Object=} opt_meta
  */
-aurora.columns.Selectize = recoil.ui.widgets.table.makeStructColumn(aurora.widgets.Selectize);
+aurora.columns.Selectize = recoil.ui.widgets.table.makeStructColumn(aurora.widgets.Selectize, {debug: true});
 
 /**
- *
+ *				// 
  * @param {!recoil.structs.table.ColumnKey} columnKey
  * @param {string|!recoil.ui.message.Message} name
  * @param {!recoil.frp.Behaviour<!Array<{id:?, name: string}>>} refListB
