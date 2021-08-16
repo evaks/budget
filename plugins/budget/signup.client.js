@@ -364,7 +364,7 @@ budget.widgets.SignUp = function(scope, opt_userid) {
 
                 });
                 if (info.schedule) {
-                    inputs.push('schedule', info.schedule);
+                    inputs.push({'schedule': info.schedule});
                 }
                 actionB.set(inputs);
             }, actionB, tableB),

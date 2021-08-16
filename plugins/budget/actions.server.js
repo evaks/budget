@@ -689,6 +689,7 @@ budget.actions.doResetPassword = function(coms, context, reader, uid, secret, pa
  */
 budget.actions.register = function(coms, context, reader, inputs, callback) {
     let userT = aurora.db.schema.tables.base.user;
+    let apptT = aurora.db.schema.tables.base.appointments;
     let groupT = aurora.db.schema.tables.base.group;
     let failCb = function(err) {callback(err, []);};
     if (inputs instanceof Array) {
@@ -751,8 +752,20 @@ budget.actions.register = function(coms, context, reader, inputs, callback) {
                                         callback('Unable to create user', null);
                                     }
                                     else {
-                                        console.log('schedule', object);
-                                        callback(null, res.insertId);
+                                        // check permissions here no anybody can update an appointment
+                                        let scheduleId = object['schedule'];
+                                        if (scheduleId !== undefined && (
+                                            aurora.permissions.has('site-management')(context) ||
+                                                aurora.permissions.has('mentor')(context))
+                                        ) {
+                                            reader.updateOneLevel(context, apptT, {userid: res.insertId}, query.eq(apptT.cols.id, query.val(scheduleId)), function(err) {
+                                                callback(null, res.insertId);
+                                            });
+
+                                        }
+                                        else {
+                                            callback(null, res.insertId);
+                                        }
                                     }
                                 });
                             }
