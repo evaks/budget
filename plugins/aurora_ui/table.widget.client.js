@@ -9,6 +9,30 @@ goog.require('recoil.ui.widgets.ButtonWidget');
 goog.require('recoil.ui.widgets.table.TableWidget');
 
 /**
+ * @param {!recoil.ui.WidgetScope} scope
+ * @param {!recoil.frp.Behaviour} cellB
+ * @return {recoil.ui.Widget}
+ */
+aurora.widgets.TableWidget.delFactory = function(scope, cellB) {
+
+    let ico = goog.dom.createDom('i', {class: 'fas fa-minus-square'});
+    var frp = scope.getFrp();
+    var widget = new recoil.ui.widgets.ButtonWidget(scope);
+    var value = recoil.frp.table.TableCell.getValue(frp, cellB);
+    var meta = frp.liftB(function(m) {
+        let res = goog.object.clone(m);
+        if (m.confirmDelete) {
+            res.confirm = m.confirmDelete;
+        }
+        return res;
+    }, recoil.frp.table.TableCell.getMeta(frp, cellB));
+
+    widget.attachStruct(recoil.frp.struct.extend(frp, meta, {action: value, classes: ['aurora-icon-button'], text: ico}));
+    return widget;
+};
+
+
+/**
  * add columns and actions to make it possible to reorder columns and and rows
  *
  * @param {!recoil.frp.Behaviour<!recoil.structs.table.Table>} tableB
@@ -46,25 +70,7 @@ aurora.widgets.TableWidget.createMovableSizable = function(tableB, opt_movable) 
         widget.attachStruct(recoil.frp.struct.extend(frp, meta, {action: value, classes: ['aurora-icon-button'], text: ico}));
         return widget;
     };
-
-    let delFactory = function(scope, cellB) {
-
-        let ico = goog.dom.createDom('i', {class: 'fas fa-minus-square'});
-        var frp = scope.getFrp();
-        var widget = new recoil.ui.widgets.ButtonWidget(scope);
-        var value = recoil.frp.table.TableCell.getValue(frp, cellB);
-        var meta = frp.liftB(function(m) {
-            let res = goog.object.clone(m);
-            if (m.confirmDelete) {
-                res.confirm = m.confirmDelete;
-            }
-            return res;
-        }, recoil.frp.table.TableCell.getMeta(frp, cellB));
-
-        widget.attachStruct(recoil.frp.struct.extend(frp, meta, {action: value, classes: ['aurora-icon-button'], text: ico}));
-        return widget;
-    };
-
+    let delFactory = aurora.widgets.TableWidget.delFactory;
     let moveFactory = function(scope, cellB) {
 
         let ico = goog.dom.createDom('i', {draggable: false, class: 'aurora-move-icon'});

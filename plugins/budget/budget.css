@@ -530,10 +530,16 @@ div.budget-budget-template div.group-header {
 }
 
 
+
 div.budget-budget-template {
     display:flex;
     flex-direction: column;
     flex-flow: row;
+}
+@media only screen and (max-device-width: 720px) {
+    div.budget-budget-template {
+	flex-flow: column;
+    }
 }
 div.budget-budget-template div.budget-budget-template-column {
     display: flex;
@@ -874,33 +880,17 @@ div.side-bar-control div {
     max-height: calc(100vh - 200px);
     overflow: auto;
 }
-.dialog-table.select-files tr td {
-    padding-right: 10px;
+
+.dialog-message {
+    position: absolute;
+    left: 10px;
+    max-width: calc(100% - 80px);
+    max-height: 35px;
+    overflow: auto;
+    color: lightcoral;
 }
-i.budget-import {
-    display: inline-block;
-    font-size: 10pt;
-    line-height: 23px;
-    user-select: none;
-    padding: 1px 15px 2px 15px;
-    color: white;
-    font-family: arial;
-    border-radius: 1px;
-    -webkit-appearance: button;
-    font-style: normal;
-    background-image: linear-gradient(30deg, #0e420d, #90ae61,#0e420d);
-}
-i.budget-import:hover {
-    background-image: linear-gradient(30deg, #1b7f19, #90ae61,#1b7f19);
-}
-label.budget-import.custom-file-upload {
-    display: inline-block;
-    width: unset;
-    border: none;
-    padding: 0;
-    font-size: unset;
-	       
-}
+
+
 /*div.budget-edit-profile {
     cursor: pointer;
     color: red;
@@ -1039,30 +1029,3 @@ div.budget-div:hover div {
 
 
 
-td.budget-import-link span.goog-checkbox:hover {
-    color: grey;
-}
-td.budget-import-link span.goog-checkbox {
-    -moz-osx-font-smoothing: grayscale;
-    -webkit-font-smoothing: antialiased;
-    display: inline-block;
-    font-style: normal;
-    font-variant: normal;
-    text-rendering: auto;
-    line-height: 1;
-    font-family: 'Font Awesome 5 Free';
-    font-weight: 900;
-    font-size: 14pt;
-    border: 0;
-    background: none;
-    padding-bottom: 4px;
-    cursor: pointer;
-}
-
-td.budget-import-link .goog-checkbox.goog-checkbox-checked::before {
-    content: "\f0c1";
-}
-
-td.budget-import-link .goog-checkbox.goog-checkbox-unchecked::before {
-    content: "\f127";
-}

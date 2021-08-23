@@ -1181,12 +1181,15 @@ function generateDbInit(def, ns, types, out) {
         }
     }
 
-    function closeDeps(depMap, entry, item, seen) {
+    function closeDeps(depMap, entry, item, seen, path) {
         let dependsOn = depMap[item];
-        if (seen[item]) {
-            console.error('loop in dependancies', item, depMap);
+        let found = path.indexOf(item);
+        if (found != -1) {
+            console.error('loop in dependancies', item, depMap, 'path', path, path.indexOf(item));
             process.exit(1);
         }
+        path = path.concat([item]);
+
         seen[item] = true;
         if (entry != item) {
             depMap[entry][item] = true;
@@ -1197,13 +1200,14 @@ function generateDbInit(def, ns, types, out) {
         for (let provider in dependsOn) {
             // a table can reference itself
             if (item !== provider) {
-                closeDeps(depMap, entry, provider, seen);
+
+                closeDeps(depMap, entry, provider, seen, path);
             }
         }
     };
 
     for (let t in depMap) {
-        closeDeps(depMap, t, t, {});
+        closeDeps(depMap, t, t, {}, []);
     }
 
     function depComparator(x, y) {

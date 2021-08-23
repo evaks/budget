@@ -8,6 +8,13 @@
 	    {"id":1, "name": "Household"},
 	    {"id":2, "name": "Debt"}
 	]},
+	"BudgetImportType": {"type": "enum", "enum": [
+	    {"id":0, "name": "Split"},
+	    {"id":1, "name": "Income"},
+	    {"id":2, "name": "Payment"},
+	    {"id":3, "name": "Transfer"},
+	    {"id":4, "name": "Debt"}
+	]},
 	"PeriodType": {"type": "enum", "enum": [
 	    {"id":0, "name": "Daily", "info": {"rate": 1}},
 	    {"id":1, "name": "Weekly", "info": {"rate": 7}},
@@ -215,7 +222,46 @@
 		      ]
 		  }
 		}]
+	},
+	{
+	    "name" : "budget_mappings",
+	    "indexes": [],
+	    "access": "aurora.db.access.basic([{'site-management':'crud'}, {'mentor':'crud'}, {'client':'crud'}, {'': 'r'}])",
+	    "accessFilter": [
+		{"user-management" : "all"},
+		{"mentor": "budget.filter.budgetMentor"},
+		{"": "aurora.db.access.filter.equal('userid','@userid')"}
+		
+	    ],
+	    "columns": [
+		{ "name": "id", "type": "id"},
+		{ "name": "userid", "type": "ref(user)"},
+		{ "name": "entries", "type": "owned-list(budgetid)",
+		  "table": {
+		      "name": "budget_mapping_entry",
+		      "columns": [
+			  {"name": "id", "type": "id"},
+			  {"name": "description", "type": "string(100)", "default": ""},
+			  {"name": "reference", "type": "string(100)", "default": ""},
+			  {"name": "particulars", "type": "string(100)", "default": ""},
+			  {"name": "type", "type": "BudgetEntryType", "nullable": true},
+			  {"name": "importType", "type": "BudgetImportType"},
+			  {"name": "splits", "type": "owned-list(mappingid)",
+			   "table": {
+			       "name": "budget_mapping_split",
+			       "columns": [
+				   {"name": "id", "type": "id"},
+				   {"name": "description", "type": "string(100)", "default": ""},
+				   {"name": "importType", "type": "BudgetImportType"},
+				   {"name": "amount", "type": "int", "default": 0}
+			       ]
+			   }
+			  }
+		      ]
+		  }
+		}]
 	}
+
 		
     ],
 

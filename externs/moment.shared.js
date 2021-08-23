@@ -12,7 +12,12 @@ var Moment = function () {};
 Moment.prototype.add =  function (amount, unit) {};
 Moment.prototype.calendar =  function () {};
 Moment.prototype.clone =  function () {};
-Moment.prototype.diff =  function () {};
+/**
+ * @param {Moment|Date} other
+ * @param {string} unit
+ * @return {number}
+ */
+Moment.prototype.diff =  function (other, unit) {};
 Moment.prototype.endOf =  function () {};
 /**
  * @param {string=} format
@@ -23,7 +28,11 @@ Moment.prototype.from =  function () {};
 Moment.prototype.fromNow =  function () {};
 Moment.prototype.to =  function () {};
 Moment.prototype.toNow =  function () {};
-Moment.prototype.get =  function () {};
+/**
+ * @param {string=} opt_unit
+ * @return {number}
+ */
+Moment.prototype.get =  function (opt_unit) {};
 Moment.prototype.invalidAt =  function () {};
 Moment.prototype.isAfter =  function () {};
 Moment.prototype.isBefore =  function () {};
@@ -108,6 +117,20 @@ Moment.prototype.zone =  function () {};
 Moment.prototype.isDSTShifted =  function () {};
 
 /**
+ * @constructor
+ */
+var Duration = function () {};
+
+/**
+ * @return {number}
+ */
+Duration.prototype.asMonths = function() {};
+
+/**
+ * @return {number}
+ */
+Duration.prototype.asDays = function() {};
+/**
  * @param {(Date|Array|Object|string|number)=} opt_time
  * @param {(string|Array<string>)=} opt_format
  * @param {string=} opt_lang
@@ -138,7 +161,11 @@ moment.months =  function () {};
 moment.isDate =  function () {};
 moment.locale =  function () {};
 moment.invalid =  function () {};
-moment.duration =  function () {};
+/**
+ * @param {number} diff
+ * @return {!Duration}
+ */
+moment.duration =  function (diff) {};
 moment.isMoment =  function () {};
 moment.weekdays =  function () {};
 /**

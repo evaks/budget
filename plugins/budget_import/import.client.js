@@ -6,6 +6,12 @@ goog.provide('budget.Importer');
  */
 budget.ImportRow;
 
+
+/**
+ * @typedef {{start:?,stop:?number, rows: !Array<!budget.ImportRow>}}
+ */
+budget.ImportData;
+
 /**
  * @interface
  */

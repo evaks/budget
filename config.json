@@ -1,4 +1,5 @@
 {
+    "logName": "budget",
     "authentication": {
 	"sessionTable" : "aurora.auth.DbSessionTable.factory",
 	"persistantTimeoutMins" : 525600,

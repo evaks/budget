@@ -105,10 +105,6 @@ aurora.db.PermDatabase.addTablePermissions = function(table, tableT) {
     }
 
     table.forEachColumn(function(col) {
-        if (col.getName() === 'description') {
-            console.log('col perm ', col.getName());
-        }
-
         let access = aurora.db.PermDatabase.getColAccess(perms, col);
         if (baseEditable != (access('c') || access('u'))) {
             table.addColumnMeta(col, {editable: !baseEditable});

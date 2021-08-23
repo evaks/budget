@@ -25,13 +25,14 @@ budget.widgets.ClientView = function(scope) {
     let cd = goog.dom.createDom;
     let budgetDiv = cd('div', {class: 'budget-div'});
     let budgetBodyDiv = cd('div', {class: 'budget-body-div'});
+    let budgetImportBodyDiv = cd('div', {class: 'budget-body-div'});
     let profileBodyDiv = cd('div', {class: 'profile-body-div'});
     let notesBodyDiv = cd('div', {class: 'notes-body-div'});
     let documentsBodyDiv = cd('div', {class: 'documents-body-div'});
     let appointmentDiv = cd('div', {class: 'appointment-div'});
     let appointmentBodyDiv = cd('div', {class: 'appointment-body-div'});
     let mess = budget.messages;
-    let bodyDiv = cd('div', {class: 'body-div'}, budgetBodyDiv, profileBodyDiv, notesBodyDiv, documentsBodyDiv, appointmentBodyDiv);
+    let bodyDiv = cd('div', {class: 'body-div'}, budgetBodyDiv, budgetImportBodyDiv, profileBodyDiv, notesBodyDiv, documentsBodyDiv, appointmentBodyDiv);
     let notLoggedInDiv = cd('div', {class: 'not-logged-in'}, mess.NOT_LOGGED_IN.toString());
     let profileDiv = cd('div', {class: 'budget-edit-profile'}, aurora.messages.VIEW_EDIT_PROFILE.toString());
     let notesDiv = cd('div', {class: 'budget-edit-profile'}, mess.NOTES.toString());
@@ -40,7 +41,10 @@ budget.widgets.ClientView = function(scope) {
     let appointmentListWidget = new budget.widgets.AppointmentList(scope);
     let budgetListWidget = new budget.widgets.BudgetList(scope);
     let budgetWidget = new budget.widgets.Budget(scope);
+    let budgetImportWidget = new budget.widgets.import.Wizard(scope);
     let screenB = recoil.ui.frp.LocalBehaviour.create(frp, '1', 'budget.client.menu.screen', 'profile', localStorage);
+    let importCompleteE = budgetImportWidget.getFinishedE().debug('import complete ********************************');
+
     let logic = recoil.frp.logic;
     let html = new recoil.ui.HtmlHelper(scope);
     let showProfileB = logic.equal('profile', screenB);
@@ -59,7 +63,6 @@ budget.widgets.ClientView = function(scope) {
     html.show(usernameDiv, logic.not(collapsedB));
     html.class(slideMenuControl, recoil.frp.Chooser.if(collapsedB, 'slide-menu-control-collapse', 'slide-menu-control'));
 
-    html.show(budgetBodyDiv, logic.equal('budget', screenB));
     html.show(profileBodyDiv, showProfileB);
     html.show(notesBodyDiv, showNotesB);
     html.show(documentsBodyDiv, showDocumentsB);
@@ -72,6 +75,7 @@ budget.widgets.ClientView = function(scope) {
     appointmentListWidget.getComponent().render(appointmentDiv);
     budgetListWidget.getComponent().render(budgetDiv);
     budgetWidget.getComponent().render(budgetBodyDiv);
+    budgetImportWidget.getComponent().render(budgetImportBodyDiv);
 
 
     let idStr = budget.widgets.BudgetList.getUserId();
@@ -142,14 +146,27 @@ budget.widgets.ClientView = function(scope) {
     let container = cd('div', {class: 'side-list-page'}, sidePanel,
                        contentPanel, notLoggedInDiv);
 
-    let selectedBugdetB = budgetListWidget.createSelected();
+    let selectedBudgetB = budgetListWidget.createSelected();
     let selectedApptB = appointmentListWidget.createSelected();
+    let importSelectedB = frp.liftB(function(sel) {
+        return sel && sel.length === 1 && sel[0] && sel[0][0] === null;
+    }, selectedBudgetB);
 
-    budgetWidget.attach(selectedBugdetB);
+    let importHelper = new recoil.ui.WidgetHelper(scope, container, null, function() {
+        let complete = importCompleteE.get();
+        if (selectedBudgetB.good() && complete.length > 0) {
+            selectedBudgetB.set([complete[0]]);
+            console.log('imported', complete, selectedBudgetB.get());
+        }
+    });
+    importHelper.attach(importCompleteE, selectedBudgetB);
+    html.show(budgetBodyDiv, logic.and(logic.equal('budget', screenB), logic.not(importSelectedB)));
+    html.show(budgetImportBodyDiv, logic.and(logic.equal('budget', screenB), importSelectedB));
+    budgetWidget.attach(selectedBudgetB);
     appointmentWidget.attach(selectedApptB);
 
     var helper = new recoil.ui.WidgetHelper(scope, container, null, function() {
-        let val = selectedBugdetB.get();
+        let val = selectedBudgetB.get();
         if (val && val.length > 0) {
             screenB.set('budget');
         }
@@ -159,14 +176,14 @@ budget.widgets.ClientView = function(scope) {
         goog.style.setElementShown(notLoggedInDiv, secContextB.good() && !hasPerm);
 
     });
-    helper.attach(selectedBugdetB, screenB, secContextB);
+    helper.attach(selectedBudgetB, screenB, secContextB);
 
     let setScreen = function(screen) {
         return frp.accessTransFunc(function() {
             screenB.set(screen);
-            selectedBugdetB.set([]);
+            selectedBudgetB.set([]);
             selectedApptB.set([]);
-        }, screenB, selectedBugdetB, selectedApptB);
+        }, screenB, selectedBudgetB, selectedApptB);
     };
     goog.events.listen(profileDiv, goog.events.EventType.CLICK, setScreen('profile'));
     goog.events.listen(notesDiv, goog.events.EventType.CLICK, setScreen('notes'));

@@ -48,7 +48,6 @@ budget.access.avialablity = function() {
 budget.filter.userMentor = function(context) {
     let query = new recoil.db.Query();
 
-    console.log('context', context);
     return query.or(
         query.eq('@userid', 'id'),
         query.eq('@userid', 'mentorid'),
@@ -56,6 +55,7 @@ budget.filter.userMentor = function(context) {
 
     );
 };
+
 
 
 /**
@@ -112,7 +112,6 @@ budget.filter.client = function(context) {
 };
 
 
-
 /**
  * @param {aurora.db.access.SecurityContext} context
  * @return {!recoil.db.Query}
@@ -120,8 +119,12 @@ budget.filter.client = function(context) {
 budget.filter.budgetMentor = function(context) {
     let query = new recoil.db.Query();
 
+    let userIdField = new recoil.db.Query();
+
     return query.or(
-        query.eq('@userid', 'userid'),
-        query.eq('@userid', query.field(['userid', 'mentorid']))
+        query.eq('@userid', query.field('userid')),
+        query.isIn(query.field('userid'), [query.raw('(SELECT id FROM `user` where mentorid = ' + context.userid + ')')]),
+        query.isIn(query.field('userid'), [query.raw('(SELECT userid FROM `appointments` where mentorid = ' + context.userid + ')')])
+
     );
 };

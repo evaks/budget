@@ -691,3 +691,40 @@ budget.messages.ADD_APPOINTMENT = recoil.ui.message.getParamMsg('Click to Add');
  * @final
  */
 budget.messages.YOU_MUST_HAVE_AT_LEAST_2_SPLITS = recoil.ui.message.getParamMsg('You must have at least 2 splits.');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.START_DATE_MUST_BE_BEFORE_END_DATE = recoil.ui.message.getParamMsg('Start date must be before end date');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.FILL_OUT_ALL_CATEGORIES = recoil.ui.message.getParamMsg('Fill in all categories');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.YOU_MUST_HAVE_AT_LEAST_1_FILE = recoil.ui.message.getParamMsg('You must have at least 1 file');
+
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.THERE_ARE_INVALID_FILES = recoil.ui.message.getParamMsg('There are invalid files');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.LONGER_TIME_RANGE_RECOMENDED = recoil.ui.message.getParamMsg('Longer time range recomended');
+

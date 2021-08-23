@@ -590,6 +590,14 @@ aurora.db.Helper.createSubTableB = function(schema, tableB, pkB, col) {
         tableB.set(res.freeze());
     }, tableB, pkB);
 };
+
+/**
+ * @param {!aurora.db.schema.TableType} tbl
+ * @return {recoil.structs.table.Table}
+ */
+aurora.db.Helper.createEmptyTable = function(tbl) {
+    return aurora.db.Helper.createTable(recoil.db.ChangeSet.Path.fromString(tbl.info.path), []);
+};
 /**
  * @param {!recoil.db.ChangeSet.Path} path
  * @param {Object} value
@@ -757,7 +765,6 @@ aurora.db.Helper.prototype.keyToQuery_ = function(inKey) {
  * @param {!recoil.db.QueryOptions} options
  */
 aurora.db.Helper.prototype.get_ = function(success, failure, id, inKey, options) {
-    console.log('check action, id', id.getData());
     if (id.getData().action) {
         success({action: null, data: null, output: null, enabled: recoil.ui.BoolWithExplanation.TRUE});
         return;
@@ -854,7 +861,6 @@ aurora.db.Helper.prototype.updateEffectedTables = function(changes, currentError
     idMap.inOrderTraverse(function(entry) {
         let pk = entry.key.lastKeys()[0];
         let newPk = new aurora.db.PrimaryKey(entry.id, pk.mem);
-        console.log('adding pk', pk, 'newPk', newPk);
         let tbl = aurora.db.schema.getTableByName(entry.key);
         let tblInfo = me.tblMap_.findFirst({key: tbl.key.uniqueId()});
         if (tblInfo) {
@@ -867,7 +873,6 @@ aurora.db.Helper.prototype.updateEffectedTables = function(changes, currentError
 
         me.db_.updatePk(me.schema_, entry.key, [newPk]);
     });
-    console.log('id map', idMap.toList());
     this.tblMap_.inOrderTraverse(function(qEntry) {
         qEntry.queries.inOrderTraverse(function(entry) {
             var tblInfo = entry.value;
