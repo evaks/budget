@@ -181,13 +181,15 @@ budget.widgets.BudgetList.prototype.createSelected = function() {
     let frp = this.scope_.getFrp();
     return frp.liftBI(function(budget, selImport, budgetChanges, importChanges) {
         console.log('changes', budgetChanges, importChanges);
-
-        if (budgetChanges.length > 0) {
+        // we we have non empty selection changes
+        let nonEmpty = (a, v) => a || v.length > 0;
+        if (budgetChanges.reduce(nonEmpty, false)) {
             selectedImport.set([]);
             return budget;
         }
 
-        if (importChanges.length > 0) {
+        // we we have non empty selection changes
+        if (importChanges.reduce(nonEmpty, false)) {
             selectedBudget.set([]);
             return selImport;
         }

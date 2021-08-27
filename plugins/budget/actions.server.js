@@ -1,8 +1,8 @@
 goog.provide('budget.actions');
 
-
 goog.require('aurora.log');
 goog.require('aurora.permissions');
+goog.require('budget.appointments');
 goog.require('config');
 goog.require('recoil.db.Query');
 
@@ -264,22 +264,27 @@ budget.actions.requestResetPassword = function(coms, context, reader, inputs, ca
  * @param {function (?, !Array)} callback (error, outputs)
  */
 budget.actions.sendAppointmentEmail_ = function(context, mentor, user, start, length, uuid, callback) {
-    const ics = require('ics');
     let mod = 'SCHEDULE';
     let log = aurora.log.createModule(mod);
+    log.info('sending emailxx');
+    const ics = require('ics');
+    log.info('requiring ics');
+    let toEmail = [user, mentor].filter(function(v) { return v.email && v.email.indexOf('@') > 0;});
+    if (toEmail.length === 0) {
+        // its ok no one specified an email so we just won't send an email
+        callback(null, []);
+        return;
+    }
+
     budget.actions.getEmailTransporterInfo_(context, function(err, transporter, emailInfo, previewer) {
+        log.info('got transporter', err);
+
         if (err) {
             log.error('unable to create email info to schedule appointment', err);
             callback('Unable able to create email', []);
             return;
         }
 
-        let toEmail = [user, mentor].filter(function(v) { return v.email && v.email.indexOf('@') > 0;});
-        if (toEmail.length === 0) {
-            // its ok no one specified an email so we just won't send an email
-            callback(null, []);
-            return;
-        }
 
         log.info('sending emails to', toEmail.map(function(v) {return v.email;}));
         let startDate = new Date(start);
@@ -440,6 +445,90 @@ budget.actions.getApptUsers_ = function(context, reader, mentorid, userid, email
         });
 
 };
+
+/**
+ * @param {!aurora.db.access.SecurityContext} context
+ * @param {number} mentorid
+ * @param {?number} userid
+ * @param {function (?, !Array)} callback (error, outputs)
+ * @return {boolean}
+ */
+budget.actions.scheduleAppointmentSecCheck_ = function(context, mentorid, userid, callback) {
+    if (!aurora.permissions.has('site-management')(context)) {
+        if (aurora.permissions.has('mentor')) {
+            if (context.userid != mentorid && context.userid != userid) {
+                callback('Access Denied', []);
+                return false;
+            }
+        }
+        else if (aurora.permissions.has('client')) {
+            if (context.userid != userid) {
+                callback('Access Denied', []);
+                return false;
+            }
+        }
+        else {
+            callback('Access Denied', []);
+            return false;
+        }
+    }
+    return true;
+};
+
+/**
+ * @private
+ * @param {!aurora.db.Coms} coms
+ * @param {!aurora.db.access.SecurityContext} context
+ * @param {number} time
+ * @param {number} length
+ * @param {function (?, !Array)} callback (error, outputs)
+ * @return {function(?, number, Object, Object,Array)}
+ */
+budget.actions.scheduleAppointmentDoneFunc_ = function(
+    coms, context, time, length, callback) {
+    let mod = 'SCHEDULE';
+    let log = aurora.log.createModule(mod);
+    return function(err, id, mentorObj, userObj, changes) {
+            if (err) {
+                callback(err, []);
+            }
+        else {
+            // don't wait for email to be sent its scheduled irrelevant on the appointment being sent
+            callback(err, [id]);
+
+            log.info('User', context.userid, 'Scheduled appointment for ', userObj.id, 'mentor', mentorObj.id);
+            budget.actions.sendAppointmentEmail_(context, /** @type {!Object} */ (mentorObj), /** @type {!Object} */ (userObj), time, length, null, function(err, val) {
+                if (changes.length > 0) {
+                    coms.notifyListeners(changes, {}, function() {});
+                }
+            });
+        }
+    };
+};
+
+/**
+ * @param {?} id
+ * @return {string}
+ */
+budget.actions.createScheduleId = function(id) {
+    return new Date().getTime() + '.' + id + '@' + config.http.hostname;
+};
+
+/**
+ * creates al ist of paths that need to be notified for a schedule change
+ * @param {?} id
+ * @return {!Array<!recoil.db.ChangeSet.Path>}
+ */
+budget.actions.createSchedulePaths = function(id) {
+    let apptT = aurora.db.schema.tables.base.appointments;
+    let secApptT = aurora.db.schema.tables.base.secure_appts;
+
+    return [
+        recoil.db.ChangeSet.Path.fromString(apptT.info.path).setKeys([apptT.info.pk.getName()], [BigInt(id)]),
+        recoil.db.ChangeSet.Path.fromString(secApptT.info.path).setKeys([apptT.info.pk.getName()], [BigInt(id)])];
+
+};
+
 /**
  * @param {!aurora.db.Coms} coms
  * @param {!aurora.db.access.SecurityContext} context
@@ -463,23 +552,8 @@ budget.actions.scheduleAppointment = function(coms, context, reader, apptId, men
     // first some security checks
     log.info('Scheduling appointment');
 
-    if (!aurora.permissions.has('site-management')(context)) {
-        if (aurora.permissions.has('mentor')) {
-            if (context.userid != mentorid && context.userid != userid) {
-                callback('Access Denied', []);
-                return;
-            }
-        }
-        else if (aurora.permissions.has('client')) {
-            if (context.userid != userid) {
-                callback('Access Denied', []);
-                return;
-            }
-        }
-        else {
-            callback('Access Denied', []);
-            return;
-        }
+    if (!budget.actions.scheduleAppointmentSecCheck_(context, mentorid, userid, callback)) {
+        return;
     }
     let uuid = null;
     let name = ((firstName || '') + (lastName || '')).trim();
@@ -490,7 +564,6 @@ budget.actions.scheduleAppointment = function(coms, context, reader, apptId, men
         }
         // we can send to a non existant user
         let userEmail = email;
-        let change = null;
         reader.transaction(function(reader, transCb) {
             reader.readObjects(context, apptT, query.and(
                 query.eq(apptT.cols.mentorid, query.val(mentorid)),
@@ -510,39 +583,212 @@ budget.actions.scheduleAppointment = function(coms, context, reader, apptId, men
                             transCb('Mentor already has an appointment scheduled');
                             return;
                         }
-                        uuid = new Date().getTime() + '.' + a.id + '@' + config.http.hostname;
+                        uuid = budget.actions.createScheduleId(a.id);
                         reader.updateOneLevel(context, apptT, {scheduled: uuid}, query.eq(apptT.cols.id, query.val(a.id)), function(err) {
-                            let path = recoil.db.ChangeSet.Path.fromString(apptT.info.path).setKeys([apptT.info.pk.getName()], [a.id]);
-                            change = new recoil.db.ChangeSet.Set(path.appendName('scheduled'), null, uuid);
-                            transCb(err);
+                            let changes = budget.actions.createSchedulePaths(a.id).map(
+                                path => new recoil.db.ChangeSet.Set(path.appendName('scheduled'), null, uuid));
+                            changes.push();
+                            transCb(err, a.id, mentorObj, userObj, changes);
                         });
                     }
                     else {
-                        // this is a new appointment
+                        transCb('Appointment does not exist');
                     }
                 });
-        }, function(err) {
-            if (err) {
-                callback(err, []);
-            }
-            else {
-
-                budget.actions.sendAppointmentEmail_(context, /** @type {!Object} */ (mentorObj), /** @type {!Object} */ (userObj), time, length, null, function(err, val) {
-                    if (change) {
-                        coms.notifyListeners([change], {}, function() {
-                            callback(err, val);
-                        });
-                    }
-                    else {
-                        callback(err, val);
-                    }
-
-                });
-            }
-        });
-        // now schedule them event the calander
-
+        }, budget.actions.scheduleAppointmentDoneFunc_(coms, context, time, length, callback));
     });
+};
+
+/**
+ * @param {number} start
+ * @param {number} stop
+ * @param {!Array} avail
+ * @return {boolean}
+ */
+budget.actions.isAvailable_ = function(start, stop, avail) {
+    let found = [];
+    let periodStart = new Date(start).setHours(0, 0, 0, 0);
+    let periodStop = new Date(stop).setHours(24, 0, 0, 0);
+
+    for (let i = 0; i < avail.length; i++) {
+        let a = avail[i];
+        budget.appointments.iterateOverPeriod(
+            null, a.start, a.stop, a.repeat, a.len, periodStart, periodStop,
+            function(start, stop) {
+                found.push({start: start, stop: stop});
+            });
+    }
+    budget.appointments.mergeDayUsage(found, true);
+    for (let i = 0; i < found.length; i++) {
+        let e = found[i];
+        if (start >= e.start && stop <= e.stop) {
+            return true;
+        }
+    }
+    return false;
+};
+
+/**
+ * @param {!aurora.db.Coms} coms
+ * @param {!aurora.db.access.SecurityContext} context
+ * @param {!aurora.db.Reader} reader
+ * @param {number} mentorid
+ * @param {number} userid
+ * @param {number} start
+ * @param {number} stop
+ * @param {function (?, !Array=)} callback (error, outputs)
+ */
+budget.actions.addAppointment = function(coms, context, reader, mentorid, userid, start, stop, callback) {
+    let mod = 'SCHEDULE';
+    let log = aurora.log.createModule(mod);
+
+    if (!budget.actions.scheduleAppointmentSecCheck_(context, mentorid, userid, callback)) {
+        return;
+    }
+
+    if (start > stop) {
+        callback('Invalid Appointment Length');
+        return;
+    } else if (stop < new Date().getTime()) {
+        callback('Can\'t schedule an appointment in the past');
+        return;
+    }
+
+    let holidaysT = aurora.db.schema.tables.base.site_holidays;
+    let appointmentsT = aurora.db.schema.tables.base.appointments;
+    let availT = aurora.db.schema.tables.base.mentor_availablity;
+    let groupT = aurora.db.schema.tables.base.group;
+    let permissionT = aurora.db.schema.tables.base.permission;
+    let usersT = aurora.db.schema.tables.base.user;
+    let length = stop - start;
+
+    let addAppointment = async function(reader) {
+        let query = new recoil.db.Query();
+
+        let mentorPerm = await reader.readObjectsAsync(
+            context, permissionT, query.eq(query.field(permissionT.cols.name), query.val('mentor')), null);
+        if (mentorPerm.length === 0) {
+            throw 'Internal Error no mentor permission';
+        }
+
+        let users = await reader.readObjectsAsync(
+            context, usersT, query.eq(query.field(usersT.cols.id), query.val(userid)), null);
+
+        let mentors = await reader.readObjectsAsync(
+            context, usersT, query.eq(query.field(usersT.cols.id), query.val(mentorid)), null);
+
+        if (users.length != 1) {
+            throw 'User does not exist';
+        }
+
+        if (mentors.length != 1) {
+            throw 'Mentor does not exist';
+        }
+
+        let mentorGroups = await reader.readObjectsAsync(
+            context, groupT, query.isIn(query.field(groupT.cols.id), mentors[0].groups.map(x => x.groupid)), null);
+
+        let user = users[0];
+        let isMentor = false;
+        let mentorPermId = mentorPerm[0].id;
+        for (let i = 0; !isMentor && i < mentorGroups.length; i++) {
+            isMentor = mentorGroups[i].permission.reduce((a, v) => a || v.permissionid == mentorPermId, false);
+        }
+        if (!isMentor) {
+            throw 'Must schedule an appointment with a mentor';
+        }
+
+        // ae > b and ab < e
+        // no ae <= b or ab >= e
+        let appointments = await reader.readObjectsAsync(
+            context, appointmentsT,
+            query.and(
+                query.eq(appointmentsT.cols.mentorid, query.val(mentorid)),
+                query.gt(query.field(appointmentsT.cols.stop), query.val(start)),
+                query.lt(query.field(appointmentsT.cols.start), query.val(stop))), null);
+        if (appointments.length > 0) {
+            throw 'Overlapps with another appointment';
+        }
+
+        let avail = await reader.readObjectsAsync(
+            context, availT,
+            query.and(
+                query.eq(availT.cols.mentorid, query.val(mentorid)),
+                query.or(
+                    query.gt(query.field(availT.cols.stop), query.val(start)),
+                    query.null(query.field(availT.cols.stop))),
+                query.lt(query.field(availT.cols.start), query.val(stop))), null);
+
+        if (!budget.actions.isAvailable_(start, stop, avail)) {
+            throw 'Mentor is not available';
+        }
+        let holidays = await reader.readObjectsAsync(
+            context, holidaysT,
+            query.and(
+                query.gt(query.field(holidaysT.cols.stop), query.val(start)),
+                query.lt(query.field(holidaysT.cols.start), query.val(stop))), null);
+
+        if (holidays.length > 0) {
+            throw 'Overlapps with holiday';
+        }
+
+
+        let appt = {
+            showed: 0, mentorid: mentorid, scheduled: null, userid: userid,
+            start, stop, firstName: user.firstName || '', lastName: user.lastName || '',
+            phone: user.phone || '' , email: user.email || '', address: user.address || ''};
+        let res = await reader.insertAsync(context, appointmentsT, appt);
+        appt.id = res.insertId;
+        let uuid = budget.actions.createScheduleId(appt.id);
+        await reader.updateOneLevelAsync(
+            context, appointmentsT, {scheduled: uuid},
+            query.eq(appointmentsT.cols.id, query.val(appt.id)));
+        return {user: user, mentor: mentors[0], id: appt.id, object: appt};
+
+    };
+    log.info('User', context.userid, 'Scheduling appointment for ', userid, 'mentor', mentorid, start, stop);
+    reader.transaction(function(reader, transCb) {
+        addAppointment(reader).then(
+            function(info) {
+                let changes = budget.actions.createSchedulePaths(info.id).map(
+                    path => budget.actions.makeAddChange_(path, info.object));
+                transCb(null, info.id, info.mentor, info.user, changes);
+
+            }, function(err) {
+                transCb(err);
+            });
+    }, budget.actions.scheduleAppointmentDoneFunc_(coms, context, start, length, callback));
+};
+
+/**
+ * @param {!aurora.db.Coms} coms
+ * @param {!aurora.db.access.SecurityContext} context
+ * @param {!aurora.db.Reader} reader
+ * @param {number} apptid
+ * @param {function (?, !Array)} callback (error, outputs)
+ */
+budget.actions.removeAppointment = function(coms, context, reader, apptid, callback) {
+    budget.actions.unscheduleAppointmentInternal(coms, context, reader, apptid, true, callback);
+};
+
+/**
+ * @param {!recoil.db.ChangeSet.Path} path
+ * @param {Object} object
+ * @return {!recoil.db.ChangeSet.Add}
+ */
+budget.actions.makeAddChange_ = function(path, object) {
+    let deps = [];
+
+    let meta = aurora.db.schema.getTableByName(path).meta;
+
+    for (let k in meta) {
+        let m = meta[k];
+        if (object.hasOwnProperty(k) && !m.primary) {
+            deps.push(new recoil.db.ChangeSet.Set(path.appendName(k), null, object[k]));
+        }
+    }
+
+    return new recoil.db.ChangeSet.Add(path, deps);
 };
 
 /**
@@ -553,7 +799,19 @@ budget.actions.scheduleAppointment = function(coms, context, reader, apptId, men
  * @param {function (?, !Array)} callback (error, outputs)
  */
 budget.actions.unscheduleAppointment = function(coms, context, reader, apptid, callback) {
+    budget.actions.unscheduleAppointmentInternal(coms, context, reader, apptid, false, callback);
+};
+/**
+ * @param {!aurora.db.Coms} coms
+ * @param {!aurora.db.access.SecurityContext} context
+ * @param {!aurora.db.Reader} reader
+ * @param {number} apptid
+ * @param {boolean} remove
+ * @param {function (?, !Array)} callback (error, outputs)
+ */
+budget.actions.unscheduleAppointmentInternal = function(coms, context, reader, apptid, remove, callback) {
     let apptT = aurora.db.schema.tables.base.appointments;
+    let secApptT = aurora.db.schema.tables.base.secure_appts;
     let query = new recoil.db.Query();
 
     let mod = 'SCHEDULE';
@@ -563,7 +821,7 @@ budget.actions.unscheduleAppointment = function(coms, context, reader, apptid, c
     if (!aurora.permissions.hasAny(['mentor', 'client', 'site-management'])) {
         callback('Access Denied', []);
     }
-    let change = null;
+    let changes = [];
     let userObj = null;
     let mentorObj = null;
     let a = null;
@@ -583,13 +841,13 @@ budget.actions.unscheduleAppointment = function(coms, context, reader, apptid, c
 
                 if (aurora.permissions.has('mentor')) {
                     if (context.userid != a.mentorid && context.userid != a.userid) {
-                        transCb('Mentor Access Denied ');
+                        transCb('Access Denied');
                         return;
                     }
                 }
                 else if (aurora.permissions.has('client')) {
                     if (context.userid != a.userid) {
-                        transCb('Client Access Denied');
+                        transCb('Access Denied');
                         return;
                     }
                 } else {
@@ -604,11 +862,30 @@ budget.actions.unscheduleAppointment = function(coms, context, reader, apptid, c
                 }
                 mentorObj = mentorObj1;
                 userObj = userObj1;
-                reader.updateOneLevel(context, apptT, {scheduled: uuid}, query.eq(apptT.cols.id, query.val(a.id)), function(err) {
-                    let path = recoil.db.ChangeSet.Path.fromString(apptT.info.path).setKeys([apptT.info.pk.getName()], [BigInt(a.id)]);
-                    change = new recoil.db.ChangeSet.Set(path.appendName('scheduled'), null, null);
-                    transCb(err);
-                });
+
+                let path = recoil.db.ChangeSet.Path.fromString(apptT.info.path).setKeys([apptT.info.pk.getName()], [BigInt(a.id)]);
+                let secPath = recoil.db.ChangeSet.Path.fromString(secApptT.info.path).setKeys([apptT.info.pk.getName()], [BigInt(a.id)]);
+                if (remove) {
+                    reader.deleteObjects(context, apptT,
+                                         query.eq(apptT.cols.id, query.val(a.id)),
+                                         null, function(err) {
+                        if (!err) {
+                            changes.push(new recoil.db.ChangeSet.Delete(path, null));
+                            changes.push(new recoil.db.ChangeSet.Delete(secPath, null));
+                        }
+
+                        transCb(err);
+                    });
+                }
+                else {
+                    reader.updateOneLevel(context, apptT, {scheduled: uuid}, query.eq(apptT.cols.id, query.val(a.id)), function(err) {
+
+                        if (!err) {
+                            changes.push(new recoil.db.ChangeSet.Set(path.appendName('scheduled'), null, null));
+                        }
+                        transCb(err);
+                    });
+                }
             });
 
         });
@@ -625,9 +902,8 @@ budget.actions.unscheduleAppointment = function(coms, context, reader, apptid, c
                 if (err) {
                     log.warn('Error sending cancel email', err);
                 }
-                if (change) {
-                    console.log('sending changes', change.path().toString());
-                    coms.notifyListeners([change], {}, function() {
+                if (changes.length > 0) {
+                    coms.notifyListeners(changes, {}, function() {
                         console.log('action done');
                         callback(err, []);
                     });
@@ -706,11 +982,24 @@ budget.actions.register = function(coms, context, reader, inputs, callback) {
         object[userT.cols.active.getName()] = true;
         object[userT.cols.lastinvalidtime.getName()] = null;
         object[userT.cols.lockcount.getName()] = 0;
+        let mentorid = object[userT.cols.mentorid.getName()];
+
         object[userT.cols.mentorid.getName()] = null;
         let query = new recoil.db.Query();
         let username = object[userT.cols.username.getName()];
         let password = object[userT.cols.password.getName()];
-
+        if (aurora.permissions.has('mentor')(context)) {
+            // mentors can create clients
+            if (mentorid == undefined) {
+                mentorid = context.userid;
+            }
+            else {
+                object[userT.cols.mentorid.getName()] = mentorid;
+            }
+        } else if (aurora.permissions.has('user-management')(context) ||
+                   aurora.permissions.has('site-management')(context)) {
+            object[userT.cols.mentorid.getName()] = mentorid;
+        }
 
         let makeUser = function(username) {
             object[userT.cols.username.getName()] = username.toLowerCase();

@@ -50,7 +50,7 @@ aurora.widgets.TableDialog = function(scope, table, callbackB, buttonName, valid
         });
         if (opt_options && opt_options.blockErrors) {
             tbl.forEachPlacedColumn(function(col) {
-                errorCount += (myRow.getCellMeta(col).errors || []).length > 0;
+                errorCount += (myRow.getCellMeta(col).errors || []).length;
             });
         }
         if (errorCount > 0) {
@@ -180,7 +180,7 @@ aurora.widgets.TableDialog = function(scope, table, callbackB, buttonName, valid
 
     }, dataB, outErrorsB);
     tableWidget.attachStruct(metaTableB);
-
+    this.behaviourB_ = metaTableB;
 
     var errorDiv = goog.dom.createDom('div', {class: 'table-dialog-error'});
 
@@ -265,15 +265,40 @@ aurora.widgets.TableDialog.prototype.getComponent = function() {
     return this.tableWidget_.getComponent();
 };
 
+
+/**
+ * @param {!recoil.frp.Frp} frp
+ * @param {!goog.ui.Dialog} dialog
+ * @param {!recoil.frp.Behaviour} behaviour
+ * @param {boolean} show
+ */
+aurora.widgets.TableDialog.show = function(frp, dialog, behaviour, show) {
+    // we want the behaviour to error or load before we show the
+    // dialog so it is placed correctly
+    if (!show) {
+        dialog.setVisible(show);
+    }
+    else {
+        let tempB = frp.metaLiftB(function(status) {
+            if (status.ready()) {
+                dialog.setVisible(show);
+                if (show) {
+                    aurora.widgets.TableDialog.focusFirst(dialog);
+                }
+                frp.detach(tempB);
+
+            }
+            return status;
+        }, behaviour);
+        frp.attach(tempB);
+    }
+};
 /**
  *
  * @param {boolean} show
  */
 aurora.widgets.TableDialog.prototype.show = function(show) {
-    this.dialog_.setVisible(show);
-    if (show) {
-        aurora.widgets.TableDialog.focusFirst(this.dialog_);
-    }
+    aurora.widgets.TableDialog.show(this.frp_, this.dialog_, this.behaviourB_, show);
 };
 
 /**

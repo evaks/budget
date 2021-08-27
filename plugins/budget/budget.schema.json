@@ -24,6 +24,17 @@
 	    {"id":5, "name": "Yearly", "info": {"rate": 365}}
 	], "null" : "None"}
     },
+    "views": [
+	{
+	    "name" : "secure_appts",
+	    "access": "aurora.db.access.basic([{'': 'r'}])",
+	    "accessFilter": [{"" : "all"}],
+	    "filter": [{"" : "all"}],
+	    "table": "appointments",
+	    "columns": [{"name":"id"},{"name":"userid"}, {"name":"mentorid"}, {"name":"start"}, {"name":"stop"}]
+	}
+    ],
+
     "tables": [
 	{
 	    "name" : "site",
@@ -267,6 +278,14 @@
 
     "actions": [
 	{
+	    "path": "/schedule/add",
+	    "function": "budget.actions.addAppointment",
+	    "access": "aurora.db.access.basic([{'site-management': 'r'}, {'mentor': 'r'}, {'client': 'r'}])",
+	    "inputs": [
+		{"name":"mentorid", "type":"bigint"}, {"name":"userid", "type": "bigint"},
+		{"name":"start", "type":"int"}, {"name":"stop", "type": "int"}]
+	},
+	{
 	    "path": "/schedule/schedule",
 	    "function": "budget.actions.scheduleAppointment",
 	    "access": "aurora.db.access.basic([{'site-management': 'r'}, {'mentor': 'r'}])",
@@ -277,9 +296,15 @@
 		{"name":"time", "type": "number"}, {"name":"length", "type": "number"} ]
 	},
 	{
+	    "path": "/schedule/remove",
+	    "function": "budget.actions.removeAppointment",
+	    "access": "aurora.db.access.basic([{'': 'r'}])",
+	    "inputs": [{"name":"id", "type":"bigint"}]
+	},
+	{
 	    "path": "/schedule/unschedule",
 	    "function": "budget.actions.unscheduleAppointment",
-	    "access": "aurora.db.access.basic([{'site-management': 'r'}, {'mentor': 'r'}])",
+	    "access": "aurora.db.access.basic([{'site-management': 'r'}, {'mentor': 'r'}, {'client': 'r'}])",
 	    "inputs": [{"name":"appointmentid", "type":"bigint"}]
 	}
     ]

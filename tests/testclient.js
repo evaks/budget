@@ -235,6 +235,31 @@ TestClient.prototype.remove = async function (path) {
 
 };
 
+/**
+ * @param {!aurora.db.schema.ActionType} action
+ * @param {Object} params
+ * @return {?}
+ */
+TestClient.prototype.action = async function (action, params) {
+    let id = this.transId_++;
+
+    let inputs = params;
+
+    let res = await this.sendAndWait(
+        aurora.db.shared.PLUGIN_ID, aurora.db.shared.DATA,
+        {
+            command: 'action',
+            id: id,
+            path: action.key.getData().path,
+            'inputs': inputs
+        }, x => x.command === 'action' && x.id === id);
+
+    if (res.error) {
+        throw res.error;
+    }
+    return res.outputs;
+
+};
 
 TestClient.prototype.set = async function (path, items) {
     let me = this;

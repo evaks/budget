@@ -5,3 +5,4 @@ letsencrypt/
 *~
 *.orig
 certificates/
+test.log

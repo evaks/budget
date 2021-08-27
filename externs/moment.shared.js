@@ -15,9 +15,10 @@ Moment.prototype.clone =  function () {};
 /**
  * @param {Moment|Date} other
  * @param {string} unit
+ * @param  {boolean=} frac 
  * @return {number}
  */
-Moment.prototype.diff =  function (other, unit) {};
+Moment.prototype.diff =  function (other, unit, frac) {};
 Moment.prototype.endOf =  function () {};
 /**
  * @param {string=} format

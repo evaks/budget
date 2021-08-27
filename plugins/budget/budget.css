@@ -1029,3 +1029,23 @@ div.budget-div:hover div {
 
 
 
+.budget-error-display {
+    position: absolute;
+    bottom:  0;
+    right: 0;
+    padding: 5px;
+    border: 2px solid salmon;
+    border-radius: 6px;
+    background: #f19085;
+    font-size: 12pt;
+    line-height: 18pt;
+}
+
+.budget-error-display i {
+    color: #a71717;
+}
+
+.modal-dialog th {
+    vertical-align: top;
+    color: #636363;
+}

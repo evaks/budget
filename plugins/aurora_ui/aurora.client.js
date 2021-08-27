@@ -116,15 +116,30 @@ aurora.Client.prototype.screenShownB = function() {
 aurora.Client.prototype.loadDone = function() {
     return this.dataLoadDone_;
 };
+
+
 /**
- * @param {string} id
+ * @return {!Array}
+ */
+aurora.Client.prototype.getNotDone = function() {
+    let res = [];
+    for (let k in this.dataLoadRegistryId_) {
+        if (!this.dataLoadRegistryId_[k].done) {
+            res.push(k);
+        }
+    }
+    return res;
+};
+
+/**
+ * @param {{id: string, info:string}} id
  */
 aurora.Client.prototype.registerLoad = function(id) {
-    var data = this.dataLoadRegistryId_[id];
+    var data = this.dataLoadRegistryId_[id.id];
     if (data) {
         return;
     }
-    this.dataLoadRegistryId_[id] = {done: false};
+    this.dataLoadRegistryId_[id.id] = {done: false, info: id.info};
 
     if ((this.dataLoadRegistry_ === 0 || !this.loadStarted_)) {
         try {
@@ -140,22 +155,22 @@ aurora.Client.prototype.registerLoad = function(id) {
     this.loadStarted_ = this.widgetsLoaded_;
 
     this.dataLoadRegistry_++;
-    console.log('reg start', this.dataLoadRegistry_, id);
+    console.log('reg start', this.dataLoadRegistry_, id.id, id.info);
 };
 
 
 /**
  * indicate that something is loaded
- * @param {string} id
+ * @param {{id: string, info:string}} id
  */
 aurora.Client.prototype.registerLoadDone = function(id) {
-    var data = this.dataLoadRegistryId_[id];
+    var data = this.dataLoadRegistryId_[id.id];
     if (!data || data.done) {
         return;
     }
     this.dataLoadRegistry_--;
     data.done = true;
-    console.log('reg done', this.dataLoadRegistry_, id);
+    console.log('reg done', this.dataLoadRegistry_, id.id, id.info);
     this.loadDoneFunc_();
 };
 

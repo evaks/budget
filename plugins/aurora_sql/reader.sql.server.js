@@ -150,11 +150,6 @@ aurora.db.sql.Reader.readObject_ = function(driver, path, start, data, table, co
         return null;
     }
 
-    if (table.info.view) {
-
-        console.log('reading row', colMap[table.info.pk.getId()]);
-    }
-
     if (colMap[table.info.pk.getId()] === undefined) {
         return {next: start + 1, object: null};
     }
@@ -699,6 +694,52 @@ aurora.db.sql.Reader.prototype.readLevel = function(context, table, filter, secu
             }*/
 
 };
+/**
+ * for now this only does the top level object, I need to think about how to do lower level items
+ * for example security you may not want to update certain fields, also we need the original object in order
+ * do this correctly, maybe we should pass in changes instead
+ *
+ * @param {!Object} context
+ * @param {!aurora.db.schema.TableType} table
+ * @param {!Object} object
+ * @param {?recoil.db.Query} query
+ * @return {!Promise}
+ */
+aurora.db.sql.Reader.prototype.updateOneLevelAsync = function(context, table, object, query) {
+    let me = this;
+    return new Promise((resolve, reject) => {
+        me.updateOneLevel(context, table, object, query, function(err) {
+            if (err) {
+                reject(err);
+            }
+            else {
+                resolve();
+            }
+        });
+    });
+};
+
+/**
+ * @param {!Object} context
+ * @param {!aurora.db.schema.TableType} table
+ * @param {recoil.db.Query} filter
+ * @param {?recoil.db.Query} securityFilter
+ * @param {recoil.db.QueryOptions=} opt_options
+ * @return {Promise}
+ */
+aurora.db.sql.Reader.prototype.readObjectsAsync = function(context, table, filter, securityFilter, opt_options) {
+    let me = this;
+    return new Promise((resolve, reject) => {
+        me.readObjects(context, table, filter, securityFilter, function (err, res) {
+            if (err) {
+                reject(err);
+            }
+            else {
+                resolve(res);
+            }
+        }, opt_options);
+    });
+};
 
 /**
  * @param {!Object} context
@@ -812,10 +853,6 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
                 // todo add extra JOINs to table so we can get subtables
 
                 sql.query += ' WHERE ' + sql.filter.query(scope);
-            }
-
-            if (cur.table.info.view) {
-                console.log('view sql---------------------------------------------', sql);
             }
 
             driver.query(driver.addOptions(sql.query, opt_options), function(error, data, colInfo) {
@@ -943,6 +980,26 @@ aurora.db.sql.Reader.prototype.sequence = function(name, callback) {
  * @param {!Object} context
  * @param {!aurora.db.schema.TableType} table
  * @param {!Object} object
+ * @return {!Promise}
+ */
+aurora.db.sql.Reader.prototype.insertAsync = function(context, table, object) {
+    let me = this;
+    return new Promise((resolve, reject) => {
+        me.insert(context, table, object, function (err, res) {
+            if (err) {
+                reject(err);
+            }
+            else {
+                resolve(res);
+            }
+        });
+    });
+};
+
+/**
+ * @param {!Object} context
+ * @param {!aurora.db.schema.TableType} table
+ * @param {!Object} object
  * @param {function(?,?aurora.db.type.InsertDef)} callback
  */
 aurora.db.sql.Reader.prototype.insert = function(context, table, object, callback) {
@@ -1038,7 +1095,6 @@ aurora.db.sql.Reader.prototype.insert = function(context, table, object, callbac
  * @param {function(?,(Array|!aurora.db.type.InsertDef),?)=} opt_callback not optional, but can be suplied in params argument
  */
 aurora.db.sql.Reader.prototype.query = function(query, params, opt_callback) {
-    console.log('query', query);
     this.driver_.query(query, params, opt_callback);
 };
 

@@ -618,6 +618,130 @@ it('security-documents', async () => {
 
 });
 
+
+it('security-schedule', async () => {
+    let hour = 3600000;
+    let tbl = tables.mentor_availablity;
+    let siteId = BigInt((await adminClient.getData(tables.site))[0].id);
+
+    // make an a slot available monday 9-5 every day
+    // don't really care about business hours here
+    let RepeatType = aurora.db.schema.getEnum(tbl.cols.repeat);
+
+    let availId = await adminClient.add(tbl, {
+        siteid: siteId, mentorid: mentor1Id,
+        start: new Date(1970, 0, 5, 9).getTime(), stop: null, len: 3 * hour,
+        repeat: RepeatType.weekly,
+        appointmentLen: 60});
+
+
+
+    let now = new Date();
+    let monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 8 - now.getDay()).getTime();
+    let appt1Id = (await client1Client.action(
+        aurora.db.schema.actions.base.schedule.add,
+        {
+            mentorid: mentor1Id, userid: client1Id,
+            start: monday + hour * 10, stop: monday + hour * 11,
+        }));
+
+    // can't schedule an appointment with a client
+    await expect(client1Client.action(
+        aurora.db.schema.actions.base.schedule.add,
+        {
+            mentorid:client1Id, userid: client1Id,
+            start: monday + hour * 11, stop: monday + hour * 12,
+        })).rejects.toBe("Must schedule an appointment with a mentor");
+
+    
+    // can't schedule overlapping  app
+    await expect(client1Client.action(
+        aurora.db.schema.actions.base.schedule.add,
+        {
+            mentorid: mentor1Id, userid: client1Id,
+            start: monday + hour * 10, stop: monday + hour * 11,
+        })).rejects.toBe('Overlapps with another appointment');
+
+    // slightly after but still overlaps
+    await expect(client1Client.action(
+        aurora.db.schema.actions.base.schedule.add,
+        {
+            mentorid: mentor1Id, userid: client1Id,
+            start: monday + hour * 11 - 1, stop: monday + hour * 11,
+        })).rejects.toBe('Overlapps with another appointment');
+
+    await expect(client1Client.action(
+        aurora.db.schema.actions.base.schedule.add,
+        {
+            mentorid: mentor1Id, userid: client1Id,
+            start: monday + hour * 9, stop: monday + hour * 10 + 1,
+        })).rejects.toBe('Overlapps with another appointment');
+
+    await expect(client1Client.action(
+        aurora.db.schema.actions.base.schedule.add,
+        {
+            mentorid: mentor1Id, userid: client1Id,
+            start: monday + hour * 10 + 1, stop: monday + hour * 11 - 1,
+        })).rejects.toBe('Overlapps with another appointment');
+
+
+    // can't schedule for another client,
+
+    await expect(client1Client.action(
+        aurora.db.schema.actions.base.schedule.add,
+        {
+            mentorid: mentor1Id, userid: client2Id,
+            start: monday + hour * 11, stop: monday + hour * 12,
+        })).rejects.toBe('Access Denied');
+
+    // mentor can't schedule for another mentor
+
+    await expect(mentor1Client.action(
+        aurora.db.schema.actions.base.schedule.add,
+        {
+            mentorid: mentor2Id, userid: client1Id,
+            start: monday + hour * 11, stop: monday + hour * 12,
+        })).rejects.toBe('Access Denied');
+
+    await expect(mentor2Client.action(
+        aurora.db.schema.actions.base.schedule.add,
+        {
+            mentorid: mentor2Id, userid: client1Id,
+            start: monday + hour * 11, stop: monday + hour * 12,
+        })).rejects.toBe('Mentor is not available');
+
+
+    await expect(mentor1Client.action(
+        aurora.db.schema.actions.base.schedule.add,
+        {
+            mentorid: mentor1Id, userid: client1Id,
+            start: monday + hour * 8, stop: monday + hour * 10,
+        })).rejects.toBe('Mentor is not available');
+
+
+    await expect(client2Client.action(
+        aurora.db.schema.actions.base.schedule.remove,
+        {
+            id: appt1Id
+        })).rejects.toBe('Access Denied');
+
+    await expect(mentor2Client.action(
+        aurora.db.schema.actions.base.schedule.remove,
+        {
+            id: appt1Id
+        })).rejects.toBe('Access Denied');
+    
+    await client1Client.action(
+        aurora.db.schema.actions.base.schedule.remove,
+        {
+            id: appt1Id
+        });
+
+    
+    await adminClient.remove(makePath(tbl, availId));
+    
+});
+
 it('security-appointments', async () => {
     let tableT = tables.appointments;
     function makeApt(mid, cid, start, opts) {

@@ -22,12 +22,17 @@ budget.widgets.AppointmentList = function(scope) {
     let cd = goog.dom.createDom;
     let container = cd('div', {class: 'budget-appointment'});
     let frp = scope.getFrp();
-
+    this.scope_ = scope;
     let userId = budget.widgets.BudgetList.getUserId();
     let query = new recoil.db.Query();
-    let time = new Date().getTime();
+    let startOfWeek = new Date().setHours(0, 0, 0, 0);
     let userB = scope.getDb().get(userT.key, query.eq(userT.cols.id, userId));
-    let appointmentsB = scope.getDb().get(appointmentsT.key, query.eq(query.val(userId), appointmentsT.cols.userid));
+    let todayStart = new Date().setHours(0, 0, 0, 0);
+    let appointmentsB = scope.getDb().get(
+        appointmentsT.key,
+        query.and(
+            query.lte(query.val(todayStart), query.field(appointmentsT.cols.start)),
+            query.eq(query.val(userId), appointmentsT.cols.userid)));
 
     let addAppointmentDecorator = function() {
         return new recoil.ui.RenderedDecorator(
@@ -51,20 +56,49 @@ budget.widgets.AppointmentList = function(scope) {
 
     }, appointmentsB);
 
-
+    this.tableB_ = tblB;
     this.widget_ = new recoil.ui.widgets.table.TableWidget(scope);
-
+    let me = this;
     this.widget_.attachStruct(tblB);
     this.widget_.getComponent().render(container);
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(container);
+    this.selectHelper_ = new recoil.ui.ComponentWidgetHelper(scope, this.component_, this, function() {
+        me.selectedMondayE_.get().forEach(function(e) {
+            if (e !== null) {
+                me.startDateB_.set(recoil.ui.widgets.DateWidget2.convertDateToLocal(new Date(e)));
+            }
+        });
+
+    });
+
 };
 
 /**
- * @return {number}
+ * @param {!recoil.frp.Behaviour<number>} startDateB
  */
-budget.widgets.AppointmentList.getUserId = function() {
-    let idStr = budget.widgets.AppointmentList.getSearchParams()['id'];
-    return parseInt(idStr == undefined ? (goog.net.cookies.get('userid') || '0') : idStr[0], 10);
+budget.widgets.AppointmentList.prototype.attachStartDate = function(startDateB) {
+
+    const appointmentsT = aurora.db.schema.tables.base.appointments;
+    let frp = this.scope_.getFrp();
+    let selectedStartDateB = frp.liftB(function(selected, tbl) {
+        let time = null;
+        selected.forEach(function(pks) {
+            let row = tbl.getRow(pks);
+            if (row) {
+                time = row.get(appointmentsT.cols.start);
+                if (time === null) {
+                    time = budget.widgets.BusinessHours.lastMonday().getTime();
+                }
+            }
+        });
+        if (time === null) {
+            return null;
+        }
+        return budget.widgets.BusinessHours.lastMonday(new Date(time)).getTime();
+    }, this.widget_.createSelected(), this.tableB_);
+    this.startDateB_ = startDateB;
+    this.selectedMondayE_ = frp.changesE(selectedStartDateB);
+    this.selectHelper_.attach(this.selectedMondayE_, this.startDateB_);
 };
 
 

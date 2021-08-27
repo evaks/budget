@@ -199,7 +199,7 @@ budget.messages.BUDGET_PROTECTED = recoil.ui.message.getParamMsg('This sheet is 
  * @type {!recoil.ui.message.Message}
  * @final
  */
-budget.messages.FINISH_DATE_CANNOT_BE_BEFORE_START_DATE = recoil.ui.message.getParamMsg('Finish date cannot be before start date');
+budget.messages.FINISH_DATE_CANNOT_BE_BEFORE_START_DATE = recoil.ui.message.getParamMsg('Finish time cannot be before start time');
 
 
 /**
@@ -509,7 +509,22 @@ budget.messages.APPOINTMENT_LENGTH = recoil.ui.message.getParamMsg('Appt Length 
  * @type {!recoil.ui.message.Message}
  * @final
  */
-budget.messages.FREE_SESSION = recoil.ui.message.getParamMsg('Free Session');
+budget.messages.FREE_SESSION = recoil.ui.message.getParamMsg('Mentor Available');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.YOUR_MENTOR = recoil.ui.message.getParamMsg('Your Mentor');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.APPOINTMENT = recoil.ui.message.getParamMsg('Appointment');
+
 
 /**
  * @type {!recoil.ui.message.Message}
@@ -685,6 +700,19 @@ budget.messages.REMOVE_USER = recoil.ui.message.getParamMsg('Remove User');
  */
 budget.messages.ADD_APPOINTMENT = recoil.ui.message.getParamMsg('Click to Add');
 
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.UNSCHEDULE_APPOINTMENT = recoil.ui.message.getParamMsg('Unschedule Appointment');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.SCHEDULE_APPOINTMENT = recoil.ui.message.getParamMsg('Schedule Appointment');
+
+
 
 /**
  * @type {!recoil.ui.message.Message}
@@ -697,7 +725,26 @@ budget.messages.YOU_MUST_HAVE_AT_LEAST_2_SPLITS = recoil.ui.message.getParamMsg(
  * @type {!recoil.ui.message.Message}
  * @final
  */
-budget.messages.START_DATE_MUST_BE_BEFORE_END_DATE = recoil.ui.message.getParamMsg('Start date must be before end date');
+budget.messages.START_DATE_MUST_BE_BEFORE_END_DATE = recoil.ui.message.getParamMsg('Start time must be before end time');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.MENTOR_NOT_FREE_AT_THAT_TIME = recoil.ui.message.getParamMsg('The mentor is not free at that time');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.APPOINTMENT_IN_PAST = recoil.ui.message.getParamMsg('Appointment is in the past');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.APPOINTMENT_NOT_LONG_ENOUGH = recoil.ui.message.getParamMsg('Appointment too short');
 
 
 /**

@@ -90,7 +90,7 @@ budget.widgets.BudgetImportCategory.prototype.createValidateB = function() {
     let frp = this.scope_.getFrp();
     let CATEGORY = budget.widgets.BudgetImportCategory.COLS.CATEGORY;
     return frp.liftB(function(mappings, startDate, endDate) {
-        if (startDate >= endDate) {
+        if (startDate > endDate) {
             return new recoil.ui.BoolWithExplanation(false, budget.messages.START_DATE_MUST_BE_BEFORE_END_DATE);
         }
         let complete = true;

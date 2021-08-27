@@ -27,8 +27,9 @@ aurora.db.QueryEntry;
  * @param {!recoil.db.ChangeDb} db
  * @param {!aurora.Client} client
  * @param {!aurora.db.Schema} schema
+ * @param {!recoil.util.Sequence} transId
  */
-aurora.db.Helper = function(comms, db, client, schema) {
+aurora.db.Helper = function(comms, db, client, schema, transId) {
     /**
      * @private
      * @type {!goog.structs.AvlTree<{key:string, queries:(undefined|goog.structs.AvlTree<!aurora.db.QueryEntry>)}>}
@@ -40,6 +41,8 @@ aurora.db.Helper = function(comms, db, client, schema) {
     this.db_ = db;
     this.schema_ = schema;
     this.channel_ = this.comms_.createChannel_();
+    this.transId_ = transId;
+
 };
 
 
@@ -734,7 +737,9 @@ aurora.db.Helper.prototype.reregister = function()  {
     this.tblMap_.inOrderTraverse(function(entry) {
         entry.queries.inOrderTraverse(function(node) {
             console.log('re-registering', node);
-            me.channel_.send({name: entry.id.getData().name, query: node.key.query.serialize(colSerializer), options: node.query.options.serialize(), command: 'get'});
+            let idSeq = this.transId_.next();
+
+            me.channel_.send({name: entry.id.getData().name, id: idSeq, query: node.key.query.serialize(colSerializer), options: node.query.options.serialize(), command: 'get'});
         });
     });
 };
@@ -786,9 +791,10 @@ aurora.db.Helper.prototype.get_ = function(success, failure, id, inKey, options)
         }
     }
     else {
+        let idSeq = this.transId_.next();
+        this.client_.registerLoad(aurora.db.Helper.makeLoadId(idSeq, id, key, options));
 
-        this.client_.registerLoad(aurora.db.Helper.makeLoadId(id, key, options));
-        this.channel_.send({name: id.getData().name, query: key.serialize(colSerializer), options: options.serialize(), command: 'get'});
+        this.channel_.send({name: id.getData().name, id: idSeq, query: key.serialize(colSerializer), options: options.serialize(), command: 'get'});
 
         let entry = this.tblMap_.findFirst({key: id.uniqueId()});
         let queryKey = {query: key, options: options};
@@ -804,16 +810,17 @@ aurora.db.Helper.prototype.get_ = function(success, failure, id, inKey, options)
 
 /**
  * @template T
+ * @param {string} idSeq
  * @param {!recoil.db.Type<T>} id
  * @param {recoil.db.Query} query
  * @param {recoil.db.QueryOptions} options
- * @return {string}
+ * @return {{id: string, info:string}}
  */
-aurora.db.Helper.makeLoadId = function(id, query, options) {
+aurora.db.Helper.makeLoadId = function(idSeq, id, query, options) {
     var res = id.uniqueId() + ':' + id.getData().name;
     res += '[' + (query ? JSON.stringify(query.serialize(new aurora.db.Serializer())) : '') + ']';
     res += '[' + (options ? JSON.stringify(options.serialize()) : '') + ']';
-    return res;
+    return {id: idSeq, info: res};
 };
 
 /**
@@ -917,12 +924,19 @@ aurora.db.Comms = function(db, schema, client) {
     this.queuedChanges_ = [];
     this.sentChanges_ = [];
     this.erroredChanges_ = [];
+    this.actionErrorListeners_ = [];
     this.db_ = db;
     this.currentErrors_ = new recoil.db.PathMap(schema);
-    this.helper_ = new aurora.db.Helper(this, this.db_, client, schema);
+    this.helper_ = new aurora.db.Helper(this, this.db_, client, schema, this.transId_);
     this.client_ = client;
 };
 
+/**
+ * @param {function(?)} callback
+ */
+aurora.db.Comms.prototype.addActionErrorListener = function(callback) {
+    this.actionErrorListeners_.push(callback);
+};
 /**
  * after disconnection we have to re-register every thing we are interested in
  */
@@ -1077,7 +1091,7 @@ aurora.db.Comms.prototype.createChannel_ = function() {
                     let query = Query.deserialize(obj['query'], colDeserializer);
                     let options = QueryOptions.deserialize(obj['options']);
                     let loadId = aurora.db.Helper.makeLoadId(
-                        info.key, query, options);
+                        obj['id'], info.key, query, options);
                     if (options.isCount()) {
                         // hear we should deal with count
                         me.helper_.updateCount(info, query, options, obj['value-error'], obj['value']);
@@ -1109,6 +1123,10 @@ aurora.db.Comms.prototype.createChannel_ = function() {
                     if (action) {
                         delete me.pendingActions_[obj.id];
                         action.success({action: null, id: obj.id, output: {value: obj.outputs, error: obj.error}, enabled: recoil.ui.BoolWithExplanation.TRUE});
+                        if (obj.error) {
+                            console.error('got error action', obj.error);
+                            me.actionErrorListeners_.forEach(cb => cb(obj.error));
+                        }
                     }
                 }
                 else if (obj.command === 'set') {

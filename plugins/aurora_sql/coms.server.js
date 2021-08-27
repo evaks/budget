@@ -532,6 +532,7 @@ aurora.db.Coms = function(authenticator) {
                         else {
                             if (recoil.util.map.size(inputs) !== expectedInputs.length) {
                                 response['error'] = 'Unexpected number of parameter expected ' + expectedInputs.length + ' got ' + recoil.util.map.size(inputs);
+                                console.log('inputs', e.data, expectedInputs);
                                 me.log_.warn(response['error']);
                                 me.channel_.send(response, e.clientId);
                                 return;
@@ -858,7 +859,7 @@ aurora.db.Coms.prototype.notifyListeners = function(changes, exclude, opt_done) 
             }
             else {
                 sendClients.inOrderTraverse(function(info) {
-                    me.doGetHelper_(info.clientId, reader, info.context, info.key.name, info.key.query, info.key.options, function() {
+                    me.doGetHelper_(info.clientId, null, reader, info.context, info.key.name, info.key.query, info.key.options, function() {
                         todo--;
                         if (todo === 0 && opt_done) {
                             opt_done();
@@ -1003,12 +1004,14 @@ aurora.db.Coms.prototype.doGet_ = function(reader, e, secContext) {
     let name = e.data['name'];
     let queryIn = e.data['query'];
     let optionsIn = e.data['options'];
-    this.doGetHelper_(e.clientId, reader, secContext, name, queryIn, optionsIn);
+    let id = e.data['id'];
+    this.doGetHelper_(e.clientId, id, reader, secContext, name, queryIn, optionsIn);
 };
 
 /**
  * @private
  * @param {string} clientId
+ * @param {?string} id
  * @param {aurora.db.Reader} reader
  * @param {!aurora.db.access.SecurityContext} secContext
  * @param {string} name
@@ -1016,23 +1019,26 @@ aurora.db.Coms.prototype.doGet_ = function(reader, e, secContext) {
  * @param {?} optionsIn
  * @param {function()=} opt_done
  */
-aurora.db.Coms.prototype.doGetHelper_ = function(clientId, reader, secContext, name, queryIn, optionsIn, opt_done) {
+aurora.db.Coms.prototype.doGetHelper_ = function(clientId, id, reader, secContext, name, queryIn, optionsIn, opt_done) {
     let secName = aurora.db.schema.tables.sec.permissions.info.name;
     let me = this;
-    let response = {'command': 'full', 'name': name, 'query': queryIn, 'options': optionsIn, 'value': null};
+    let response = {'command': 'full', 'id': id, 'name': name, 'query': queryIn, 'options': optionsIn, 'value': null};
     let serializer = new aurora.db.Serializer;
     let context = aurora.db.Coms.makeReadContext(secContext);
 
     let start = new Date().getTime();
     if (name === secName) {
         // this is special every one can request what permissions they have
-        me.channel_.send({'command': 'full', 'name': name, 'query': queryIn, 'options': optionsIn, 'value': secContext}, clientId);
+        me.channel_.send({'command': 'full', 'id': id, 'name': name, 'query': queryIn, 'options': optionsIn, 'value': secContext}, clientId);
         if (opt_done) {
             opt_done();
         }
         return;
     }
     if (!reader) {
+        me.log_.error('error no reader');
+        response['value-error'] = 'no reader';
+        me.channel_.send(response, clientId);
         if (opt_done) {
             opt_done();
         }
@@ -1047,7 +1053,7 @@ aurora.db.Coms.prototype.doGetHelper_ = function(clientId, reader, secContext, n
             secInfo.accessFilter,
             function(err, data) {
                 if (err) {
-                    me.log_.debug('error reading data', queryIn, optionsIn, err);
+                    me.log_.error('error reading data', queryIn, optionsIn, err);
                     response['value-error'] = err;
                 }
                 else {
@@ -1092,6 +1098,10 @@ aurora.db.Coms.prototype.doGetHelper_ = function(clientId, reader, secContext, n
             }, options);
     }
     else {
+        me.log_.error('unable to get security context');
+        response['value-error'] = 'unable to get security context';
+        me.channel_.send(response, clientId);
+
         if (opt_done) {
             opt_done();
         }

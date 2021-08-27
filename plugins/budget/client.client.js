@@ -23,6 +23,12 @@ budget.Client = function() {
     let database = new aurora.db.PermDatabase(new recoil.db.ReadWriteDatabase(aurora.recoil.frp, comms));
 
     let scope = new budget.WidgetScope(aurora.recoil.frp, database, comms);
+    let frp = scope.getFrp();
+    this.actionErrorsE_ = frp.createE();
+    let me = this;
+    comms.addActionErrorListener(frp.accessTransFunc(function(error) {
+        me.actionErrorsE_.set(error);
+    }, this.actionErrorsE_));
     aurora.Client.call(this, scope, function() {
         document.getElementById('budget-loading').style.display = 'none';
         document.getElementById('budget-content').style.display = 'flex';
@@ -30,6 +36,12 @@ budget.Client = function() {
 };
 goog.inherits(budget.Client, aurora.Client);
 
+/**
+ * @return {!recoil.frp.Behaviour}
+ */
+budget.Client.prototype.getActionErrorsE = function() {
+    return this.actionErrorsE_;
+};
 
 /**
  * @final

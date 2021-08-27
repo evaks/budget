@@ -30,13 +30,13 @@
 	{
 	    "types": ["module-test"],
 	    "filename": "module-test.min.js",
-	    "searchExp": [".*\\.shared\\.js$", ".*\\.module-test\\.js$", ".*schema\\.gen.server\\.js$"],
+	    "searchExp": [".*\\.shared\\.js$", ".*\\.module-test\\.js$"],
 	    "compiled": true,
 	    "externs" : ["externs/*.server.js","externs/**.shared.js"],
 	    "sourcesFile":"sources.module-test.json",
 	    "env":"CUSTOM",
 	    "nodejs":true,
-	    "imports" : ["aurora.websocket.constants", "aurora.websocket.enums", "aurora.db.shared","aurora.db.schema.tables.base.user", "aurora.db.ValueSerializor"],
+	    "imports" : ["budget.actions", "aurora.websocket.constants", "aurora.websocket.enums", "aurora.db.shared","aurora.db.schema.tables.base.user", "aurora.db.ValueSerializor"],
 	    "exports" : {"aurora": "aurora", "recoil": "recoil", "goog": "goog"},
 	    "sourceMapLocation":"local",
 	    "compilationLevel":"SIMPLE_OPTIMIZATIONS"

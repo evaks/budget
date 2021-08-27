@@ -31,7 +31,20 @@ div.budget-calendar-day .avail {
     background: linear-gradient(315deg, #8abda0, #8abda0 50%, #96c9a0 50%, #96c9a0);
 }
 
-div.budget-calendar-day .mentor-avail {
+.legend-key.your-mentor-avail {
+    background: linear-gradient(315deg, #518094, #518094 50%, #1d488885 50%, #1d488885);
+}
+
+.legend-key.mentor-appoint {
+    background: #0665c7;
+}
+div.budget-calendar-day .budget-cal-appoint {
+    background: #0665c7;
+    position: absolute;
+    display: flex;
+
+}
+div.budget-calendar-day .mentor-avail, div.budget-calendar-day .your-mentor-avail {
     position: absolute;
     background: #1f8c3678;
     width: 20px;
@@ -39,6 +52,9 @@ div.budget-calendar-day .mentor-avail {
     pointer-events: none;
 }
 
+div.budget-calendar-day .your-mentor-avail {
+    background: #1d488885;
+}
 div.budget-calendar-mentor-label {
     line-height: 30px;
     padding-left: 6px;
@@ -156,6 +172,7 @@ div.budget-calendar-date {
     height: 28px;
     align-items: center;
     padding-left: 20px;
+    white-space: nowrap;
 }
 
 .budget-calendar-header {

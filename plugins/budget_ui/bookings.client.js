@@ -307,7 +307,8 @@ budget.widgets.Bookings = function(scope) {
                     row.addCellMeta(SEARCH_COL, {text: searchIcon()});
                     row.set(SEARCH_COL, null);
                     row.set(START_COL, recoil.ui.widgets.TimeWidget.convertTimeToLocal(new Date(row.get(appointmentsT.cols.start))));
-                    row.set(appointmentsT.cols.mentorid, row.get(appointmentsT.cols.mentorid).db);
+                    let mentorid = row.get(appointmentsT.cols.mentorid).db;
+                    row.set(appointmentsT.cols.mentorid, mentorid);
                     row.set(clientCK, userid ? '/client?id=' + userid.db : '/client/new?data=' + encodeURI(JSON.stringify(
                         {
                             firstName: row.get(appointmentsT.cols.firstName),
@@ -316,6 +317,7 @@ budget.widgets.Bookings = function(scope) {
                             address: row.get(appointmentsT.cols.address),
                             email: row.get(appointmentsT.cols.email),
                             schedule: row.get(appointmentsT.cols.id).db,
+                            mentorid: mentorid,
                         }
                     )));
                     if (userid) {
@@ -591,7 +593,7 @@ budget.widgets.Bookings.makeAppointmentMap_ = function(avail, holidays, appointm
 
     for (let mentor in mentorDayUsage) {
         let usage = mentorDayUsage[mentor];
-        budget.widgets.BusinessHours.mergeDayUsage(usage.free, true);
+        budget.appointments.mergeDayUsage(usage.free, true);
         usage.free.forEach(function(entry) {
             let start = entry.start;
             let len = getAppointmentLength(usage.lengths, start);

@@ -36,8 +36,11 @@ output/module-test.min.js: $(wildcard plugins/**/*.server.js)  $(wildcard plugin
 
 .PHONY: module-test
 module-test: output/module-test.min.js output/server.min.js
-	node output/server.min.js --test 1> /dev/null 2>  /dev/null &
-#	node output/server.min.js --test &
+#	node output/server.min.js --test 1> /dev/null 2>  /dev/null &
+	node output/server.min.js --test 1> test.log 2>  /dev/null &
+#       wait for node to start and create the database
+	sh scripts/wait-for-test-start.sh
+
 ifndef UNIT_TEST
 	node_modules/.bin/jest --config=mjest.config.js 
 else
@@ -80,7 +83,7 @@ node_modules:
 
 .PHONY: install-modules
 install-modules:
-	npm install node-forge mime modern-syslog websocket async mysql moment nodemailer multiparty ics glob
+	npm install node-forge mime modern-syslog websocket async mysql moment nodemailer multiparty ics glob jest
 
 ip-tables:
 	sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8080

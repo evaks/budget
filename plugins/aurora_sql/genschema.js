@@ -276,7 +276,6 @@ let traverseTable = function(inDef, cb, tableDefs) {
             if (def.view) {
                 let viewTable = tableDefs[def.table].info;
                 let e = getSourceColumn(viewTable, col.name);
-
                 (cb.startCol || nullFunc)(col.name, e, fullTableName, def.tableName, item.col);
             }
             else {
@@ -365,7 +364,7 @@ let traverse = function(def, cb, tableDefs) {
 
 
 
-let doGenerate = function(def, ns, client, custRequires, types, actions, out, tableDefs) {
+let doGenerate = function(def, ns, client, custRequires, types, actions, out, tableDefs, clientTest) {
     let nullFunc = function() {return {};};
     fs.writeFileSync(out, '/**\n * GENERATED DO NOT CHANGE\n */\n\n');
     let provides = [];
@@ -733,7 +732,7 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
         if (a.func) {
             actionNames[a.path] = aname;
             fs.appendFileSync(out, '\n');
-            if (!client) {
+            if (!client && !clientTest) {
                 fs.appendFileSync(out, '    func:' + a.func + ',\n');
             }
             if (a.arrayParams) {
@@ -1394,6 +1393,7 @@ module.exports = {
 
         doGenerate(defs, ns, true, filterReq(requires, requiresServerOnly), types, actions, output + '.gen.client.js', tableDefs);
         doGenerate(defs, ns, false, filterReq(requires, requiresClientOnly), types, actions, output + '.gen.server.js', tableDefs);
+        doGenerate(defs, ns, false, filterReq(requires, requiresClientOnly), types, actions, output + '.gen.module-test.js', tableDefs, true);
         generateDbInit(defs, ns, types, output + '.init.gen.server.js');
     },
 };

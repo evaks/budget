@@ -3,6 +3,7 @@ goog.provide('budget.widgets.BusinessHours');
 goog.require('aurora.Client');
 goog.require('aurora.db.schema.tables.base.user');
 goog.require('aurora.widgets.TableDialog');
+goog.require('budget.appointments');
 goog.require('budget.messages');
 goog.require('goog.dom');
 goog.require('goog.dom.classlist');
@@ -19,23 +20,31 @@ goog.require('recoil.ui.widgets.ButtonWidget');
 goog.require('recoil.ui.widgets.DateWidget2');
 goog.require('recoil.ui.widgets.TimeWidget');
 goog.require('recoil.ui.widgets.table.TableWidget');
+
 /**
  * @constructor
  * @export
  * @param {!budget.WidgetScope} scope
  * @param {string=} opt_type
+ * @param {number=} opt_clientId
  * @implements {recoil.ui.Widget}
  */
-budget.widgets.BusinessHours = function(scope, opt_type) {
+budget.widgets.BusinessHours = function(scope, opt_type, opt_clientId) {
     this.scope_ = scope;
+    // types can be:
+    //     admin - used to administer business hours and holidays
+    //     mentor - used to set available hours for a mentor
+    //     client - used to schedule and view appointments for a client
+
     this.type_ = opt_type || 'admin';
+    this.clientId_ = opt_clientId;
     let me = this;
     let frp = scope.getFrp();
     let mess = budget.messages;
     let cd = goog.dom.createDom;
     let siteT = aurora.db.schema.tables.base.site;
     let holidaysT = aurora.db.schema.tables.base.site_holidays;
-    let appointmentsT = aurora.db.schema.tables.base.appointments;
+    let appointmentsT = aurora.db.schema.tables.base.secure_appts;
     let availT = aurora.db.schema.tables.base.mentor_availablity;
     this.contextB_ = aurora.permissions.getContext(scope);
     this.borderDimsB_ = frp.createB({x: 0, y: 0});
@@ -63,24 +72,22 @@ budget.widgets.BusinessHours = function(scope, opt_type) {
         selectedMentorB.set(v);
     }, selectedMentorB, this.contextB_, mentorListB);
 
-
+    me.mentorsB_ = budget.widgets.UserManagement.getMentors(scope);
     this.dateWidget_ = new recoil.ui.widgets.DateWidget2(scope);
     this.mentorWidget_ = new recoil.ui.widgets.SelectorWidget(scope);
 
 
     let milliPerDay = budget.widgets.BusinessHours.MILLI_PER_DAY;
+    let weekdayize = budget.widgets.BusinessHours.lastMonday;
 
-    let weekdayIze = function() {
-        let today = new Date();
-        let monday = new Date(today.getTime() - ((today.getDay() + 6) % 7) * milliPerDay);
-        return monday;
-    };
-
-    this.curDateB_ = frp.createB(recoil.ui.widgets.DateWidget2.convertDateToLocal(weekdayIze()));
+    this.curDateB_ = frp.createB(recoil.ui.widgets.DateWidget2.convertDateToLocal(weekdayize()));
     this.dateWidget_.attachStruct({value: this.curDateB_, min: 19700105, step: 7});
     this.mentorWidget_.attachStruct({value: this.mentorB_, list: mentorListB, renderer: budget.widgets.UserManagement.getMentorRenderer(scope)});
 
     this.siteB_ = scope.getDb().get(siteT.key);
+    this.scheduleActionB_ = scope.getDb().get(aurora.db.schema.actions.base.schedule.add.key);
+    this.unscheduleActionB_ = scope.getDb().get(aurora.db.schema.actions.base.schedule.remove.key);
+
     // do this because later on we will change so we can have multiple sites
     this.siteIdB_ = frp.liftB(function(site) {
         let res = null;
@@ -90,6 +97,7 @@ budget.widgets.BusinessHours = function(scope, opt_type) {
         return res;
     }, this.siteB_);
 
+    let isClient = this.type_ === 'client';
     this.hoursTblB_ = budget.Client.instance.createSubTableB(this.siteB_, frp.createB(
         /** @type {Array} */ (null)), siteT.cols.regular);
 
@@ -106,19 +114,39 @@ budget.widgets.BusinessHours = function(scope, opt_type) {
 
     }, this.curDateB_));
 
+    if (this.clientId_ != undefined) {
+        let query = new recoil.db.Query();
+        let userT = aurora.db.schema.tables.base.user;
+        this.mentorIdB_ = frp.liftB(function(tbl) {
+            let res = null;
+            tbl.forEach(function(r) {
+                let m = r.get(userT.cols.mentorid);
+                res = m ? m.db : null;
+            });
+            return res;
+        }, scope.getDb().get(userT.key, query.eq(query.field(userT.cols.id), query.val(this.clientId_))));
+    }
+    else {
+        this.mentorIdB_ = frp.createB(null);
+    }
+
     this.availableB_ = frp.switchB(frp.liftB(function(date) {
         let query = new recoil.db.Query();
         let startTime = recoil.ui.widgets.DateWidget2.convertLocaleDate(date).getTime();
 
         let endTime = startTime + 7 * milliPerDay;
-
-        return scope.getDb().get(availT.key, query.and(
-            query.eq(availT.cols.mentorid, query.val(me.mentorB_.get())),
+        let rangeQuery = query.and(
             query.or(
                 query.gt(query.field(availT.cols.stop), query.val(startTime)),
                 query.null(query.field(availT.cols.stop))),
+            query.lt(query.field(availT.cols.start), query.val(endTime)));
+        if (isClient) {
+            return scope.getDb().get(availT.key, rangeQuery);
+        }
 
-            query.lt(query.field(availT.cols.start), query.val(endTime))
+        return scope.getDb().get(availT.key, query.and(rangeQuery,
+            query.eq(availT.cols.mentorid, query.val(me.mentorB_.get())),
+
         ));
 
     }, this.curDateB_, this.mentorB_));
@@ -140,7 +168,7 @@ budget.widgets.BusinessHours = function(scope, opt_type) {
 
     this.yAxis_ = cd('div', 'budget-calendar-hour-labels');
     this.highlightDiv_ = cd('div', 'budget-calendar-highlight');
-    this.calendarDiv_ = cd('div', {class: 'budget-calendar'}, this.yAxis_, this.highlightDiv_);
+    this.calendarDiv_ = cd('div', {class: 'budget-calendar goog-menu-noicon goog-menu-noaccel'}, this.yAxis_, this.highlightDiv_);
 
     goog.dom.setFocusableTabIndex(this.calendarDiv_, true);
     this.yAxis_.appendChild(cd('div', {class: 'budget-calendar-hour'}));
@@ -177,15 +205,43 @@ budget.widgets.BusinessHours = function(scope, opt_type) {
         this.days_.push({div: day, hours: hours});
     }
 
-    let holidaysLegend = cd('div', {class: 'legend-item'}, cd('div', {class: 'legend-key holidays'}), cd('div', {class: 'legend-name'}, mess.HOLIDAY.toString()));
-    let hoursLegend = cd('div', {class: 'legend-item'}, cd('div', {class: 'legend-key hours'}), cd('div', {class: 'legend-name'}, mess.OFFICE_HOURS.toString()));
-    let availableLegend = cd('div', {class: 'legend-item'}, cd('div', {class: 'legend-key mentor-avail'}), cd('div', {class: 'legend-name'}, mess.FREE_SESSION.toString()));
+    let holidaysLegend =
+        cd('div', {class: 'legend-item'},
+           cd('div', {class: 'legend-key holidays'}),
+           cd('div', {class: 'legend-name'}, mess.HOLIDAY.toString()));
+
+    let hoursLegend =
+        cd('div', {class: 'legend-item'},
+           cd('div', {class: 'legend-key hours'}),
+           cd('div', {class: 'legend-name'}, mess.OFFICE_HOURS.toString()));
+
+    let availableLegend =
+        cd('div', {class: 'legend-item'},
+           cd('div', {class: 'legend-key mentor-avail'}),
+           cd('div', {class: 'legend-name'}, mess.FREE_SESSION.toString()));
+
+    let yourAvailableLegend =
+        cd('div', {class: 'legend-item'},
+           cd('div', {class: 'legend-key your-mentor-avail'}),
+           cd('div', {class: 'legend-name'}, mess.YOUR_MENTOR.toString()));
+
+    let appointmentLegend
+        = cd('div', {class: 'legend-item'},
+             cd('div', {class: 'legend-key mentor-appoint'}),
+             cd('div', {class: 'legend-name'}, mess.APPOINTMENT.toString()));
 
     this.legendDiv_ = cd('div', {class: 'budget-legend'}, holidaysLegend, hoursLegend);
 
-    if (this.type_ == 'mentor') {
+    if (this.type_ == 'mentor' || this.type_ == 'client') {
         this.legendDiv_.appendChild(availableLegend);
     }
+    if (this.clientId_ != undefined) {
+        this.legendDiv_.appendChild(yourAvailableLegend);
+    }
+    if (this.type_ === 'client' && this.clientId_ != undefined) {
+        this.legendDiv_.appendChild(appointmentLegend);
+    }
+
     let dateDiv = cd('div', 'budget-date');
     let mentorDiv = cd('div', 'budget-cal-mentor goog-inline-block');
     this.mentorDiv_ = cd('div', {}, cd('div', {class: 'budget-calendar-mentor-label'}, mess.MENTOR.toString()), mentorDiv);
@@ -194,6 +250,7 @@ budget.widgets.BusinessHours = function(scope, opt_type) {
     this.calendarHeader_ = cd('div', {class: 'budget-calendar-header'}, dateDiv, this.mentorDiv_, this.legendDiv_);
 //    this.dateWidget_.getComponent().render(this.calendarHeader_);
 
+    this.yourAvailableLegend_ = yourAvailableLegend;
     this.loadingContainer_ = cd('div', {class: 'budget-loading'}, cd('div'));
     this.errorContainer_ = cd('div', {class: 'budget-error'}, 'Error');
 
@@ -234,10 +291,28 @@ budget.widgets.BusinessHours = function(scope, opt_type) {
     resizeObserver.observe(this.calendarDiv_);
 
 };
+
+/**
+ * @param {Date=} opt_date if provided will use this date instead of today
+ * @return {Date}
+ */
+budget.widgets.BusinessHours.lastMonday = function(opt_date) {
+    let today = opt_date || new Date();
+    let monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (today.getDay() + 6) % 7);
+    return monday;
+};
+
 /**
  * @typedef {{dayIndex:number, hourIndex:number, clickPosMilli:number, clickPosTime:number}}
  */
 budget.widgets.BusinessHours.MenuInfo;
+
+/**
+ * @return {!recoil.frp.Behaviour<number>}
+ */
+budget.widgets.BusinessHours.prototype.getStartDateB = function() {
+    return this.curDateB_;
+};
 
 /**
  * @private
@@ -440,6 +515,406 @@ budget.widgets.BusinessHours.prototype.doRemoveHolidayFunc_ = function(menuInfo)
         let res = me.removeDateRange_(holidayUsage, selDate, selectedStopTime);
         me.holidaysB_.set(me.updateHolidayUsage_(me.siteB_.get(), holidays, res));
     }, this.siteB_, this.curDateB_, this.holidaysB_);
+
+};
+
+
+
+/**
+ * returns a function that will remove a holiday
+ * @private
+ * @param {!budget.widgets.BusinessHours.MenuInfo} menuInfo
+ * @return {function(?)}
+ */
+budget.widgets.BusinessHours.prototype.doUnscheduleAppointmentFunc_ = function(menuInfo) {
+    let me = this;
+    let frp = me.scope_.getFrp();
+    let HOUR_RES = budget.widgets.BusinessHours.HOUR_RES;
+    let scope = me.scope_;
+    return frp.accessTransFunc(function(e) {
+        let selDate = me.getSelectionDate_(menuInfo, me.curDateB_.get());
+        let appointments = me.createAppointments_(true);
+
+        let when = menuInfo.clickPosTime;
+        let found = null;
+        for (let i = 0; i < appointments.length; i++) {
+            let entry = appointments[i];
+
+            if (entry.start <= when && entry.stop >= when) {
+                found = entry.id;
+            }
+        }
+        let selectedStopTime = selDate + budget.widgets.BusinessHours.MILLI_PER_DAY;
+        if (found !== null) {
+            me.unscheduleActionB_.set({action: {
+                id: found
+            }});
+        }
+
+    }, this.siteB_, this.curDateB_, this.appointmentsB_, this.unscheduleActionB_);
+
+};
+
+/**
+ * returns a function that will remove a holiday
+ * @private
+ * @param {!budget.widgets.BusinessHours.MenuInfo} menuInfo
+ * @return {function(?)}
+ */
+budget.widgets.BusinessHours.prototype.showScheduleAppointmentDialog_ = function(menuInfo) {
+
+};
+
+/**
+ * @typedef {{ranges:!Array<{start:number, stop: number}>,
+ *       lengths:!Array<number>,
+ *       mentor:number}}
+ */
+budget.widgets.BusinessHours.AvailSlot;
+
+
+/**
+ * returns a function that will remove a holiday
+ * @private
+ * @param {number} when when did the user click
+ * @param {!recoil.structs.table.Table} avail
+ * @param {!Array<{start: number,stop: number,mentorid:number}>} appointments
+ * @return {!Array<!budget.widgets.BusinessHours.AvailSlot>}
+ */
+budget.widgets.BusinessHours.getAvailableSlots_ = function(when, avail, appointments) {
+    let ORIG_MENTOR = budget.widgets.BusinessHours.ORIG_MENTOR;
+    let time = new Date(when);
+    let start = new Date(time.getFullYear(), time.getMonth(), time.getDate()).getTime();
+    let stop = new Date(time.getFullYear(), time.getMonth(), time.getDate() + 1).getTime();
+    let availT = aurora.db.schema.tables.base.mentor_availablity;
+    // we have to remove existing appointments
+    let mentorTimes = {};
+    let mentorLengths = {};
+    let mentorAppointments = {};
+    avail.forEach(function(row) {
+        // appointmentLen in minutes
+        let len = row.get(availT.cols.appointmentLen) * 60000;
+        budget.widgets.BusinessHours.iterateOverPeriod(
+            row, start, stop,
+            function(start, stop, mentorid) {
+                recoil.util.map.safeGet(mentorTimes, mentorid, []).push({start: start, stop: stop});
+                recoil.util.map.safeGet(mentorLengths, mentorid, []).push(len);
+            });
+    });
+    appointments.forEach(function(appt) {
+        recoil.util.map.safeGet(mentorAppointments, appt.mentorid, []).push(appt);
+    });
+
+    let res = [];
+
+    for (let mentorStr in mentorTimes) {
+        let mentor = BigInt(mentorStr);
+        budget.appointments.mergeDayUsage(mentorTimes[mentor], true);
+        // remove existing appointments with mentor
+
+        mentorTimes[mentor] = budget.widgets.BusinessHours.removeAllOverlaps(
+            mentorTimes[mentor],
+            mentorAppointments[mentor] || []);
+
+
+        let times = mentorTimes[mentor];
+        if (times.length === 0) {
+            continue;
+        }
+        let seen = {};
+        let lengths = mentorLengths[mentor].filter(len => {
+            let res = !seen[len];
+            seen[len] = true;
+            return res;
+        }).sort((x,y) => x - y);
+
+        let item = {
+            mentor, lengths, ranges: []};
+        
+        times.forEach(function (entry) {
+            item.ranges.push({start: entry.start, stop: entry.stop, mentor, lengths});
+        });
+        res.push(item);
+    }
+    return res;
+    
+};
+/**
+ * @private
+ */
+budget.widgets.BusinessHours.ORIG_MENTOR = new recoil.structs.table.ColumnKey('orig-mentor');
+/** 
+ * @param {number} when when the user clicked
+ * @param {!recoil.structs.table.Table} avail
+ * @return {{slots:!Array<!budget.widgets.BusinessHours.AvailSlot>, 
+ *           mentors:!Array<number>,
+ *           setupEntryRow:function(budget.widgets.BusinessHours.AvailSlot, recoil.structs.table.MutableTableRow, number),
+ *           setupRow:function(number,recoil.structs.table.MutableTableRow,number),
+*            getMentorInfo:function(number):{start:number, stop:number, len: number, ranges:!Array<{start: number,stop:number}>}
+ * }}
+ */
+budget.widgets.BusinessHours.prototype.createScheduleHelper_ = function(when, avail) {
+    let apptsC = aurora.db.schema.tables.base.secure_appts.cols;
+    let ORIG_MENTOR = budget.widgets.BusinessHours.ORIG_MENTOR;
+    let slots = budget.widgets.BusinessHours.getAvailableSlots_(
+        when, avail,
+        /** @type {!Array<{mentorid: number, start: number, stop: number}>} */(this.createAppointments_(false)));
+    
+    let minFunc = (a, v) => a === null ? v : Math.min(a, v);
+    let maxFunc = (a, v) => a === null ? v : Math.max(a, v);
+    let setupEntryRow = function (entry, row, when) {
+        let ranges = entry ? entry.ranges : [];
+        let lengths = entry ? entry.lengths : [];
+            row.set(apptsC.mentorid, entry ? entry.mentor : null);
+        row.set(ORIG_MENTOR, row.get(apptsC.mentorid));
+        let start = ranges.map(x => x.start).reduce(minFunc, null) || 0;
+        let len = lengths.reduce(minFunc, null) || 0;
+        if (when !== null) {
+            ranges.forEach(function (r) {
+                if (r.start <= when && when <= r.stop) {
+                    start = Math.max(Math.floor((when - r.start) /len) * len + r.start, r.start);
+                }
+            });
+                               
+        }
+        row.set(apptsC.start, start);
+        row.set(apptsC.stop, start + len);
+        row.set(apptsC.mentorid, entry ? entry.mentor : null);
+    };
+
+
+    let getMentorInfo = function (mentorid) {
+        let found = null;
+        slots.forEach(function (entry) {
+            if (entry.mentor === mentorid) {
+                found = entry;
+            }
+        });
+        if (found) {
+            return {
+                start: found.ranges.map(x=>x.start).reduce(minFunc, null),
+                stop: found.ranges.map(x=>x.stop).reduce(maxFunc, null),
+                len: found.lengths.reduce(minFunc, null),
+                ranges: found.ranges
+            };
+            
+        }
+        return {
+            start: 0, stop: 0, len: 0, ranges: []
+        };
+        
+    };
+    let setupRow = function (mentorid, row, when) {
+        let found = false;
+        slots.forEach(function (entry) {
+            if (entry.mentor === mentorid) {
+                setupEntryRow(entry, row, when);
+                found = true;
+            }
+        });
+        return found;
+    };
+    let mentors = slots.map(x => x.mentor);
+
+    return {slots, mentors, setupEntryRow, setupRow, getMentorInfo};
+};
+
+/**
+ * @return {function():boolean}
+ */
+budget.widgets.BusinessHours.prototype.loggedIn_ = function() {
+    let me = this;
+    return function() {
+        let context = me.scope_.getFrp().accessTrans(function() {
+            return me.contextB_.get();
+        }, me.contextB_);
+        return context !== null && aurora.permissions.loggedIn(true)(context);
+    };
+};
+/**
+ * returns a function that will remove a holiday
+ * @private
+ * @param {!budget.widgets.BusinessHours.MenuInfo} menuInfo
+ * @return {function(?)}
+ */
+budget.widgets.BusinessHours.prototype.doScheduleAppointmentFunc_ = function(menuInfo) {
+    let me = this;
+    let frp = me.scope_.getFrp();
+    let HOUR_RES = budget.widgets.BusinessHours.HOUR_RES;
+    let scope = me.scope_;
+    let ORIG_MENTOR = budget.widgets.BusinessHours.ORIG_MENTOR;
+    let apptsC = aurora.db.schema.tables.base.secure_appts.cols;
+    let FREE_COL = new recoil.structs.table.ColumnKey('orig-mentor');
+    let cd = goog.dom.createDom;
+
+    let freeCol = new recoil.ui.widgets.table.LabelColumn(FREE_COL, 'Available', {
+        formatter: function (v) {
+            return cd.apply(null, ['div', {}].concat(v.map(x => cd('div', {}, x))));
+        }});
+    return frp.accessTransFunc(function(e) {
+        let selDate = me.getSelectionDate_(menuInfo, me.curDateB_.get());
+        let mentorC = aurora.db.schema.tables.base.user.cols;
+
+        if (me.clientId_ == null) {
+            // maybe take user to signup screen
+            if (!me.loggedIn_()()) {
+                window.location = "/account/signup";
+            }
+            return;
+        }
+        
+        let when = menuInfo.clickPosTime;
+        let dayStartTime = new Date(when).setHours(0,0,0,0);
+        
+        let newAppointments = me.appointmentsB_.get().createEmpty([],[ORIG_MENTOR]);
+        let toTime = function (absolute) {
+            let d = new Date(absolute);
+            return ((d.getHours() * 60 + d.getMinutes()) * 60 + d.getSeconds()) * 1000 + d.getMilliseconds();
+        };
+        let toAbsolute = function (rel) {
+            let remaining = rel;
+            let div = function (divisor) {
+                let res = remaining % divisor;
+                remaining = Math.floor(remaining/divisor);
+                return res;
+            };
+            let milli = div(1000);
+            let sec = div(60);
+            let min = div(60);
+            let hour = remaining;
+            return new Date(dayStartTime).setHours(hour, min, sec, milli);
+        };
+        let helper = me.createScheduleHelper_(when, me.availableB_.get());
+        {
+            let row = new recoil.structs.table.MutableTableRow();
+            row.set(apptsC.userid, me.clientId_);
+            helper.setupEntryRow(helper.slots[0], row, when);
+        // override with user mentor if we can
+            let mentorid = me.mentorIdB_.get();
+            helper.setupRow(mentorid, row, when);
+            newAppointments.addRow(row);
+        }
+            
+            
+
+
+
+        
+
+        
+        // set the default row to be our mentor if they exist
+        
+        let newAppointmentsB = frp.createB(newAppointments.freeze());
+        
+        let validatedTableB = frp.liftBI(function(tbl, mentorsTbl) {
+            let mentorList = [];
+            let helper = me.createScheduleHelper_(when, me.availableB_.get());
+            mentorsTbl.forEach(function (row) {
+                mentorList.push({name:row.get(mentorC.firstName) || row.get(mentorC.username) || '', val: row.get(mentorC.id).db});
+            });
+
+            
+            let res = tbl.createEmpty([], [FREE_COL]);
+            res.addColumnMeta(apptsC.start, {editable: true});
+            res.addColumnMeta(apptsC.stop, {editable: true});
+            res.addColumnMeta(FREE_COL, {editable: false});
+            
+            let columns = new recoil.ui.widgets.TableMetaData();
+            columns.addColumn(new recoil.ui.widgets.table.SelectColumn(apptsC.mentorid, 'Mentor', helper.mentors));
+            columns.addColumn(freeCol);
+            columns.addColumn(new recoil.ui.columns.Time(apptsC.start, 'Start'));
+            columns.addColumn(new recoil.ui.columns.Time(apptsC.stop, 'Finish'));
+            
+            res.addColumnMeta(apptsC.mentorid, {renderer: new recoil.ui.renderers.ListRenderer(mentorList)});
+            let mess = budget.messages;
+            tbl.forEachModify(function(mrow) {
+                let startAbs = mrow.get(apptsC.start);
+                let stopAbs = mrow.get(apptsC.stop);
+                let startV = toTime(mrow.get(apptsC.start));
+                let stopV = toTime(mrow.get(apptsC.stop));
+
+                res.addColumnMeta(apptsC.start, {editable: true});
+                res.addColumnMeta(apptsC.stop, {editable: true});
+                let mInfo = helper.getMentorInfo(mrow.get(apptsC.mentorid));
+                let minTime = toTime(mInfo.start);
+                let maxTime = toTime(mInfo.stop);
+                
+                let startErrors = [];
+                let stopErrors = [];
+                let validSlots = mInfo.ranges.filter(r => r.start <= startAbs && stopAbs <= r.stop);
+                if (mrow.get(apptsC.stop) < new Date().getTime()) {
+                    stopErrors.push(mess.APPOINTMENT_IN_PAST);
+                }
+                else if (startV > stopV) {
+                    stopErrors.push(mess.FINISH_DATE_CANNOT_BE_BEFORE_START_DATE);
+                }
+                else if (startV < minTime) {
+                    startErrors.push(mess.MENTOR_NOT_FREE_AT_THAT_TIME);
+                }
+                else if (stopV > maxTime) {
+                    stopErrors.push(mess.MENTOR_NOT_FREE_AT_THAT_TIME);
+                }
+                else if (stopV - startV < mInfo.len) {
+                    stopErrors.push(mess.APPOINTMENT_NOT_LONG_ENOUGH);
+                } else if (validSlots.length == 0) {
+                    stopErrors.push(mess.MENTOR_NOT_FREE_AT_THAT_TIME);
+                }
+                
+                mrow.addCellMeta(apptsC.start, {
+                    min: minTime,
+                    max: maxTime - mInfo.len,
+                    errors: startErrors
+                });
+                mrow.addCellMeta(apptsC.stop, {
+                    min: minTime + mInfo.len,
+                    max: maxTime,
+                    errors: stopErrors
+                });
+                mrow.set(FREE_COL, mInfo.ranges.map(
+                    r => new Date(r.start).toLocaleTimeString() + ' to '
+                        + new Date(r.stop).toLocaleTimeString()));
+                mrow.set(ORIG_MENTOR, mrow.get(apptsC.mentorid));
+                mrow.set(apptsC.start, startV);
+                mrow.set(apptsC.stop, stopV);
+                res.addRow(mrow);
+            });
+            return columns.applyMeta(res);
+        }, function (v) {
+            let res = newAppointmentsB.get().createEmpty();
+            let helper = me.createScheduleHelper_(when, me.availableB_.get());
+            v.forEachModify(function (mrow) {
+                let absStart = toAbsolute(mrow.get(apptsC.start));
+                if (mrow.get(ORIG_MENTOR) != mrow.get(apptsC.mentorid)) {
+                    if (helper.setupRow(mrow.get(apptsC.mentorid), mrow, absStart)) {
+                        // time is now in absolute
+                        res.addRow(mrow);
+                        return;
+                    }
+                }
+                mrow.set(apptsC.start, absStart);
+                mrow.set(apptsC.stop, toAbsolute(mrow.get(apptsC.stop)));
+                res.addRow(mrow);
+            });
+            
+            newAppointmentsB.set(res.freeze());
+        }, newAppointmentsB, me.mentorsB_, me.mentorIdB_, me.availableB_, me.appointmentsB_);
+            
+        var td = new aurora.widgets.TableDialog(scope, validatedTableB, frp.createCallback(function(e) {
+            console.log("schedule the appointment");
+            newAppointmentsB.get().forEach(function (row) {
+                
+                me.scheduleActionB_.set({action: {
+                    mentorid: row.get(apptsC.mentorid),
+                    userid: row.get(apptsC.userid),
+                    start: row.get(apptsC.start),
+                    stop: row.get(apptsC.stop)
+                    
+                }});
+            });
+                                          
+        }, me.scheduleActionB_, newAppointmentsB), 'Schedule', function() {return null;}, 'Schedule Appointent', undefined, {blockErrors: true});
+        td.show(true);
+    }, this.siteB_, this.curDateB_, this.appointmentsB_, this.scheduleActionB_, me.availableB_, me.mentorIdB_);
 
 };
 
@@ -1097,6 +1572,20 @@ budget.widgets.BusinessHours.prototype.holidayExists_ = function(menuInfo) {
  * @param {{dayIndex: number, hourIndex: number, clickPosMilli: number, clickPosTime:number}} menuInfo
  * @return {boolean}
  */
+budget.widgets.BusinessHours.prototype.isAppointment_ = function(menuInfo) {
+    
+
+    let usage = this.createAppointments_(true);
+    let startOfWeekMilli = recoil.ui.widgets.DateWidget2.convertLocaleDate(this.curDateB_.get()).getTime();
+    return this.timeInDateRange_(usage, (startOfWeekMilli + menuInfo.clickPosMilli));
+
+};
+
+
+/**
+ * @param {{dayIndex: number, hourIndex: number, clickPosMilli: number, clickPosTime:number}} menuInfo
+ * @return {boolean}
+ */
 budget.widgets.BusinessHours.prototype.isAvailable_ = function(menuInfo) {
     let avail = this.availableB_.get();
     let startOfWeekMilli = recoil.ui.widgets.DateWidget2.convertLocaleDate(this.curDateB_.get()).getTime();
@@ -1121,6 +1610,7 @@ budget.widgets.BusinessHours.prototype.setupMenu_ = function() {
     let holidayExists = this.holidayExists_.bind(this);
     let regHoursExists = this.regHoursExists_.bind(this);
     let isAvailable = this.isAvailable_.bind(this);
+    let isAppointment = this.isAppointment_.bind(this);
     let not = function(func) {
         return function(menuInfo) {
             return !func(menuInfo);
@@ -1133,9 +1623,19 @@ budget.widgets.BusinessHours.prototype.setupMenu_ = function() {
         };
     };
 
+    let or = function(f1, f2) {
+        return function(menuInfo) {
+            return f1(menuInfo) || f2(menuInfo);
+        };
+    };
+
+    
 
     let checkPerm = function(perms) {
         return function() {
+            if (perms === null) {
+                return true;
+            }
             let context = null;
             frp.accessTrans(function() {
                 context = me.contextB_.get();
@@ -1154,8 +1654,9 @@ budget.widgets.BusinessHours.prototype.setupMenu_ = function() {
     let addMenu = function(name, show, func, perm) {
         menus.push({item: new goog.ui.MenuItem(name.toString()), show: and(show, checkPerm(perm)), func: func});
     };
+    let mess = budget.messages;
     if (this.type_ === 'admin') {
-        addMenu(budget.messages.REMOVE_HOURS, regHoursExists, this.doRemoveHoursFunc_(menuInfo), ['site-management']);
+        addMenu(mess.REMOVE_HOURS, regHoursExists, this.doRemoveHoursFunc_(menuInfo), ['site-management']);
         addMenu(budget.messages.MODIFY_HOURS_DIALOG, regHoursExists, this.doModifyHoursDialogFunc_(menuInfo), ['site-management']);
         addMenu(budget.messages.ADD_HOURS_DIALOG, not(regHoursExists), this.doAddHoursDialogFunc_(menuInfo), ['site-management']);
         addMenu(budget.messages.REMOVE_HOLIDAY, holidayExists, this.doRemoveHolidayFunc_(menuInfo), ['site-management']);
@@ -1164,7 +1665,19 @@ budget.widgets.BusinessHours.prototype.setupMenu_ = function() {
         addMenu(budget.messages.ADD_HOLIDAYS_DIALOG, not(holidayExists), this.doAddHolidaysDialogFunc_(menuInfo), ['site-management']);
     }
 
-
+    if (this.type_ === 'client') {
+        let perms = ['client', 'mentor', 'site-management'];
+        let clientIdFunc = function () {
+            return me.clientId_ != undefined;
+        };
+        addMenu(mess.UNSCHEDULE_APPOINTMENT,
+                and(isAppointment, clientIdFunc),
+                this.doUnscheduleAppointmentFunc_(menuInfo), perms);
+        addMenu(mess.SCHEDULE_APPOINTMENT,  and(
+            and(or(clientIdFunc, not(this.loggedIn_())), isAvailable),
+            and(not(holidayExists), not(isAppointment))), this.doScheduleAppointmentFunc_(menuInfo), null);
+    }
+    
     if (this.type_ === 'mentor') {
         addMenu(budget.messages.MAKE_AVAILABLE, not(isAvailable), this.doAddAvailableFunc_(menuInfo), ['mentor']);
         addMenu(budget.messages.MAKE_UNAVAILABLE, isAvailable, this.doRemoveAvailableFunc_(menuInfo, false), ['mentor']);
@@ -1182,12 +1695,23 @@ budget.widgets.BusinessHours.prototype.setupMenu_ = function() {
     let calDiv = goog.dom.getElementsByClass('budget-calendar');
     //    this.contextMenu_.render(calDiv);
     // @todo change the render to not use document.body
-    this.contextMenu_.render(document.body);
-
+    this.contextMenu_.render(this.calendarDiv_);
+    let menuEvents = [goog.events.EventType.CONTEXTMENU];
+    if (this.isClient_()) {
+        menuEvents.push(goog.events.EventType.MOUSEDOWN);
+    }
     goog.events.listen(
-        this.calendarDiv_, goog.events.EventType.CONTEXTMENU, frp.accessTransFunc(function(e) {
+        this.calendarDiv_, menuEvents, frp.accessTransFunc(function(e) {
 
+
+            
             if (e.ctrlKey) {
+                return;
+            }
+
+            if (goog.dom.contains(me.contextMenu_.getElement(), e.target)) {
+                e.preventDefault();
+                e.stopPropagation();
                 return;
             }
             me.contextMenu_.removeChildren(true);
@@ -1312,62 +1836,8 @@ budget.widgets.BusinessHours.prototype.timeInDateRange_ = function(timeRange, ti
  * @param {boolean=} opt_absolute
  */
 budget.widgets.BusinessHours.prototype.mergeDayUsage_ = function(dayUsage, opt_absolute) {
-    budget.widgets.BusinessHours.mergeDayUsage(dayUsage, opt_absolute);
+    budget.appointments.mergeDayUsage(dayUsage, opt_absolute);
 };
-
-/**
- * @param {!Array<{start: number, stop: number}>} dayUsage
- * @param {boolean=} opt_absolute
- */
-budget.widgets.BusinessHours.mergeDayUsage = function(dayUsage, opt_absolute) {
-
-    let comparator = function(x, y) {
-        let res = x.start - y.start;
-        if (res) {
-            return res;
-        }
-        return x.stop - y.stop;
-    };
-    let milliPerDay = budget.widgets.BusinessHours.MILLI_PER_DAY;
-    let milliPerWeek = milliPerDay * 7;
-
-    for (let i = dayUsage.length - 1; i >= 0; i--) {
-        let e = dayUsage[i];
-        let size = e.stop - e.start;
-        if (size <= 0) {
-            dayUsage.splice(i, 1);
-        }
-        else if (!opt_absolute) {
-            e.start = e.start % milliPerWeek;
-            e.stop = e.start + size;
-        }
-
-
-
-    }
-    // merge entries
-    let entries = dayUsage;
-    entries.sort(comparator);
-    if (entries.length === 0) {
-        return;
-    }
-    let newEntries = [entries[0]];
-    let last = entries[0];
-    for (let i = 1; i < entries.length; i++) {
-        let e = entries[i];
-        if (last.stop < e.start) {
-            last = e;
-            newEntries.push(e);
-        }
-        else {
-            last.stop = Math.max(last.stop, e.stop);
-        }
-    }
-    dayUsage.splice(0, dayUsage.length);
-    dayUsage.push.apply(dayUsage, newEntries);
-
-};
-
 
 /**
  * @private
@@ -1396,16 +1866,7 @@ budget.widgets.BusinessHours.prototype.createHolidayUsage_ = function(holidays) 
  * @param {number} months number of months to add
  * @return {number}
  */
-budget.widgets.BusinessHours.addMonths_ = function(start, months) {
-    let startDate = new Date(start);
-    let month = startDate.getMonth();
-    startDate.setMonth(month + months + 1, 0);
-    let maxDate = startDate.getDate();
-    startDate = new Date(start);
-    startDate.setMonth(month + months, Math.min(maxDate, startDate.getDate()));
-    return startDate.getTime();
-
-};
+budget.widgets.BusinessHours.addMonths_ = budget.appointments.addMonths;
 
 /**
  * add days to start taking into consideration day lengths, if the lenght is shorter it will go
@@ -1437,10 +1898,7 @@ budget.widgets.BusinessHours.addDays = function(start, days, opt_millInDay) {
  * @param {number} when
  * @return {number}
  */
-budget.widgets.BusinessHours.getMonths_ = function(when) {
-    let date = new Date(when);
-    return date.getFullYear() * 12 + date.getMonth();
-};
+budget.widgets.BusinessHours.getMonths_ = budget.appointments.getMonths;
 
 
 /**
@@ -1495,93 +1953,216 @@ budget.widgets.BusinessHours.nextPeriod_ = function(entry, cur, steps) {
  * @param {!recoil.structs.table.TableRowInterface} entry
  * @param {number} periodStart millis since epoc
  * @param {number} periodStop millis since epoc
- * @param {function(number,number)} callback - params start and stop
+ * @param {function(number,number,?number)} callback - params start and stop, mentorid
  */
 budget.widgets.BusinessHours.iterateOverPeriod = function(entry, periodStart, periodStop, callback) {
     let availT = aurora.db.schema.tables.base.mentor_availablity;
-    let RepeatType = aurora.db.schema.getEnum(availT.cols.repeat);
-    let repeatMeta = aurora.db.schema.getMeta(availT.cols.repeat);
-
-    const REGULAR = [RepeatType.weekly, RepeatType.fortnightly, RepeatType.daily];
+    let repType = entry.get(availT.cols.repeat);
     let startRep = entry.get(availT.cols.start);
     let stopRep = entry.get(availT.cols.stop);
-
-    if (periodStop < periodStart) {
-        return;
-    }
-    let repType = entry.get(availT.cols.repeat);
-    if (repType == null) {
-        if (startRep >= periodStart && startRep < periodStop) {
-            callback(startRep, startRep + entry.get(availT.cols.len));
-        }
-        return;
-    }
-
-    let stopTime = stopRep == null ? periodStop : stopRep;
-    let regularIdx = REGULAR.indexOf(repType);
-    if (regularIdx !== -1) {
-        let interval = repeatMeta.enumInfo[repType].rate * budget.widgets.BusinessHours.MILLI_PER_DAY;
-        let curStart = startRep;
-        if (startRep < periodStart) {
-            let numIntervals = Math.ceil((periodStart - startRep) / interval);
-            curStart = numIntervals * interval + startRep;
-        }
-
-        for (let i = curStart; i < stopTime; i += interval) {
-            // deal with daylight savings
-            let dayDiff = Math.round((i - startRep) / budget.widgets.BusinessHours.MILLI_PER_DAY);
-
-            let time = new Date(startRep);
-            time.setDate(time.getDate() + dayDiff);
-            callback(time.getTime(), time.getTime() + entry.get(availT.cols.len));
-        }
-    }
-    else if (repType === RepeatType.monthly || repType === RepeatType.quarterly || repType === RepeatType.yearly) {
-        // we will work in months and compare
-        let repMonths = budget.widgets.BusinessHours.getMonths_(startRep);
-        let startMonths = budget.widgets.BusinessHours.getMonths_(periodStart);
-        let interval = Math.round(12 * (repeatMeta.enumInfo[repType].rate / 365));
-        let curStart = repMonths;
-
-        if (startMonths > repMonths) {
-            let numIntervals = Math.ceil((startMonths - repMonths) / interval);
-            curStart = repMonths + numIntervals * interval;
-        }
-
-
-        let curMonth = curStart - repMonths;
-
-        let curDate = budget.widgets.BusinessHours.addMonths_(startRep, curMonth);
-        while (curDate < stopTime) {
-            callback(curDate, curDate + entry.get(availT.cols.len));
-            curMonth += interval;
-            curDate = budget.widgets.BusinessHours.addMonths_(startRep, curMonth);
-
-        }
-    }
+    let len = entry.get(availT.cols.len);
+    let mentorid = entry.get(availT.cols.mentorid) ? entry.get(availT.cols.mentorid).db : null;
+    budget.appointments.iterateOverPeriod(
+        mentorid, startRep, stopRep, repType, len,
+        periodStart, periodStop, callback);
 };
+
+
+/**
+ * @private
+ * @return {boolean}
+ */
+budget.widgets.BusinessHours.prototype.isClient_ = function() {
+    return this.type_ == 'client';
+};
+
+/**
+ * @param {number} start start of week
+ * @param {number} time
+ * @return {number}
+ */
+budget.widgets.BusinessHours.toWeekTime = function (start, time) {
+
+    let timeM = moment(time);
+    let dayDiff = Math.floor(timeM.diff(moment(start), 'd', true));
+    let dayOffset = ((timeM.hour() * 60 + timeM.minute()) * 60 + timeM.seconds()) * 1000 + timeM.millisecond();
+
+    return dayOffset + Math.round(dayDiff) * budget.widgets.BusinessHours.MILLI_PER_DAY;
+};
+/**
+ * @param {!Array<{start:number,stop:number}>} dayUsage
+ * @param {number} periodStart
+ * @param {number} startTime
+ * @param {number} stopTime
+ * @param {function(?):boolean=} opt_match
+ * @return {!Array}
+ */
+budget.widgets.BusinessHours.removeOverlaps_ = function(dayUsage, periodStart, startTime, stopTime, opt_match) {
+    let start = budget.widgets.BusinessHours.toWeekTime(periodStart, startTime);
+    let stop = budget.widgets.BusinessHours.toWeekTime(periodStart, stopTime);
+    return budget.widgets.BusinessHours.removeOverlaps(dayUsage, start, stop, opt_match);
+};
+
+
+/**
+ * @param {!Array<{start:number,stop:number}>} removeFrom
+ * @param {!Array<{start:number,stop:number}>} toRemove
+ * @return {!Array}
+ */
+budget.widgets.BusinessHours.removeAllOverlaps = function(removeFrom, toRemove) {
+    let res = removeFrom;
+    toRemove.forEach(function (e) {
+        res = budget.widgets.BusinessHours.removeOverlaps(res, e.start, e.stop);
+    });
+    return res;
+};
+/**
+ * like removeOverlaps_ but doesn't use period start
+ * @param {!Array<{start:number,stop:number}>} dayUsage
+ * @param {number} start
+ * @param {number} stop
+ * @param {function(?):boolean=} opt_match
+ * @return {!Array}
+ */
+budget.widgets.BusinessHours.removeOverlaps = function(dayUsage, start, stop, opt_match) {
+    let newDayUsage = [];
+    // we need to convert times to their ms offset in the week
+    function addNonEmpty(list, entry) {
+        if (entry.start < entry.stop) {
+            list.push(entry);
+        }
+    }
+
+    dayUsage.forEach(function (usage) {
+        if (!opt_match || opt_match(usage)) {
+            if (stop <= usage.start || start >= usage.stop || start >= stop) {
+                // happens out of range of usage
+                newDayUsage.push(usage);
+            }
+            else {
+                
+                /**
+                 *   aaaa         aaaa    case(1,2)
+                 *      uuuu   uuuu
+                 *
+                 *    aa          aaaa    case(3,4)  
+                 *   uuuu          uu
+                 * 
+                 *   aaa           aaa    case(5,6)
+                 *   uuuuu       uuuuu 
+                 *
+                 *   aaaaa       aaaaa    case(7,8)
+                 *   uuu           uuu 
+                 *
+                 *         aaa            case(9)
+                 *         uuu
+                 */
+                        
+                let newUsage = goog.object.clone(usage);
+                if (start <= usage.start) {
+                    // 1=>ok,4=>empty,5=>ok,7=>empty,9=>empty
+                    newUsage.start = stop;
+                    addNonEmpty(newDayUsage, newUsage);
+                }
+                else if (stop >= usage.stop) {
+                    // 2=>ok,6=>ok,8=>empty
+                    newUsage.stop = start;
+                    addNonEmpty(newDayUsage, newUsage);
+                }
+                else {
+                    // 3 remaining
+                    goog.object.extend(newUsage, {start: usage.start, stop: start});
+                    newDayUsage.push(newUsage);
+                    newUsage = {};
+                    goog.object.extend(newUsage, usage, {start: stop, stop: usage.stop});                    
+                    newDayUsage.push(newUsage);
+                }
+            }
+        }
+        else {
+            newDayUsage.push(usage);
+        }
+    });
+    return newDayUsage;
+};
+/**
+ * @param {boolean} userOnly if true only shows the current users appointment
+ * @return {!Array<{start: number, stop: number, id:number, mentor:number}>}
+ */
+budget.widgets.BusinessHours.prototype.createAppointments_ = function(userOnly) {
+    if (!this.isClient_()) {
+        return [];
+    }
+    let apptsT = aurora.db.schema.tables.base.secure_appts;
+    let appointments = this.appointmentsB_.get();
+    let res = [];
+    let toNum = x => x ? x.db : null;
+    let clientId = this.clientId_;
+    if (clientId != undefined) {
+        appointments.forEach(function (appt) {
+            let id = toNum(appt.get(apptsT.cols.id));
+            let mentor = toNum(appt.get(apptsT.cols.mentorid));
+            let userid = toNum(appt.get(apptsT.cols.userid));
+            let start = appt.get(apptsT.cols.start);
+            let stop = appt.get(apptsT.cols.stop);
+            if (!userOnly || clientId == userid) {
+                res.push({mentorid: mentor, userid, start, stop, id: id});
+            }
+        });
+    }
+
+    return res;
+};
+
 /**
  * @private
  * @param {!recoil.structs.table.Table} avail
  * @param {number} periodStart
  * @param {number} periodStop
+ * @param {function(?number):boolean=} opt_filterMentors
  * @return {!Array<{start: number, stop: number}>}
  */
-budget.widgets.BusinessHours.prototype.createAvailable_ = function(avail, periodStart, periodStop) {
+budget.widgets.BusinessHours.prototype.createAvailable_ = function(avail, periodStart, periodStop, opt_filterMentors) {
     let availT = aurora.db.schema.tables.base.mentor_availablity;
+    let apptsT = aurora.db.schema.tables.base.secure_appts;
 
     let iterateOverPeriod = budget.widgets.BusinessHours.iterateOverPeriod;
-
+    let me = this;
     let dayUsage = [];
     // the end time here is where the repeat stops not the appointment
     avail.forEach(function(entry) {
-        iterateOverPeriod(entry, periodStart, periodStop, function(start, stop) {
+        iterateOverPeriod(entry, periodStart, periodStop, function(start, stop, mentor) {
             if (stop > periodStart && start < periodStop) {
-                dayUsage.push({start: start - periodStart, stop: stop - periodStart});
+                if (!opt_filterMentors || opt_filterMentors(mentor)) {
+                    dayUsage.push({start: start - periodStart, stop: stop - periodStart, mentor});
+                }
             }
         });
     });
 
+    if (this.isClient_()) {
+        // if client view filter out appointments and holidays
+        // don't worry about a particular clients appointments that will be added later
+        let appointments = this.appointmentsB_.get();
+        let holidaysT = aurora.db.schema.tables.base.site_holidays;
+
+        appointments.forEach(function (appt) {
+            let mentor = appt.get(apptsT.cols.mentorid);
+            let start = appt.get(apptsT.cols.start);
+            let stop = appt.get(apptsT.cols.stop);
+            dayUsage = budget.widgets.BusinessHours.removeOverlaps_(
+                dayUsage, periodStart,
+                start, stop, usage => mentor && usage.mentor == mentor.db);
+        });
+        this.holidaysB_.get().forEach(function (row) {
+            dayUsage = budget.widgets.BusinessHours.removeOverlaps_(
+                dayUsage, periodStart,
+                row.get(holidaysT.cols.start),
+                row.get(holidaysT.cols.stop));
+        });
+    }
+
+    
     this.mergeDayUsage_(dayUsage, true);
     return dayUsage;
 };
@@ -1820,6 +2401,62 @@ budget.widgets.BusinessHours.prototype.updateUsage_ = function(dayUsage, calDim,
     }
 
 };
+
+/**
+ * should be able to refactor so holidays and appointments use same code
+ * @param {!Array<{start:number, stop: number}>} list
+ * @param {string} cls
+ * @param {number} startDateMillis
+ * @param {{height:number, width:number, top:number, left:number}} hourDim
+ * @param {{height:number, width:number, top:number, left:number}} calDim
+ */
+budget.widgets.BusinessHours.prototype.updateRanges_ = function (list, cls, startDateMillis, hourDim, calDim) {
+    let milliPerDay = budget.widgets.BusinessHours.MILLI_PER_DAY;
+    let hourH = hourDim.height;
+    let minY = hourDim.top - calDim.top;
+    let cd = goog.dom.createDom;
+
+    let divs = goog.dom.getElementsByClass(cls, this.calendarDiv_);
+    for (let j = 0; j < divs.length; j++) {
+        goog.dom.removeNode(divs[j]);
+    }
+
+    for (let day = 0; day < 7; day++) {
+        let curDateStart = moment(startDateMillis).add(day, 'd').toDate().getTime();
+        let curDateEnd = moment(startDateMillis).add(day + 1, 'd').toDate().getTime();
+
+        function getOffset(val) {
+            // handles daylight savings
+            let timeM = moment(val);
+            return ((timeM.hour() * 60 + timeM.minute()) * 60 + timeM.seconds()) * 1000 + timeM.millisecond();
+        }
+        for (let i = 0; i < list.length; i++) {
+            let item = list[i];
+            let start = item.start;
+            let stop = item.stop;
+            if (curDateEnd <= start || curDateStart >= stop) {
+                
+            } else {
+                let startOffsetMillis = Math.max(getOffset(start), 0);
+                let stopOffset = getOffset(stop);
+                let endOffsetMillis = Math.min(milliPerDay, stop  >= curDateEnd ? milliPerDay : stopOffset);
+                
+                let yStart = (minY + hourH * startOffsetMillis / 3600000);
+                let yEnd = (minY + hourH * endOffsetMillis / 3600000);
+                
+                let curDiv = cd('div', {class: cls});
+                
+                curDiv.style.top = (1 + yStart) + 'px';
+                curDiv.style.height = (yEnd - yStart - 1) + 'px';
+                curDiv.style.left = '1px';
+                curDiv.style.width = (hourDim.width -1) + 'px';
+                
+                this.days_[day].div.appendChild(curDiv);
+                
+            }
+        }
+    }
+};
 /**
  * @private
  * @param {!recoil.ui.ComponentWidgetHelper} helper
@@ -1832,7 +2469,7 @@ budget.widgets.BusinessHours.prototype.update_ = function(helper) {
 
     let me = this;
     if (helper.isGood()) {
-
+        goog.style.setElementShown(this.yourAvailableLegend_, me.mentorIdB_.get() != null);
         goog.style.setElementShown(this.mentorDiv_, me.type_ == 'mentor' && aurora.permissions.has('user-management')(this.contextB_.get()));
 
         let border = this.borderDimsB_.get();
@@ -1880,49 +2517,31 @@ budget.widgets.BusinessHours.prototype.update_ = function(helper) {
 
         let milliPerDay = budget.widgets.BusinessHours.MILLI_PER_DAY;
         let milliPerWeek = milliPerDay * 7;
-
+        
         me.updateUsage_(dayUsage, calDim, hourDim, 'avail', false);
-        if (me.type_ === 'mentor') {
+        if (me.type_ === 'mentor' || me.type_ === 'client') {
             let pStart = this.dateWidget_.convertLocaleDate(curDate).getTime();
-            me.updateUsage_(this.createAvailable_(this.availableB_.get(), pStart, pStart + milliPerWeek), calDim, hourDim, 'mentor-avail', true);
+            let mainFilter = function (mentor) {
+                return me.type_ !== 'client' || mentor != me.mentorIdB_.get();
+            };
+            let myFilter = function (mentor) {
+                return me.type_ === 'client' && mentor == me.mentorIdB_.get();
+            };
+            
+            me.updateUsage_(
+                this.createAvailable_(this.availableB_.get(), pStart, pStart + milliPerWeek, mainFilter),
+                calDim, hourDim, 'mentor-avail', true);
+            me.updateUsage_(
+                this.createAvailable_(this.availableB_.get(), pStart, pStart + milliPerWeek, myFilter),
+                calDim, hourDim, 'your-mentor-avail', true);
+
         }
 
 
         let startDateMillis = this.dateWidget_.convertLocaleDate(curDate).getTime();
 
-        let holidayDivs = goog.dom.getElementsByClass('budget-holiday', this.calendarDiv_);
-        for (let j = 0; j < holidayDivs.length; j++) {
-            goog.dom.removeNode(holidayDivs[j]);
-        }
-
-        for (let day = 0; day < 7; day++) {
-            let curDateStart = startDateMillis + (day * milliPerDay);
-            let curDateEnd = curDateStart + milliPerDay;
-
-            for (let i = 0; i < holidayUsage.length; i++) {
-
-                let hol = holidayUsage[i];
-
-                if (curDateEnd <= hol.start || curDateStart >= hol.stop) {
-
-                } else {
-                    let startOffsetMillis = Math.max(hol.start - curDateStart, 0);
-                    let endOffsetMillis = Math.min(milliPerDay, hol.stop - curDateStart);
-
-                    let yStart = (minY + hourH * startOffsetMillis / 3600000);
-                    let yEnd = (minY + hourH * endOffsetMillis / 3600000);
-
-                    let curDiv = cd('div', {class: 'budget-holiday'});
-
-                    curDiv.style.top = yStart + 'px';
-                    curDiv.style.height = (yEnd - yStart) + 'px';
-                    curDiv.style.width = hourDim.width + 'px';
-
-                    this.days_[day].div.appendChild(curDiv);
-
-                }
-            }
-        }
+        this.updateRanges_(holidayUsage, 'budget-holiday', startDateMillis, hourDim, calDim);
+        this.updateRanges_(this.createAppointments_(true), 'budget-cal-appoint', startDateMillis, hourDim, calDim);
 
     }
 };
@@ -1934,7 +2553,10 @@ budget.widgets.BusinessHours.prototype.attachHelper_ = function(selectionB) {
 
     this.selAppB_ = selectionB;
 
-    let bs = [this.siteB_, this.siteIdB_, this.highlightedB_, this.curDateB_, this.contentSizeB_, this.holidaysB_, this.borderDimsB_, this.hoursTblB_, this.appointmentsB_, this.availableB_, this.contextB_];
+    let bs = [this.siteB_, this.siteIdB_, this.highlightedB_, this.curDateB_,
+              this.contentSizeB_, this.holidaysB_,
+              this.borderDimsB_, this.hoursTblB_, this.appointmentsB_, this.availableB_,
+              this.contextB_, this.unscheduleActionB_, this.scheduleActionB_, this.mentorIdB_];
 
 
     if (selectionB) {

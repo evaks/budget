@@ -70,7 +70,7 @@ budget.widgets.Contact = function(scope) {
 
     let officeHoursLabel = cd('td', {class: 'label'}, 'Office Hours', this.officeHours_);
 
-    let calLink = cd('td', {}, cd('a', {href: '/hours'}, budget.messages.FULL_CALENDAR.toString()));
+    let calLink = cd('td', {}, cd('a', {href: '/open'}, budget.messages.FULL_CALENDAR.toString()));
     let linkLabel = cd('tr', {class: 'contact-item'}, cd('td'), calLink);
 
 

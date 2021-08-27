@@ -93,8 +93,10 @@ budget.widgets.ClientView = function(scope) {
     notesWidget.getComponent().render(notesBodyDiv);
     documentsWidget.getComponent().render(documentsBodyDiv);
 
-    let appointmentWidget = new budget.widgets.BusinessHours(scope, 'client');
+    let appointmentWidget = new budget.widgets.BusinessHours(scope, 'client', userId);
     appointmentWidget.getComponent().render(appointmentBodyDiv);
+
+    appointmentListWidget.attachStartDate(appointmentWidget.getStartDateB());
 
     let sideGroupsContainer =
         cd('div', {class: 'side-groups-container'},
