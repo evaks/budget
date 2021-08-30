@@ -315,6 +315,15 @@ budget.messages.CALCULATED_PER = recoil.ui.message.getParamMsg('Calculated value
 }});
 
 
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.CALCULATED_NL_PER = recoil.ui.message.getParamMsg('Calculated value\nPer ', {'period': function(v) {
+    return v.substring(0, v.length - 2);
+}});
+
 /**
  * @type {!recoil.ui.message.Message}
  * @final

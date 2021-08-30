@@ -522,7 +522,7 @@ aurora.db.sql.ChangeWriter.prototype.applySilentError = function(err, results) {
             if (results) {
                 for (let i = 0; i < results.length; i++) {
                     if (results[i].error) {
-                        calcError = {silent: true};
+                        calcError = {silent: true, error: results[i].error};
                         break;
                     }
                     calcErrorFunc(results[i].children);

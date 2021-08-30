@@ -4,6 +4,7 @@ goog.require('aurora.db.schema.tables.base.user');
 goog.require('aurora.widgets.TableWidget');
 goog.require('budget.Importer');
 goog.require('budget.messages');
+goog.require('budget.print.BudgetPrinter');
 goog.require('goog.dom');
 goog.require('recoil.frp.logic');
 goog.require('recoil.structs.table.Filter');
@@ -156,14 +157,16 @@ budget.widgets.Budget.makeDialog = function(scope, content, headerName, okName, 
     }, 0);
 };
 
+
 /**
  * @private
  * @param {!recoil.frp.Behaviour} budgetB
  * @param {!recoil.frp.Behaviour} userB
+ * @param {!recoil.frp.Behaviour} siteB
  * @return {!recoil.frp.Behaviour}
  */
 
-budget.widgets.Budget.prototype.createPrintB_ = function(budgetB, userB) {
+budget.widgets.Budget.prototype.createPrintB_ = function(budgetB, userB, siteB) {
     let frp = this.scope_.getFrp();
     let scope = this.scope_;
     let budgetT = aurora.db.schema.tables.base.budget;
@@ -379,7 +382,7 @@ budget.widgets.Budget.prototype.createPrintB_ = function(budgetB, userB) {
         household.push([
             {value: '', styles: ['bold', 'border', 'border-left']},
             {value: mess.ENTER_TOTAL_C, styles: ['bold', 'border']},
-            {value: totals[EntryType.household] / 100, styles: ['border']}, {value: '', styles: ['border-bottom']}]);
+            {value: totals[EntryType.debt] / 100, styles: ['border']}, {value: '', styles: ['border-bottom']}]);
 
         household.push([
             {value: '', styles: ['bold', 'border', 'border-left']},
@@ -471,8 +474,17 @@ budget.widgets.Budget.prototype.createPrintB_ = function(budgetB, userB) {
 
     return frp.createCallback(
         function() {
-            let user = userB.get();
-            let budget = budgetB.get();
+            let user = userB.get().getFirstRow();
+            let budgetRow = budgetB.get().getFirstRow();
+            let site = siteB.get().getFirstRow();
+
+            
+            if (user && budgetRow && site) {
+                let printer = new budget.print.BudgetPrinter();
+                printer.print(user, budgetRow, site);
+                return;
+            }
+            
             // we have to do this otherwize the print will happen before the style sheet loads
             goog.net.XhrIo.send('/images/print.css', function(e) {
                 let xhr = e.target;
@@ -480,7 +492,7 @@ budget.widgets.Budget.prototype.createPrintB_ = function(budgetB, userB) {
                     printSheet(user, budget, xhr.getResponseText());
                 }
             });
-        }, budgetB, userB);
+        }, budgetB, userB, siteB);
 };
 
 /**
@@ -903,6 +915,7 @@ budget.widgets.Budget.prototype.attach = function(idB) {
     }, idB));
     this.budgetB_ = budgetB;
     let userB = scope.getDb().get(userT.key, query.eq(userT.cols.id, userId));
+    let siteB = scope.getDb().get(aurora.db.schema.tables.base.site.key);
 
     let periodMeta = aurora.db.schema.getMeta(budgetT.cols.period);
 
@@ -911,7 +924,7 @@ budget.widgets.Budget.prototype.attach = function(idB) {
         text: 'Export'});
 
     this.printWidget_.attachStruct({
-        action: this.createPrintB_(budgetB, userB),
+        action: this.createPrintB_(budgetB, userB, siteB),
         text: 'Print'});
 
     let CALC = new recoil.structs.table.ColumnKey('calc');

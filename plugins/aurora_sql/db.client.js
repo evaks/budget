@@ -848,6 +848,7 @@ aurora.db.Helper.prototype.addChangesToIdMap_ = function(idMap, changes, results
  * @param {!Array<!recoil.db.ChangeSet.Change>} changes
  * @param {!recoil.db.PathMap} currentErrors
  * @param {undefined|Array} serverResults
+ * @return {!goog.structs.AvlTree}
  */
 aurora.db.Helper.prototype.updateEffectedTables = function(changes, currentErrors, serverResults) {
     var effectedTables = [];
@@ -856,7 +857,6 @@ aurora.db.Helper.prototype.updateEffectedTables = function(changes, currentError
     // make it that longer paths occur first in the list that way we do not screw up parent paths before
     // we insert the child
     console.log('update references to keys as well');
-
     let idMap = new goog.structs.AvlTree(function(x, y) {
         let res = y.key.size() - x.key.size();
         if (res !== 0) {
@@ -906,6 +906,7 @@ aurora.db.Helper.prototype.updateEffectedTables = function(changes, currentError
     effectedTables.forEach(function(info) {
         me.updateTable(recoil.db.ChangeSet.Path.fromString(info.id.getData().name), currentErrors);
     });
+    return idMap;
 };
 
 
@@ -1131,11 +1132,13 @@ aurora.db.Comms.prototype.createChannel_ = function() {
                 }
                 else if (obj.command === 'set') {
                     var setChanges = me.sentChanges_;
+                    var idMap = null;
                     if (setChanges) {
+                       
                         console.log('got set result', obj);
                         me.currentErrors_ = new recoil.db.PathMap(schema);
                         var notApplied = aurora.db.Comms.generateErrors(obj.results, setChanges, me.currentErrors_);
-                        me.helper_.updateEffectedTables(setChanges, me.currentErrors_, obj.results);
+                        idMap = me.helper_.updateEffectedTables(setChanges, me.currentErrors_, obj.results);
                         me.erroredChanges_ = notApplied.unapplied;
                         me.sentChanges_ = [];
                         if (notApplied.unapplied.length > 0) {
@@ -1146,7 +1149,25 @@ aurora.db.Comms.prototype.createChannel_ = function() {
                     if (me.queuedChanges_.length > 0) {
                         var sendChanges = me.erroredChanges_ || [];
                         me.queuedChanges_.forEach(function(change) {
-                            sendChanges.push(change);
+                            // update queued changes path we new path ids
+                            sendChanges.push(change.forEachChange(function (c) {
+                                let changePath = c.path();
+                                while (changePath.size() > 1) {
+                                    let lastKeys = changePath.lastKeys();
+
+                                    if (lastKeys.length == 1 && lastKeys[0] instanceof aurora.db.PrimaryKey) {
+                                        
+                                        let newId = idMap.findFirst({key: changePath});
+                                        if (newId) {
+                                            let newKey = new aurora.db.PrimaryKey(newId.id, lastKeys[0].mem);
+                                            c = c.setPathKeys([newKey], changePath.size() - 1);
+                                        }
+                                    }
+                                    changePath = changePath.parent();
+                                }
+
+                                return c;
+                            }));
                         });
                         me.queuedChanges_ = [];
                         me.erroredChanges_ = [];
