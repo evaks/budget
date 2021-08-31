@@ -1049,3 +1049,8 @@ div.budget-div:hover div {
     vertical-align: top;
     color: #636363;
 }
+
+.budget-align-top{
+    vertical-align: top;
+}
+    

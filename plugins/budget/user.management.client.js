@@ -26,22 +26,13 @@ budget.widgets.UserManagement = function(scope, options) {
     let linkCol = new aurora.columns.Link(linkCK, 'Link');
     let frp = scope.getFrp();
     let query = new recoil.db.Query();
-    let mentorsB = budget.widgets.UserManagement.getMentors(scope);
-
-    let extraColsB = frp.liftB(function(mentorsTbl) {
-        let mentors = [null];
-        let names = {};
-
-        mentorsTbl.forEach(function(row) {
-            mentors.push(row.get(userT.cols.id));
-            names[row.get(userT.cols.username)] = row.get(userT.cols.id);
-        });
-
-
-        let renderer = recoil.ui.renderers.MapRenderer(names, recoil.ui.messages.NONE);
+    let mentorsB = budget.widgets.UserManagement.getMentorList(scope);
+    let mentorRendererB = budget.widgets.UserManagement.getMentorRenderer(scope);
+    let extraColsB = frp.liftB(function(mentorList, mentorRenderer) {
+        let mentors = [null].concat(mentorList);
 
         let mentorCol = new recoil.ui.widgets.table.SelectColumn(userT.cols.mentorid, 'Mentor', mentors, {
-            renderer: renderer
+            renderer: mentorRenderer
         });
 
 
@@ -58,7 +49,7 @@ budget.widgets.UserManagement = function(scope, options) {
                 }});
         }
         return res;
-    }, mentorsB);
+    }, mentorsB, mentorRendererB);
 
     this.widget_ = new aurora.widgets.UserManagement(scope, options, extraColsB);
 };
@@ -74,14 +65,14 @@ budget.widgets.UserManagement.prototype.flatten = recoil.frp.struct.NO_FLATTEN;
 
 /**
  * @param {!budget.WidgetScope} scope
- * @return {!recoil.frp.Behaviour<!Array>}
+ * @return {!recoil.frp.Behaviour<!Array<number>>}
  */
 budget.widgets.UserManagement.getMentorList = function(scope) {
     return scope.getFrp().liftB(function(tbl) {
         let res = [];
 
         tbl.forEach(function(row) {
-            res.push(row.get(aurora.db.schema.tables.base.user.cols.id));
+            res.push(row.get(aurora.db.schema.tables.base.mentor.cols.id));
         });
         return res;
     }, budget.widgets.UserManagement.getMentors(scope));
@@ -94,15 +85,14 @@ budget.widgets.UserManagement.getMentorList = function(scope) {
  * @return {!recoil.frp.Behaviour}
  */
 budget.widgets.UserManagement.getMentorRenderer = function(scope) {
-    const userT = aurora.db.schema.tables.base.user;
+    const userT = aurora.db.schema.tables.base.mentor;
     return scope.getFrp().liftB(function(tbl) {
-        let mentors = {};
+        let mentors = [];
         tbl.forEach(function(row) {
-            mentors[row.get(userT.cols.firstName) || row.get(userT.cols.username)] = row.get(userT.cols.id);
+            mentors.push({name: row.get(userT.cols.firstName) || row.get(userT.cols.username), val: row.get(userT.cols.id)});
         });
 
-        let res = recoil.ui.renderers.MapRenderer(mentors, recoil.ui.messages.NONE);
-        return recoil.util.func.makeEqualFunc(res, budget.widgets.UserManagement.getMentorRenderer, mentors);
+        return recoil.ui.renderers.ListRenderer(mentors, recoil.ui.messages.NONE);
     }, budget.widgets.UserManagement.getMentors(scope));
 };
 
@@ -111,32 +101,14 @@ budget.widgets.UserManagement.getMentorRenderer = function(scope) {
  * @return {!recoil.frp.Behaviour<!recoil.structs.table.Table>}
  */
 budget.widgets.UserManagement.getMentors = function(scope) {
-    let userT = aurora.db.schema.tables.base.user;
+    let userT = aurora.db.schema.tables.base.mentor;
     let groupT = aurora.db.schema.tables.base.group;
     let permissionT = aurora.db.schema.tables.base.permission;
 
     let frp = scope.getFrp();
     let query = new recoil.db.Query();
 
-    return frp.switchB(frp.liftB(function(groupTbl, permsTbl) {
-        let groups = [];
-        let perm = null;
-        permsTbl.forEach(function(row) {
-            if (row.get(permissionT.cols.name) === 'mentor') {
-                perm = row.get(permissionT.cols.id);
-            }
-        });
-        let check = function(v) {
-            return recoil.util.object.isEqual(perm, v[groupT.permission.cols.permissionid.getName()]);
-        };
-        groupTbl.forEach(function(row) {
-            let perms = row.get(groupT.cols.permission);
-            if (goog.array.findIndex(perms, check) !== -1) {
-                groups.push(row.get(groupT.cols.id));
-            }
-        });
-        return scope.getDb().get(userT.key, query.containsAny(query.field(userT.cols.groups), groups));
-    }, scope.getDb().get(groupT.key), scope.getDb().get(permissionT.key)));
+    return scope.getDb().get(userT.key);
 };
 /**
  * @return {!goog.ui.Component}

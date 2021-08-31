@@ -478,20 +478,12 @@ budget.widgets.Budget.prototype.createPrintB_ = function(budgetB, userB, siteB) 
             let budgetRow = budgetB.get().getFirstRow();
             let site = siteB.get().getFirstRow();
 
-            
+
             if (user && budgetRow && site) {
                 let printer = new budget.print.BudgetPrinter();
                 printer.print(user, budgetRow, site);
                 return;
             }
-            
-            // we have to do this otherwize the print will happen before the style sheet loads
-            goog.net.XhrIo.send('/images/print.css', function(e) {
-                let xhr = e.target;
-                if (xhr.isSuccess()) {
-                    printSheet(user, budget, xhr.getResponseText());
-                }
-            });
         }, budgetB, userB, siteB);
 };
 

@@ -106,6 +106,12 @@ aurora.db.sql.Reader.converters_ = {
             return BigInt(val);
         }
     },
+    'boolean' : {
+        fromDb(driver, val) {
+            return val === null ? null : !!val;
+        }
+    },
+
     'json': {
         fromDb(driver, val) {
             return driver.fromJson(val);
@@ -1220,6 +1226,9 @@ aurora.db.sql.Reader.prototype.readIds_ = function(context, table, query, securi
  */
 aurora.db.sql.Reader.prototype.toDb_ = function(meta, val) {
     if (val == null) {
+        if (meta && meta.defaultVal !== undefined) {
+            return meta.defaultVal;
+        }
         return null;
     }
 

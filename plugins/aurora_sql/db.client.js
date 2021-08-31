@@ -1134,7 +1134,7 @@ aurora.db.Comms.prototype.createChannel_ = function() {
                     var setChanges = me.sentChanges_;
                     var idMap = null;
                     if (setChanges) {
-                       
+
                         console.log('got set result', obj);
                         me.currentErrors_ = new recoil.db.PathMap(schema);
                         var notApplied = aurora.db.Comms.generateErrors(obj.results, setChanges, me.currentErrors_);
@@ -1150,13 +1150,13 @@ aurora.db.Comms.prototype.createChannel_ = function() {
                         var sendChanges = me.erroredChanges_ || [];
                         me.queuedChanges_.forEach(function(change) {
                             // update queued changes path we new path ids
-                            sendChanges.push(change.forEachChange(function (c) {
+                            sendChanges.push(change.forEachChange(function(c) {
                                 let changePath = c.path();
                                 while (changePath.size() > 1) {
                                     let lastKeys = changePath.lastKeys();
 
                                     if (lastKeys.length == 1 && lastKeys[0] instanceof aurora.db.PrimaryKey) {
-                                        
+
                                         let newId = idMap.findFirst({key: changePath});
                                         if (newId) {
                                             let newKey = new aurora.db.PrimaryKey(newId.id, lastKeys[0].mem);

@@ -14,6 +14,11 @@
 	    {"id":1, "name": "Defacto"},
 	    {"id":2, "name": "Single"}
 	]},
+	"Sighted": {"type": "enum", "enum": [
+	    {"id":0, "name": "No"},
+	    {"id":1, "name": "Yes"},
+	    {"id":2, "name": "Some"}
+	]},
 	"IncomeSource": {"type": "enum", "enum": [
 	    {"id":0, "name": "Benefit"},
 	    {"id":1, "name": "Wage"},
@@ -131,7 +136,36 @@
 		{ "name": "newClient", "type": "boolean", "nullable": true},
 		{ "name": "dateOfBirth", "type":"date", "nullable": true},
 		{ "name": "countryOfBirth", "type":"string(100)", "nullable": true},
+		{ "name": "reason", "type":"string(100)", "nullable": true},
 		{ "name": "ethnicity", "type":"string(100)", "nullable": true},
+		{ "name": "accountsSighted", "type": "Sighted", "nullable": true,
+		  "access": "aurora.db.access.basic([{'mentor': 'crud'}, {'':'r'}])"
+		},
+		{ "name":"referral", "type":"string(100)", "nullable": true},
+		{ "name":"referralDate", "type":"date", "nullable": true},
+		{ "name":"agreementSigned", "type":"boolean", "default": false},
+		{ "name":"waiverSigned", "type":"boolean", "default": false},
+		{ "name":"debtCause", "type":"string(255)", "nullable": true},		
+		{ "name": "goals", "type": "owned-list(userid)",
+		  "table": {
+		      "name": "user_goals",
+		      "access": "aurora.db.access.basic([{'mentor': 'crud'}, {'':'r'}])",
+		      "columns": [
+			  {"name": "id", "type": "id"},
+			  {"name": "goal", "type": "string(255)"}
+		      ]
+		  }
+		},
+		{ "name": "results", "type": "owned-list(userid)",
+		  "table": {
+		      "name": "user_results",
+		      "access": "aurora.db.access.basic([{'mentor': 'crud'}, {'':'r'}])",
+		      "columns": [
+			  {"name": "id", "type": "id"},
+			  {"name": "result", "type": "string(255)"}
+		      ]
+		  }
+		},
 		{ "name": "children", "type": "owned-list(userid)",
 		  "table": {
 		      "name": "user_children",
@@ -157,6 +191,19 @@
 		      ]
 		  }
 		},
+		{ "name": "timeSpent", "type": "owned-list(userid)",
+		  "table": {
+		      "name": "user_time",
+		      "access": "aurora.db.access.basic([{'mentor': 'crud'}, {'': 'r'}])",
+		      "columns": [
+			  {"name": "id", "type": "id"},
+			  {"name": "description", "type": "string(1024)"},
+			  {"name": "when", "type": "date"},
+			  {"name": "len", "type": "int", "default":0}
+		      ]
+		  }
+		},
+
 		{ "name": "documents", "type": "owned-list(userid)",
 		  "table": {
 		      "name": "user_documents",
@@ -198,4 +245,4 @@
 	}
     ]
 }
-    
+

@@ -753,7 +753,7 @@ budget.widgets.BusinessHours.prototype.doScheduleAppointmentFunc_ = function(men
         }});
     return frp.accessTransFunc(function(e) {
         let selDate = me.getSelectionDate_(menuInfo, me.curDateB_.get());
-        let mentorC = aurora.db.schema.tables.base.user.cols;
+        let mentorC = aurora.db.schema.tables.base.mentor.cols;
 
         if (me.clientId_ == null) {
             // maybe take user to signup screen

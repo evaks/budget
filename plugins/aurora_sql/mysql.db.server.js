@@ -908,7 +908,7 @@ aurora.db.mysql.Pool.prototype.applyTableChanges = function(table, fields, chang
             async.eachSeries(changes.modified, function (fieldName, eachCallback) {
                 let name = fieldName['from']['name'];
                 let to = fieldName['to'];                
-                me.query('ALTER TABLE ' + me.escapeId(table) + ' CHANGE ' + name + ' ' +  me.makeFieldDef_(to.Field, fields[to.Field]), eachCallback);
+                me.query('ALTER TABLE ' + me.escapeId(table) + ' CHANGE ' + me.escapeId(name) + ' ' +  me.makeFieldDef_(to.Field, fields[to.Field]), eachCallback);
                 
             },function (err) {
                 done(err);

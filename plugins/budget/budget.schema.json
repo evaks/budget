@@ -115,7 +115,10 @@
 
 	{
 	    "name" : "appointments",
-	    "indexes": [{"columns": ["stop"]},  {"columns": ["mentorid", "stop"]}, {"columns": ["userid", "stop"]}],
+	    "indexes": [
+		{"columns": ["stop"]},
+		{"columns": ["mentorid", "stop"]},
+		{"columns": ["userid", "stop"]}],
 	    "access": "aurora.db.access.basic([{'site-management':'crud'}, {'mentor': 'crud'}, {'client': 'crud'}, {'':'r'}])",
 	    "accessFilter": [
 		{"site-management" : "all"},

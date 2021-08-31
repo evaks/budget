@@ -285,52 +285,56 @@ budget.actions.sendAppointmentEmail_ = function(context, mentor, user, start, le
             return;
         }
 
+        try {
+            log.info('sending emails to', toEmail.map(function(v) {return v.email;}));
+            let startDate = new Date(start);
+            let userName = (user.name || '').trim();
+            emailInfo.text = 'An appointment with ' + userName + ' has been scheduled with ' + mentor.firstName + ' at ' + startDate.toLocaleString();
+            emailInfo.html = '<html>An appointment with <em>' + goog.string.htmlEscape(userName)
+                + '</em> has been scheduled with <em>' + goog.string.htmlEscape(mentor.firstName) + '</em>' + ' at <em>' + startDate.toLocaleString() + '</em></html>';
+            emailInfo.html = '<html>You have a budgeting appointment scheduled at ' + startDate.toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'full', timeZone: 'Pacific/Auckland'}) + '</html>';
+            emailInfo.subject = 'Budgeting Appointment';
 
-        log.info('sending emails to', toEmail.map(function(v) {return v.email;}));
-        let startDate = new Date(start);
-        let userName = user.name.trim();
-        emailInfo.text = 'An appointment with ' + userName + ' has been scheduled with ' + mentor.firstName + ' at ' + startDate.toLocaleString();
-        emailInfo.html = '<html>An appointment with <em>' + goog.string.htmlEscape(userName)
-            + '</em> has been scheduled with <em>' + goog.string.htmlEscape(mentor.firstName) + '</em>' + ' at <em>' + startDate.toLocaleString() + '</em></html>';
-        emailInfo.html = '<html>You have a budgeting appointment scheduled at ' + startDate.toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'full', timeZone: 'Pacific/Auckland'}) + '</html>';
-        emailInfo.subject = 'Budgeting Appointment';
-
-        // ics.createEvent({start: [now.getYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes()], duration: {minutes:90}, status: 'CONFIRMED', title: 'Budgeting', attendees: [{ name: 'Mo', email: 'mo@foo.com'}], alarms: { action: 'display', trigger: {minutes: 30, before: true }}});
+            // ics.createEvent({start: [now.getYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes()], duration: {minutes:90}, status: 'CONFIRMED', title: 'Budgeting', attendees: [{ name: 'Mo', email: 'mo@foo.com'}], alarms: { action: 'display', trigger: {minutes: 30, before: true }}});
 
 
-        let icsInfo = {
-            attendees: toEmail.map(function(u) {return { name: u.firstName || 'Unknown', email: u.email};}),
-            alarms: [{ action: 'display', trigger: {minutes: 30, before: true }}],
+            let icsInfo = {
+                attendees: toEmail.map(function(u) {return { name: u.firstName || 'Unknown', email: u.email};}),
+                alarms: [{ action: 'display', trigger: {minutes: 30, before: true }}],
             title: 'Budgeting',
             status: uuid == null ? 'CONFIRMED' : 'CANCELLED'
-        };
-        if (start != null) {
-            let when = new Date(start);
-            icsInfo.start = [when.getFullYear(), when.getMonth() + 1, when.getDate(), when.getHours(), when.getMinutes()];
-            icsInfo.duration = {minutes: Math.round(length / 60000)};
-        }
-
-        ics.createEvent(icsInfo, function(err, evt) {
-            if (!err) {
-
-                emailInfo.attachments = [{
-                filename: 'invite.ics',
-                    content: evt,
-                    contentType: 'text/calendar'
-                }];
-            }
-            else {
-                log.warn('failed to create appointment', err);
+            };
+            if (start != null) {
+                let when = new Date(start);
+                icsInfo.start = [when.getFullYear(), when.getMonth() + 1, when.getDate(), when.getHours(), when.getMinutes()];
+                icsInfo.duration = {minutes: Math.round(length / 60000)};
             }
 
-            emailInfo.to = toEmail.map(function(v) { return v.email;});
-            transporter.sendMail(emailInfo).then(function(info) {
-                previewer(info);
-                callback(null, []);
-            }, function(err) {
-                callback(err, []);
+            ics.createEvent(icsInfo, function(err, evt) {
+                if (!err) {
+
+                    emailInfo.attachments = [{
+                        filename: 'invite.ics',
+                        content: evt,
+                        contentType: 'text/calendar'
+                    }];
+                }
+                else {
+                    log.warn('failed to create appointment', err);
+                }
+
+                emailInfo.to = toEmail.map(function(v) { return v.email;});
+                transporter.sendMail(emailInfo).then(function(info) {
+                    previewer(info);
+                    callback(null, []);
+                }, function(err) {
+                    callback(err, []);
+                });
             });
-        });
+        } catch (e) {
+            log.error('error processing email', err);
+            callback('Unable able to create email', []);
+        }
     });
 };
 
@@ -495,12 +499,12 @@ budget.actions.scheduleAppointmentDoneFunc_ = function(
         else {
             // don't wait for email to be sent its scheduled irrelevant on the appointment being sent
             callback(err, [id]);
-
+            if (changes.length > 0) {
+                coms.notifyListeners(changes, {}, function() {});
+            }
             log.info('User', context.userid, 'Scheduled appointment for ', userObj.id, 'mentor', mentorObj.id);
             budget.actions.sendAppointmentEmail_(context, /** @type {!Object} */ (mentorObj), /** @type {!Object} */ (userObj), time, length, null, function(err, val) {
-                if (changes.length > 0) {
-                    coms.notifyListeners(changes, {}, function() {});
-                }
+
             });
         }
     };
@@ -645,7 +649,7 @@ budget.actions.addAppointment = function(coms, context, reader, mentorid, userid
     if (!budget.actions.scheduleAppointmentSecCheck_(context, mentorid, userid, callback)) {
         return;
     }
-
+    log.info('scheduling appointment for ', userid);
     if (start > stop) {
         callback('Invalid Appointment Length');
         return;
@@ -753,6 +757,7 @@ budget.actions.addAppointment = function(coms, context, reader, mentorid, userid
                 let changes = budget.actions.createSchedulePaths(info.id).map(
                     path => budget.actions.makeAddChange_(path, info.object));
                 transCb(null, info.id, info.mentor, info.user, changes);
+                log.info('schedule done for', userid);
 
             }, function(err) {
                 transCb(err);
@@ -894,24 +899,18 @@ budget.actions.unscheduleAppointmentInternal = function(coms, context, reader, a
 
         if (err) {
             log.warn('Error unscheduling appointment', err);
-
             callback(err, []);
         }
         else {
+            // notify listeners before we send the email, since that can take a while and really irrevant to it being scheduled
+            if (changes.length > 0) {
+                coms.notifyListeners(changes, {}, function() {});
+            }
+            callback(err, []);
             budget.actions.sendAppointmentEmail_(context, /** @type {!Object} */ (mentorObj), /** @type {!Object} */ (userObj), a.start, a.stop - a.start, a.scheduled, function(err, val) {
                 if (err) {
                     log.warn('Error sending cancel email', err);
                 }
-                if (changes.length > 0) {
-                    coms.notifyListeners(changes, {}, function() {
-                        console.log('action done');
-                        callback(err, []);
-                    });
-                }
-                else {
-                    callback(err, []);
-                }
-
             });
         }
     });
@@ -974,9 +973,12 @@ budget.actions.register = function(coms, context, reader, inputs, callback) {
         for (let i = 0; i < inputs.length; i++) {
             let input = inputs[i];
             for (let k in input) {
-                object[k] = input[k];
+                if (input[k] !== null) {
+                    object[k] = input[k];
+                }
             }
         }
+        console.log('in', object);
         // don't allow specification of primary key
         delete object[userT.cols.id.getName()];
         object[userT.cols.active.getName()] = true;
@@ -1036,6 +1038,8 @@ budget.actions.register = function(coms, context, reader, inputs, callback) {
                                 callback('Username already exists');
                             }
                             else {
+                                console.log('inserting new user', object);
+
                                 reader.insert({}, userT, object, function(err, res) {
                                     if (err) {
                                         callback('Unable to create user', null);
@@ -1046,7 +1050,7 @@ budget.actions.register = function(coms, context, reader, inputs, callback) {
                                         if (scheduleId !== undefined && (
                                             aurora.permissions.has('site-management')(context) ||
                                                 aurora.permissions.has('mentor')(context))
-                                        ) {
+                                           ) {
                                             reader.updateOneLevel(context, apptT, {userid: res.insertId}, query.eq(apptT.cols.id, query.val(scheduleId)), function(err) {
                                                 callback(null, res.insertId);
                                             });

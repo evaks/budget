@@ -3,6 +3,7 @@ goog.provide('budget.widgets.SignUp');
 
 goog.require('aurora.db.schema.tables.base.user');
 goog.require('budget.messages');
+goog.require('budget.print.ClientPrinter');
 goog.require('goog.dom');
 goog.require('goog.net.XhrIo');
 goog.require('goog.net.cookies');
@@ -30,6 +31,9 @@ budget.widgets.SignUp = function(scope, opt_userid) {
     let createClient = opt_userid && opt_userid.createClient;
     let userid = opt_userid && opt_userid.createClient ? undefined : opt_userid;
     let securityContextB = aurora.permissions.getContext(scope);
+    const budgetT = aurora.db.schema.tables.base.budget;
+    const appointmentsT = aurora.db.schema.tables.base.appointments;
+
     let frp = scope.getFrp();
     let mess = budget.messages;
     let cd = goog.dom.createDom;
@@ -43,11 +47,11 @@ budget.widgets.SignUp = function(scope, opt_userid) {
         catch (e) {}
     }
 
-
-
     let login = cd('div');
     let loginButton = new recoil.ui.widgets.ButtonWidget(scope);
     let suggestUsernameButton = new recoil.ui.widgets.ButtonWidget(scope);
+    this.printWidget_ = new recoil.ui.widgets.ButtonWidget(scope);
+    let mentorsB = budget.widgets.UserManagement.getMentors(scope);
 
     let createWidget = function(widget, options, val) {
         let div = cd('div');
@@ -106,6 +110,27 @@ budget.widgets.SignUp = function(scope, opt_userid) {
     let query = new recoil.db.Query();
     let table = /** @type {!recoil.structs.table.Table} */ (aurora.db.Helper.createTable(recoil.db.ChangeSet.Path.fromString(userT.info.path), [data]));
 
+    let isMentorB = frp.liftB(function(context) {
+        return aurora.permissions.has('mentor')(context);
+    }, securityContextB);
+    let budgetsB = frp.switchB(frp.liftB(function(isMentor) {
+        if (isMentor && userid != undefined) {
+            return scope.getDb().get(budgetT.key, query.eq(query.val(userid), budgetT.cols.userid));
+        } else {
+            return frp.createB(aurora.db.Helper.createEmptyTable(budgetT));
+        }
+    }, isMentorB));
+
+    let appointmentsB = frp.switchB(frp.liftB(function(isMentor) {
+        if (isMentor && userid != undefined) {
+            return scope.getDb().get(
+                appointmentsT.key,
+                query.eq(query.val(userid), appointmentsT.cols.userid));
+        } else {
+            return frp.createB(aurora.db.Helper.createEmptyTable(appointmentsT));
+        }
+    }, isMentorB));
+
     let addMentor = function(tableB) {
         if (!createClient) {
             return tableB;
@@ -123,7 +148,7 @@ budget.widgets.SignUp = function(scope, opt_userid) {
             return res.freeze();
         }, function(tbl) {
             tableB.set(tbl);
-        }, tableB, aurora.permissions.getContext(scope));
+        }, tableB, securityContextB);
     };
 
     let tableB = userid === undefined ?
@@ -184,6 +209,13 @@ budget.widgets.SignUp = function(scope, opt_userid) {
     let confirmPassword = createWidget(new recoil.ui.widgets.PasswordWidget(scope, false), {immediate: true}, '');
     confirmPassword.cont.className = 'goog-inline-block';
     let email = tableWidget(userT.cols.email, {immediate: true, displayLength: 25});
+    let waiver = tableWidget(userT.cols.waiverSigned, {});
+    let agreement = tableWidget(userT.cols.agreementSigned, {});
+    let referral = tableWidget(userT.cols.referral, {displayLength: 25});
+    let reason = tableWidget(userT.cols.reason, {displayLength: 25});
+    let debtCause = tableWidget(userT.cols.debtCause, {displayLength: 25});
+    let referralDate = tableWidget(userT.cols.referralDate, {});
+    let accountsSighted = tableWidget(userT.cols.accountsSighted, {});
     let firstName = tableWidget(userT.cols.firstName, {displayLength: 15});
     let lastName = tableWidget(userT.cols.lastName, {displayLength: 15});
     let address = tableWidget(userT.cols.address, {});
@@ -195,58 +227,41 @@ budget.widgets.SignUp = function(scope, opt_userid) {
         widget: new recoil.ui.widgets.table.TableWidget(scope),
         div: cd('div', {class: 'goog-inline-block'})
     };
-    let AGE = new recoil.structs.table.ColumnKey('age');
-    let childrenB = budget.Client.instance.createSubTableB(tableB, frp.createB(/** @type {Array} */(null)), userT.cols.children);
 
+    let goals = {
+        widget: new recoil.ui.widgets.table.TableWidget(scope),
+        div: cd('div', {class: 'goog-inline-block'})
+    };
+
+    let results = {
+        widget: new recoil.ui.widgets.table.TableWidget(scope),
+        div: cd('div', {class: 'goog-inline-block'})
+    };
+    let timeSpent = {
+        widget: new recoil.ui.widgets.table.TableWidget(scope),
+        div: cd('div', {class: 'goog-inline-block'})
+    };
 
     let todayB = budget.widgets.SignUp.getToday(frp);
-
-    let formattedChildrenB = frp.liftBI(function(tbl, today) {
-        let res = tbl.createEmpty([], [AGE]);
-        res.addColumnMeta(AGE, {type: 'number', editable: false, displayLength: 3});
-        tbl.forEachModify(function(row) {
-            let bd = row.get(childrenT.cols.dateOfBirth);
-            if (bd === null) {
-
-                row.set(AGE, null);
-            }
-            else {
-                let dob = budget.widgets.SignUp.toDate(bd);
-                let yearDiff = today.getFullYear() - dob.getFullYear();
-
-                if (today.getMonth() < dob.getMonth() || (today.getMonth() == dob.getMonth() && today.getDate() < dob.getDate())) {
-                    yearDiff--;
-                }
-
-
-                row.set(AGE, yearDiff);
-            }
-            res.addRow(row);
-        });
-        var columns = new recoil.ui.widgets.TableMetaData();
-        columns.add(userT.children.cols.name, budget.messages.NAME);
-        columns.add(userT.children.cols.gender, budget.messages.GENDER);
-        columns.add(userT.children.cols.dateOfBirth, budget.messages.DATE_OF_BIRTH);
-        columns.add(AGE, budget.messages.AGE);
-
-        return columns.applyMeta(res);
-    }, function(tbl) {
-        let res = childrenB.get().createEmpty();
-        tbl.forEachModify(function(row) {
-            if (row.getRowMeta().doAdd) {
-                row.set(childrenT.cols.name, '');
-                row.set(childrenT.cols.gender, null);
-                row.set(childrenT.cols.dateOfBirth, null);
-            }
-            res.addRow(row);
-        });
-        childrenB.set(res.freeze());
-        console.log('inv', tbl);
-
-    }, childrenB, todayB);
+    let formattedChildrenB = this.createChildrenB(tableB, todayB);
+    let goalsB = this.createGoalsB(tableB);
+    let resultsB = this.createResultsB(tableB);
+    let timeSpentB = this.createTimeSpentB(tableB);
 
     children.widget.attachStruct(aurora.widgets.TableWidget.createSizable(aurora.ui.ErrorWidget.createTable(scope, formattedChildrenB)));
     children.widget.getComponent().render(children.div);
+
+    goals.widget.attachStruct(
+        aurora.widgets.TableWidget.createSizable(aurora.ui.ErrorWidget.createTable(scope, goalsB)));
+    goals.widget.getComponent().render(goals.div);
+
+    results.widget.attachStruct(
+        aurora.widgets.TableWidget.createSizable(aurora.ui.ErrorWidget.createTable(scope, resultsB)));
+    results.widget.getComponent().render(results.div);
+
+    timeSpent.widget.attachStruct(
+        aurora.widgets.TableWidget.createSizable(aurora.ui.ErrorWidget.createTable(scope, timeSpentB)));
+    timeSpent.widget.getComponent().render(timeSpent.div);
 
     let gender = tableWidget(userT.cols.gender, {});
     let incomeSource = tableWidget(userT.cols.incomeSource, {});
@@ -372,6 +387,10 @@ budget.widgets.SignUp = function(scope, opt_userid) {
         enabled: recoil.ui.BoolWithExplanation.and(frp, recoil.frp.struct.get('enabled', loginActionB) , loginEnabledB)
     }));
 
+    this.printWidget_.attachStruct({
+        action: this.createPrintB_(tableB, appointmentsB, budgetsB, mentorsB),
+        text: 'Print'});
+
 
     if (userid === undefined) {
         loginButton.getComponent().render(login);
@@ -391,6 +410,9 @@ budget.widgets.SignUp = function(scope, opt_userid) {
         addLoginFields();
 
     }
+    let header = function(msg) {
+        return cd('th', {class: 'field-name'}, msg.toString());
+    };
 
     fields = fields.concat([
         cd('tr', {class: 'first-item'}, cd('th', {class: 'group-header', colspan: 4}, mess.SUGGESTED.toString())),
@@ -409,20 +431,45 @@ budget.widgets.SignUp = function(scope, opt_userid) {
         cd('tr', {}, cd('th', {class: 'field-name'}, mess.COUNTRY_OF_BIRTH.toString()), cd('td', {colspan: 3}, country.cont)),
         cd('tr', {}, cd('th', {class: 'field-name'}, mess.DATE_OF_BIRTH.toString()), cd('td', {colspan: 3}, dob.cont)),
         cd('tr', {}, cd('th', {class: 'group-header', colspan: 4}, mess.CHILDREN.toString())),
-        cd('tr', {}, cd('td', {colspan: 4}, children.div))
+        cd('tr', {}, cd('td', {colspan: 4}, children.div)),
+
     ]);
+
+    let adminDivs = [];
     if (userid === undefined && createClient) {
         addLoginFields();
 
+    } else {
+        adminDivs = [
+            cd('tr', {}, cd('th', {class: 'group-header', colspan: 4}, 'Admin')),
+            cd('tr', {}, header(mess.REFERRAL_DATE), cd('td', {colspan: 4}, referralDate.cont)),
+            cd('tr', {}, header(mess.ACCOUNTS_SIGHTED), cd('td', {colspan: 4}, accountsSighted.cont)),
+            cd('tr', {}, cd('th', {class: 'field-name'}, 'Referred Onto'), cd('td', {colspan: 4}, referral.cont)),
+            cd('tr', {}, cd('th', {class: 'field-name'}, 'Cause of Debt'), cd('td', {colspan: 4}, debtCause.cont)),
+            cd('tr', {}, cd('th', {class: 'field-name'}, 'Reason for Comming'), cd('td', {colspan: 4}, reason.cont)),
+            cd('tr', {}, cd('th', {class: 'field-name'}, 'Budgeting Agreement'), cd('td', {colspan: 4}, agreement.cont)),
+            cd('tr', {}, cd('th', {class: 'field-name'}, 'Privacy Wavier'), cd('td', {colspan: 4}, waiver.cont)),
+            cd('tr', {class: 'budget-align-top'}, cd('td', {colspan: 2}, goals.div), cd('td', {colspan: 2}, results.div)),
+            cd('tr', {}, cd('td', {colspan: 4}, timeSpent.div))];
+
+        fields = fields.concat(adminDivs);
     }
 
+
     fields.push(cd('tr', {}, cd('td', {colspan: 3}, message), cd('td', {class: 'login-button'}, login)));
+    let printDiv = cd('div', {});
 
     let container = cd(
-        'div', {},
+        'div', {}, printDiv,
         cd('div', {},
            cd.apply(null, fields))
     );
+
+    html.show(printDiv, isMentorB);
+    html.showElements(adminDivs, isMentorB);
+    if (userid !== undefined) {
+        this.printWidget_.getComponent().render(printDiv);
+    }
     let alreadyLoggedIn = cd('div', {}, 'You are already logged in');
     let loggedIn = goog.net.cookies.get('username');
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(opt_userid === undefined && loggedIn ? alreadyLoggedIn : container);
@@ -485,6 +532,163 @@ budget.widgets.SignUp.getToday = function(frp) {
     return resB;
 
 };
+/**
+ * @param {!recoil.frp.Behaviour<!recoil.structs.table.Table>} userB
+ * @return {!recoil.frp.Behaviour<!recoil.structs.table.Table>}
+ */
+budget.widgets.SignUp.prototype.createGoalsB = function(userB) {
+    let frp = this.scope_.getFrp();
+    let userT = aurora.db.schema.tables.base.user;
+    let goalsT = userT.goals;
+    let goalsB = budget.Client.instance.createSubTableB(
+        userB, frp.createB(/** @type {Array} */(null)), userT.cols.goals);
+    return frp.liftBI(function(tbl, today) {
+        let res = tbl.unfreeze();
+        res.addColumnMeta(goalsT.cols.goal, {displayLength: 30});
+        var columns = new recoil.ui.widgets.TableMetaData();
+        columns.add(goalsT.cols.goal, budget.messages.GOAL);
+        return columns.applyMeta(res);
+    }, function(tbl) {
+        let res = goalsB.get().createEmpty();
+        tbl.forEachModify(function(row) {
+            if (row.getRowMeta().doAdd) {
+                row.set(goalsT.cols.goal, '');
+            }
+            res.addRow(row);
+        });
+        goalsB.set(res.freeze());
+
+    }, goalsB);
+};
+
+/**
+ * @param {!recoil.frp.Behaviour<!recoil.structs.table.Table>} userB
+ * @return {!recoil.frp.Behaviour<!recoil.structs.table.Table>}
+ */
+budget.widgets.SignUp.prototype.createResultsB = function(userB) {
+    let frp = this.scope_.getFrp();
+    let userT = aurora.db.schema.tables.base.user;
+    let resultsT = userT.results;
+    let resultsB = budget.Client.instance.createSubTableB(
+        userB, frp.createB(/** @type {Array} */(null)), userT.cols.results);
+    return frp.liftBI(function(tbl, today) {
+        let res = tbl.unfreeze();
+        res.addColumnMeta(resultsT.cols.result, {displayLength: 30});
+        var columns = new recoil.ui.widgets.TableMetaData();
+        columns.add(resultsT.cols.result, budget.messages.RESULT);
+        return columns.applyMeta(res);
+    }, function(tbl) {
+        let res = resultsB.get().createEmpty();
+        tbl.forEachModify(function(row) {
+            if (row.getRowMeta().doAdd) {
+                row.set(resultsT.cols.result, '');
+            }
+            res.addRow(row);
+        });
+        resultsB.set(res.freeze());
+
+    }, resultsB);
+};
+
+/**
+ * @param {!recoil.frp.Behaviour<!recoil.structs.table.Table>} userB
+ * @return {!recoil.frp.Behaviour<!recoil.structs.table.Table>}
+ */
+budget.widgets.SignUp.prototype.createTimeSpentB = function(userB) {
+    let frp = this.scope_.getFrp();
+    let userT = aurora.db.schema.tables.base.user;
+    let timeSpentT = userT.timeSpent;
+    let timeSpentB = budget.Client.instance.createSubTableB(
+        userB, frp.createB(/** @type {Array} */(null)), userT.cols.timeSpent);
+
+
+
+    return frp.liftBI(function(tbl, today) {
+        let res = tbl.unfreeze();
+        res.addColumnMeta(timeSpentT.cols.description, {displayLength: 30});
+        res.addColumnMeta(timeSpentT.cols.len, {min: 0, max: 24 * 60});
+        var columns = new recoil.ui.widgets.TableMetaData();
+        columns.add(timeSpentT.cols.when, 'Date');
+        columns.add(timeSpentT.cols.len, 'Time Spent (min)');
+        columns.add(timeSpentT.cols.description, 'Description');
+        return columns.applyMeta(res);
+    }, function(tbl) {
+        let res = timeSpentB.get().createEmpty();
+        tbl.forEachModify(function(row) {
+            if (row.getRowMeta().doAdd) {
+                row.set(timeSpentT.cols.description, '');
+                row.set(timeSpentT.cols.when, recoil.ui.widgets.DateWidget2.convertDateToLocal(new Date()));
+                row.set(timeSpentT.cols.len, 0);
+            }
+
+            res.addRow(row);
+        });
+        timeSpentB.set(res.freeze());
+
+    }, timeSpentB);
+};
+
+
+/**
+ * @param {!recoil.frp.Behaviour<!recoil.structs.table.Table>} userB
+ * @param {!recoil.frp.Behaviour<!Date>} todayB
+ * @return {!recoil.frp.Behaviour<!recoil.structs.table.Table>}
+ */
+budget.widgets.SignUp.prototype.createChildrenB = function(userB, todayB) {
+    let frp = this.scope_.getFrp();
+    let userT = aurora.db.schema.tables.base.user;
+    let childrenT = userT.children;
+    let AGE = new recoil.structs.table.ColumnKey('age');
+    let childrenB = budget.Client.instance.createSubTableB(
+        userB, frp.createB(/** @type {Array} */(null)), userT.cols.children);
+
+
+
+    return frp.liftBI(function(tbl, today) {
+        let res = tbl.createEmpty([], [AGE]);
+        res.addColumnMeta(AGE, {type: 'number', editable: false, displayLength: 3});
+        tbl.forEachModify(function(row) {
+            let bd = row.get(childrenT.cols.dateOfBirth);
+            if (bd === null) {
+
+                row.set(AGE, null);
+            }
+            else {
+                let dob = budget.widgets.SignUp.toDate(bd);
+                let yearDiff = today.getFullYear() - dob.getFullYear();
+
+                if (today.getMonth() < dob.getMonth() || (today.getMonth() == dob.getMonth() && today.getDate() < dob.getDate())) {
+                    yearDiff--;
+                }
+
+
+                row.set(AGE, yearDiff);
+            }
+            res.addRow(row);
+        });
+        var columns = new recoil.ui.widgets.TableMetaData();
+        columns.add(userT.children.cols.name, budget.messages.NAME);
+        columns.add(userT.children.cols.gender, budget.messages.GENDER);
+        columns.add(userT.children.cols.dateOfBirth, budget.messages.DATE_OF_BIRTH);
+        columns.add(AGE, budget.messages.AGE);
+
+        return columns.applyMeta(res);
+    }, function(tbl) {
+        let res = childrenB.get().createEmpty();
+        tbl.forEachModify(function(row) {
+            if (row.getRowMeta().doAdd) {
+                row.set(childrenT.cols.name, '');
+                row.set(childrenT.cols.gender, null);
+                row.set(childrenT.cols.dateOfBirth, null);
+            }
+            res.addRow(row);
+        });
+        childrenB.set(res.freeze());
+        console.log('inv', tbl);
+
+    }, childrenB, todayB);
+};
+
 
 /**
  * @return {!goog.ui.Component}
@@ -501,3 +705,39 @@ budget.widgets.SignUp.prototype.getComponent = function() {
 
 budget.widgets.SignUp.prototype.flatten = recoil.frp.struct.NO_FLATTEN;
 
+/**
+ * @private
+ * @param {!recoil.frp.Behaviour<!recoil.structs.table.Table>} userB
+ * @param {!recoil.frp.Behaviour<!recoil.structs.table.Table>} appointmentsB
+ * @param {!recoil.frp.Behaviour<!recoil.structs.table.Table>} budgetsB
+ * @param {!recoil.frp.Behaviour<!recoil.structs.table.Table>} mentorsB
+ * @return {!recoil.frp.Behaviour}
+ */
+
+budget.widgets.SignUp.prototype.createPrintB_ = function(userB, appointmentsB, budgetsB, mentorsB) {
+    let frp = this.scope_.getFrp();
+
+    return frp.createCallback(
+            function() {
+                let user = userB.get().getFirstRow();
+                let budgets = budgetsB.get();
+                let appointments = appointmentsB.get();
+                let mentor = null;
+                let userT = aurora.db.schema.tables.base.user;
+                let mentorT = aurora.db.schema.tables.base.mentor;
+                if (user) {
+                    let mentorKey = user.get(userT.cols.mentorid);
+                    let mentorid = mentorKey ? mentorKey.db : null;
+                    mentorsB.get().forEach(function(row) {
+                        if (row.get(mentorT.cols.id).db == mentorid) {
+                            mentor = row.get(mentorT.cols.firstName) || row.get(mentorT.cols.username);
+                        }
+                    });
+                    let printer = new budget.print.ClientPrinter();
+                    printer.print(user, appointments, budgets, mentor);
+                    return;
+                }
+
+            }, budgetsB, userB, appointmentsB, mentorsB);
+
+};

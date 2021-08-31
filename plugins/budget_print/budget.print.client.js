@@ -7,7 +7,7 @@ goog.require('recoil.structs.table.Table');
 /**
  * @constructor
  */
-budget.print.BudgetPrinter = function () {
+budget.print.BudgetPrinter = function() {
     this.budgetT = aurora.db.schema.tables.base.budget;
     this.siteT = aurora.db.schema.tables.base.site;
     this.userT = aurora.db.schema.tables.base.user;
@@ -18,7 +18,7 @@ budget.print.BudgetPrinter = function () {
     this.scale_ = 1;
     this.lineH = 6;
     this.fontSize = 6;
-    this.dotted = function (i, node) {
+    this.dotted = function(i, node) {
         return {dash: {length: 1, space: 1}};
     };
     this.clone = recoil.util.object.clone;
@@ -47,8 +47,8 @@ budget.print.BudgetPrinter.Entry;
  * @return {Object} pdfmake print object structure
  */
 
-budget.print.BudgetPrinter.prototype.makeIncome = function (period, entries, tally, rows) {
-    
+budget.print.BudgetPrinter.prototype.makeIncome = function(period, entries, tally, rows) {
+
     rows.push([
         {text: this.mesg.INCOME.toString()},
         this.mesg.$_VALUE.toString(),
@@ -58,52 +58,52 @@ budget.print.BudgetPrinter.prototype.makeIncome = function (period, entries, tal
     tally.income = this.processEntries_(period, entries, this.EntryType.income, rows);
 
     rows.push([
-        {   total: true, double: true,
-            text: this.mesg.A_TOTAL_INCOME.toString(), bold: true}, '','',
-        this.formatCurrency(tally.income/100)]);
+        { total: true, double: true,
+            text: this.mesg.A_TOTAL_INCOME.toString(), bold: true}, '', '',
+        this.formatCurrency(tally.income / 100)]);
     let me = this;
     return {
         style: 'entry-table',
         layout: {
             paddingRight: function(i, node) { return me.scale(3); },
             paddingLeft: function(i, node) { return me.scale(3); },
-	    paddingTop: function(i, node) { return  me.scale(2); },
+	    paddingTop: function(i, node) { return me.scale(2); },
 	    paddingBottom: function(i, node) { return me.scale(2); },
 
 
-            vLineColor: function (i, node) {
+            vLineColor: function(i, node) {
                 return 'grey';
             },
-            hLineColor: function (i, node) {
+            hLineColor: function(i, node) {
                 let el = node.table.body[i];
                 if (el && (el[0].total || el[0].double)) {
                     return 'black';
                 }
 		return i == 1 ? 'black' : 'grey';
 	    },
-            hLineWidth: function (i, node) {
-                let prev = node.table.body[i -1];
+            hLineWidth: function(i, node) {
+                let prev = node.table.body[i - 1];
                 if (prev && prev[0].double) {
                     return 1.5;
                 }
                 return 1;
             },
-            hLineStyle: function (i, node) {
-                let prev = node.table.body[i -1];
+            hLineStyle: function(i, node) {
+                let prev = node.table.body[i - 1];
                 if (prev && prev[0].double) {
                     return {multi: [{offset: 0, width: 0.5}, {offset: 1, width: 0.5}]};
                 }
                 return null;
             },
 
-            vLineStyle: function (i, node) {
+            vLineStyle: function(i, node) {
                 return {multi: [{offset: 0, width: 0.5}, {offset: 1, width: 0.5}]};
             },
 
         },
         table: {
             widths: ['*', 'auto', 'auto', 'auto'],
-            heights:this.scale(this.lineH),
+            heights: this.scale(this.lineH),
             body: rows
         }
     };
@@ -118,16 +118,16 @@ budget.print.BudgetPrinter.prototype.makeIncome = function (period, entries, tal
  * @param {!Array<Object>} rows
  */
 
-budget.print.BudgetPrinter.prototype.makeExpenses_ = function (period, entries, tally, rows) {
+budget.print.BudgetPrinter.prototype.makeExpenses_ = function(period, entries, tally, rows) {
 
     rows.push([
         this.mesg.HOUSEHOLD_EXPENSES.toString(), '', '', '']);
     tally.expenses = this.processEntries_(period, entries, this.EntryType.household, rows);
     rows.push([
-        {   total: true, double: true,
-            text: this.mesg.B_TOTAL_EXPENSES.toString(), bold: true}, '','',
-        this.formatCurrency(tally.expenses/100)]);
-    
+        { total: true, double: true,
+            text: this.mesg.B_TOTAL_EXPENSES.toString(), bold: true}, '', '',
+        this.formatCurrency(tally.expenses / 100)]);
+
 };
 
 
@@ -135,7 +135,7 @@ budget.print.BudgetPrinter.prototype.makeExpenses_ = function (period, entries, 
  * @param {number} period
  * @return {string}
  */
-budget.print.BudgetPrinter.prototype.periodName = function (period) {
+budget.print.BudgetPrinter.prototype.periodName = function(period) {
     if (period == null) {
         return '';
     }
@@ -149,7 +149,7 @@ budget.print.BudgetPrinter.prototype.periodName = function (period) {
  * @return {Object} pdfmake print object structure
  */
 
-budget.print.BudgetPrinter.prototype.makeDebt = function (period, entries, tally, rows) {
+budget.print.BudgetPrinter.prototype.makeDebt = function(period, entries, tally, rows) {
 
     rows.push([
         this.mesg.DEBTS_PAYABLE.toString(),
@@ -159,7 +159,7 @@ budget.print.BudgetPrinter.prototype.makeDebt = function (period, entries, tally
         this.mesg.CALCULATED_NL_PER.toString({period: this.periodName(period)}),
         this.mesg.ARREARS.toString(),
         this.mesg.TOTAL_OWING.toString()
-    ].map(x=> {return {text: x, bold: true};}));
+    ].map(x => {return {text: x, bold: true};}));
     tally.debt = this.processEntries_(period, entries, this.EntryType.debt, rows);
     let me = this;
     return {

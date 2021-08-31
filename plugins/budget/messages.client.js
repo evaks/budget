@@ -130,6 +130,19 @@ budget.messages.REQUIRED = recoil.ui.message.getParamMsg('Required');
  */
 budget.messages.REQUIRED_FOR_CLIENT_LOGIN = recoil.ui.message.getParamMsg('Required for Client Login');
 
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.CLIENT_TYPE = recoil.ui.message.getParamMsg('Client Type');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.REFERRAL = recoil.ui.message.getParamMsg('Referral');
+
 /**
  * @type {!recoil.ui.message.Message}
  * @final
@@ -304,6 +317,28 @@ budget.messages.ARREARS = recoil.ui.message.getParamMsg('Arrears');
  * @final
  */
 budget.messages.TOTAL_OWING = recoil.ui.message.getParamMsg('Total Owing');
+
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.TOTAL_DEBT = recoil.ui.message.getParamMsg('Total Debt');
+
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.REFERRAL_DATE = recoil.ui.message.getParamMsg('Referral date');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.FINANCIAL_MENTOR = recoil.ui.message.getParamMsg('Financial Mentor');
 
 
 /**
@@ -783,4 +818,86 @@ budget.messages.THERE_ARE_INVALID_FILES = recoil.ui.message.getParamMsg('There a
  * @final
  */
 budget.messages.LONGER_TIME_RANGE_RECOMENDED = recoil.ui.message.getParamMsg('Longer time range recomended');
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.DATE_ON_WHICH_MENTOR_SAW_CLIENT = recoil.ui.message.getParamMsg('Date(s) on which Mentor saw client');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+
+budget.messages.TIME_SPENT_ON_CASE = recoil.ui.message.getParamMsg('Time Spent on case e.g. Phone');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+
+budget.messages.CLIENT_REASON_FOR_COMING = recoil.ui.message.getParamMsg('Client Reason For Coming');
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.GOALS_WORK_TO_BE_DONE = recoil.ui.message.getParamMsg('Goals/Work to be done');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.GOALS = recoil.ui.message.getParamMsg('Goals');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.GOAL = recoil.ui.message.getParamMsg('Goal');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.RESULTS = recoil.ui.message.getParamMsg('Results');
+
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.RESULT = recoil.ui.message.getParamMsg('Result');
+
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.MAIN_CAUSE_OF_DEBT = recoil.ui.message.getParamMsg('Main Cause of debt');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.RESULTS_COMPLETED = recoil.ui.message.getParamMsg('Results: completed or progress');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.ACCOUNTS_SIGHTED = recoil.ui.message.getParamMsg('Accounts Sighted');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.DEBT_RETIRED = recoil.ui.message.getParamMsg('*DEBT RETIRED');
+
 
