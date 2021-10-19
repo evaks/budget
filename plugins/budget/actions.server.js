@@ -381,6 +381,98 @@ budget.actions.getGroupPermissions_ = function(context, reader, groups, callback
 
 };
 
+
+/**
+ * @param {!aurora.db.Coms} coms
+ * @param {!aurora.db.access.SecurityContext} context
+ * @param {!aurora.db.Reader} reader
+ * @param {number} userid
+ * @param {?string} oldPassword
+ * @param {?string} password
+ * @param {function(?,!Array)} callback params are error, mentor user
+ */
+budget.actions.changePassword = function(coms, context, reader, userid, oldPassword, password, callback) {
+	let admin = true;
+	if (!aurora.permissions.has('user-management')(context)) {
+		admin = false;
+        if (context.userid != userid) {
+            callback('Access Denied', []);
+			return;
+        }
+    }
+
+	if (password == '') {
+		password = null;
+	}
+	if (context.userid == userid && password == null) {
+        callback('Access Denied', []);
+    }
+
+    let userT = aurora.db.schema.tables.base.user;
+    let query = new recoil.db.Query();
+	let userQuery = query.eq(userT.cols.id, query.val(userid));
+
+
+	let updatePassword = function(password) {
+		reader.transaction(function(reader, callback) {
+			reader.updateOneLevel(
+				{}, userT, {'password': password},
+				userQuery, function(err) {
+					if (err) {
+						callback('Unable to  update password', null);
+					}
+					else {
+						callback(null);
+					}
+				});
+		}, function(err) {
+			callback(err, []);
+		});
+	};
+	let doUpdate = function() {
+		if (password === null) {
+			updatePassword(password);
+		}
+		else {
+			aurora.db.Pool.hashPassword(password, function(err, value) {
+				if (err) {
+					callback('Unable to hash password', []);
+				}
+				else {
+					updatePassword(value);
+				}
+			});
+		}
+	};
+
+	if (admin) {
+		doUpdate();
+	}
+	else {
+		let user = null;
+		reader.readLevel({}, userT, userQuery, null, function() {}, function(err) {
+			if (err) {
+				callback(err, []);
+			}
+			else if (user === null) {
+				callback('No such user', []);
+			}
+			else {
+				aurora.db.Pool.checkPassword(oldPassword, user.password, function(valid) {
+					if (valid) {
+						doUpdate();
+					}
+					else {
+						callback('Access Denied', []);
+					}
+
+				});
+			}
+		});
+	}
+
+};
+
 /**
  * @param {!aurora.db.access.SecurityContext} context
  * @param {!aurora.db.Reader} reader

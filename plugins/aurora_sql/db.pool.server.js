@@ -330,13 +330,13 @@ aurora.db.Pool.hashPasswordPromise = function(password) {
 };
 
 /**
- * @param {string} password
+ * @param {?string} password
  * @param {buffer.Buffer} hash the whole hash read from the database should include version an salt
  * @param {function(boolean)} callback true if password matches
  */
 aurora.db.Pool.checkPassword = function(password, hash, callback) {
     const crypto = require('crypto');
-    if (password == null) {
+    if (password == null || hash == null) {
         // blank passwords are allowed whoever the will never pass
         callback(false);
         return;

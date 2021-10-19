@@ -116,6 +116,7 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
         let query = new recoil.db.Query();
         return query.containsAll(query.field(col), val);
     };
+	let changePasswordB = scope.getDb().get(aurora.db.schema.actions.base.account.change_password.key);
     let resetPasswordCol = new recoil.structs.table.ColumnKey('reset-password');
     let tableWidget = new aurora.widgets.PagedTable(scope, userT, PAGE_SIZE, function(scope, sourceB) {
         return aurora.ui.ErrorWidget.createTable(
@@ -260,8 +261,31 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
                         let tableB = createDialogTable(resetPasswordRow, sourceB, groupsB.get());
                         let td = new aurora.widgets.TableDialog(scope, tableB, frp.createCallback(function(e) {
                             let addTable = tableB.get();
+							let password = null;
 
-                        }, sourceB, tableB), 'Reset', function() {return null;}, 'Reset Password');
+							addTable.forEach(function(row) {
+								password = row.get(userT.cols.password);
+							});
+							if (password == '') {
+								password = null;
+							}
+							let id = resetPasswordRow.get(userT.cols.id);
+							let res = sourceB.get().createEmpty();
+							changePasswordB.set({action: {
+								password: password,
+								oldPassword: '',
+								userid: id.db
+							}});
+                        }, sourceB, tableB, changePasswordB), 'Reset', function(row) {
+							if (row.get(confirmPasswordCK) !== row.get(userT.cols.password)) {
+								return aurora.messages.PASSWORDS_DO_NOT_MATCH;
+							}
+							if (row.get(userT.cols.password) == '') {
+								return aurora.messages.PASSWORD_MUST_NOT_BE_BLANK;
+							}
+							console.log('validate', row);
+							return null;
+						}, 'Reset Password');
                         td.show(true);
                     }
                     else {

@@ -789,6 +789,15 @@ aurora.db.mysql.Pool.makeDbType_ = function (field) {
 
 /**
  * @private
+ * @param {!Object<string,aurora.db.type.ColumnDef>} field
+ * @return {string}
+ */
+aurora.db.mysql.Pool.makeDbType1_ = function (field) {
+    return aurora.db.mysql.Pool.makeType(field).toLowerCase();
+};
+
+/**
+ * @private
  * @param {string} name
  * @param {!Object<string,aurora.db.type.ColumnDef>} field
  * @return {string}
@@ -935,6 +944,7 @@ aurora.db.mysql.Pool.prototype.applyTableChanges = function(table, fields, chang
 aurora.db.mysql.Pool.prototype.getTableChanges = function(table, fields, indexes, callback) {
     let me = this;
     let makeTypeDb = aurora.db.mysql.Pool.makeDbType_;
+    let makeTypeDb1 = aurora.db.mysql.Pool.makeDbType1_;
     this.query('SHOW COLUMNS FROM ' + this.escapeId(table), function (err, curFields) {
         if (err && err.code === 'ER_NO_SUCH_TABLE') {
             callback(null, {isNew: true, hasChanges: true, added: [], modified: [], removed: []});
@@ -957,7 +967,7 @@ aurora.db.mysql.Pool.prototype.getTableChanges = function(table, fields, indexes
                 if (newField) {
                     let defValue = newField.default == undefined ? null : '' + newField.default;
                     if ((curField.Null === 'YES') == !!newField.nullable
-                        && curField.Type == makeTypeDb(newField)
+                        && (curField.Type == makeTypeDb(newField) || curField.Type == makeTypeDb1(newField))
                         && curField['Default'] === defValue) {
                         // do nothing
                     }

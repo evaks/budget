@@ -45,7 +45,17 @@
 	    "access": "aurora.db.access.basic([{'': 'r'}])",
 	    "inputs": [{"name":"user", "type":"number"}, {"name":"secret", "type": "string"}, {"name":"password", "type": "string"}]
 	},
+		
+		{
+			"path": "/account/change_password",
+			"function": "budget.actions.changePassword",
+			"access": "aurora.db.access.basic([{'': 'r'}])",
+			"inputs": [
+				{"name":"userid", "type":"bigint"}, 
+				{"name":"oldPassword", "type":"string"},
+				{"name":"password", "type":"string"}]
 
+		},
 	{
 	    "path": "/account/register",
 	    "arrayParams": true,
