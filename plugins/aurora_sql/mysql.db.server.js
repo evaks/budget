@@ -5,15 +5,21 @@ goog.require('aurora.log');
 /**
  * parameters are given names e.g ?name, they can be used more than once
  */
+
+let poolCount = 0;
+let conCount = 0;
+
 /**
  * @implements {aurora.db.Pool}
  * @constructor
  * @param {{host:string, user:string, password:string, database:string}} options
  * @param {!mysql.Connection=} opt_connection
  */
-
 aurora.db.mysql.Pool = function(options, opt_connection) {
     const mysql = require('mysql');
+	if (!opt_connection) {
+		poolCount++;
+	}
     this.mysql_ = mysql;
     this.options_ = options;
     this.transactionCount_ = 0;
@@ -315,7 +321,6 @@ aurora.db.mysql.Pool.formatQuery = function(query, valueMap) {
     let isIdent = aurora.db.mysql.Pool.isIdent_;
     let parts = [];
     let names = [];
-
     let part = '';
     for (let i = 0; i < query.length; i++) {
         let ch = query[i];
@@ -689,7 +694,6 @@ aurora.db.mysql.Pool.prototype.transaction = function(callback, doneFunc) {
                 }                 
 
                 me.transactionCount_++;
-                
                 callback(me, function(err) {
                     let args = makeArguments(arguments);
                     me.transactionCount_--;
@@ -705,7 +709,7 @@ aurora.db.mysql.Pool.prototype.transaction = function(callback, doneFunc) {
                                     doneFunc(err);
                                 });
                             } else {
-                                    doneFunc.apply(null, args);
+                                doneFunc.apply(null, args);
                             }
                         });
                     }
@@ -715,6 +719,7 @@ aurora.db.mysql.Pool.prototype.transaction = function(callback, doneFunc) {
         }
         else {
             this.pool_.getConnection(function(err, connection) {
+
                 if (err) {
                     doneFunc(err);
                 }

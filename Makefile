@@ -98,7 +98,26 @@ certbot-install:
 certbot:
 	certbot certonly --webroot --config-dir letsencrypt/config --work-dir letsencrypt/work --logs-dir letsencrypt/log --webroot-path output/resources/htdocs --cert-path letsencrypt/certs --cert-path letsencrypt/certs/cert.pem --key-path letsencrypt/certs/priv.pem
 
+certbot-renew:
+	certbot renew --webroot --config-dir letsencrypt/config --work-dir letsencrypt/work --logs-dir letsencrypt/log --webroot-path output/resources/htdocs --cert-path letsencrypt/certs --cert-path letsencrypt/certs/cert.pem --key-path letsencrypt/certs/priv.pem
 certbot-remove:
 	certbot delete --config-dir letsencrypt/config --work-dir letsencrypt/work --logs-dir letsencrypt/log
 
+cert-backup-1:
+	mkdir -p old-certs-1
+	cp letsencrypt/config/live/*/privkey.pem letsencrypt/config/live/*/chain.pem letsencrypt/config/live/*/cert.pem old-certs-1
 
+cert-backup-2:
+	mkdir -p old-certs-2
+	cp letsencrypt/config/live/*/privkey.pem letsencrypt/config/live/*/chain.pem letsencrypt/config/live/*/cert.pem old-certs-2
+
+
+cert-restore-1:
+	cp old-certs-1/privkey.pem letsencrypt/config/live/*/
+	cp old-certs-1/cert.pem letsencrypt/config/live/*/
+	cp old-certs-1/chain.pem letsencrypt/config/live/*/
+
+cert-restore-2:
+	cp old-certs-2/privkey.pem letsencrypt/config/live/*/
+	cp old-certs-2/cert.pem letsencrypt/config/live/*/
+	cp old-certs-2/chain.pem letsencrypt/config/live/*/

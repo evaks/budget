@@ -10,6 +10,7 @@ goog.require('budget.WidgetScope');
 goog.require('goog.structs.AvlTree');
 goog.require('recoil.ui.widgets.InputWidget');
 goog.require('recoil.ui.widgets.table.ButtonColumn');
+goog.require('recoil.ui.widgets.table.PasswordStrengthColumn');
 goog.require('recoil.ui.widgets.table.TableWidget');
 
 /**
@@ -28,6 +29,8 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
     let extraDataColsB = frp.liftB(function(extraCols) {
         return extraCols.filter(function(v) {return v.hasOwnProperty('value');}).map(function(v) {return v.key;});
     }, extraColsB);
+    const COLS = aurora.widgets.UserManagement.COLS;
+
     let searchWidget = new recoil.ui.widgets.InputWidget(scope);
     this.scope_ = scope;
     const PAGE_SIZE = 20;
@@ -36,7 +39,6 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
     let groupT = aurora.db.schema.tables.base.group;
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(container);
     let usernameB = frp.createB('');
-    var confirmPasswordCK = new recoil.structs.table.ColumnKey('confirmPassword');
 
     let groupsListB = scope.getRefList(groupT, groupT.cols.name);
     let groupsFilterB = frp.liftB(function(groups) {
@@ -53,61 +55,7 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
         userT.cols.groups, aurora.messages.GROUPS,
         groupsListB);
 
-    var makeNewRow = function(sample, tblKeys) {
-        var newRow = new recoil.structs.table.MutableTableRow();
-        for (var col in userT.meta) {
-            let meta = userT.meta[col];
-            if (meta.key === userT.info.pk) {
-                continue;
-            }
-            newRow.set(meta.key, meta.defaultVal == undefined ? null : meta.defaultVal);
-        }
-        newRow.set(tblKeys.username, sample ? sample.get(tblKeys.username) : '');
-        newRow.set(tblKeys.password, '');
-        newRow.set(tblKeys.active, true);
-        newRow.set(tblKeys.lockcount, 0);
-        newRow.set(tblKeys.lastinvalidtime, null);
-        newRow.set(tblKeys.groups, []);
-
-
-        newRow.set(tblKeys.mentorid, null); // todo remove this from here
-        newRow.set(confirmPasswordCK, '');
-
-        if (sample) {
-            newRow.setCellMeta(tblKeys.username, {enabled: recoil.ui.BoolWithExplanation.FALSE});
-//            newRow.setCellMeta(tblKeys.role, {enabled: recoil.ui.BoolWithExplanation.FALSE});
-        }
-        newRow.addCellMeta(tblKeys.password, {immediate: true});
-        newRow.addCellMeta(confirmPasswordCK, {immediate: true});
-        return newRow;
-    };
     let secContext = aurora.permissions.getContext(scope);
-    let createDialogTable = function(sample, userB, groupCol) {
-        return recoil.frp.util.memoryOnlyB(frp.liftB(function(user, extraDataCols) {
-            var mTable = user.createEmpty([], [confirmPasswordCK].concat(extraDataCols));
-            var columns = new recoil.ui.widgets.TableMetaData();
-            var changePasswordCol = new recoil.ui.widgets.table.PasswordColumn(userT.cols.password, 'Password');
-            var confirmPasswordCol = new recoil.ui.widgets.table.PasswordColumn(confirmPasswordCK, 'Confirm');
-            mTable.addColumnMeta(userT.cols.username, {displayLength: 15});
-            mTable.addColumnMeta(userT.cols.password, {displayLength: 15, autocomplete: false, editable: true});
-            mTable.addColumnMeta(confirmPasswordCK, {displayLength: 15, autocomplete: false});
-            columns.add(userT.cols.username, 'User Name');
-            columns.addColumn(changePasswordCol);
-            columns.addColumn(confirmPasswordCol);
-            if (!sample) {
-                columns.addColumn(groupCol);
-            }
-            let row = makeNewRow(sample, userT.cols);
-
-            mTable.addRow(row);
-
-            mTable.addColumnMeta(confirmPasswordCK, {type: 'string'});
-
-            return columns.applyMeta(mTable.freeze());
-
-        }, userB, extraDataColsB));
-
-    };
     let userEqual = recoil.util.object.uniq();
     let filterGroups = function(col, val) {
         if (val == undefined || val.length === 0) {
@@ -116,7 +64,6 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
         let query = new recoil.db.Query();
         return query.containsAll(query.field(col), val);
     };
-	let changePasswordB = scope.getDb().get(aurora.db.schema.actions.base.account.change_password.key);
     let resetPasswordCol = new recoil.structs.table.ColumnKey('reset-password');
     let tableWidget = new aurora.widgets.PagedTable(scope, userT, PAGE_SIZE, function(scope, sourceB) {
         return aurora.ui.ErrorWidget.createTable(
@@ -182,7 +129,7 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
             }, function(tbl) {
                 if (tbl.getMeta().doAdd) {
                     let res = sourceB.get().unfreeze();
-                    var userTableB = createDialogTable(null, sourceB, groupsB.get());
+                    var userTableB = aurora.widgets.UserManagement.createDialogTable(scope, null, groupsB.get(), extraDataColsB);
                     let rapidNameB = frp.liftB(function(tbl) {
                         let uname = null;
                         tbl.forEach(function(r) {
@@ -222,18 +169,18 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
                                 mrow.addCellMeta(userT.cols.username, {errors: []});
                             }
                             let p1 = row.get(userT.cols.password);
-                            let p2 = row.get(confirmPasswordCK);
+                            let p2 = row.get(COLS.confirmPasswordCK);
 
                             if (p1 == undefined || p1 === '') {
                                 mrow.addCellMeta(userT.cols.password, {errors: [aurora.messages.PASSWORD_MUST_NOT_BE_BLANK]});
                             }
                             else if (p1 !== p2) {
                                 mrow.addCellMeta(userT.cols.password, {errors: []});
-                                mrow.addCellMeta(confirmPasswordCK, {errors: [aurora.messages.PASSWORDS_DO_NOT_MATCH]});
+                                mrow.addCellMeta(COLS.confirmPasswordCK, {errors: [aurora.messages.PASSWORDS_DO_NOT_MATCH]});
                             }
                             else {
                                 mrow.addCellMeta(userT.cols.password, {errors: []});
-                                mrow.addCellMeta(confirmPasswordCK, {errors: []});
+                                mrow.addCellMeta(COLS.confirmPasswordCK, {errors: []});
                             }
                             res.addRow(mrow);
                         });
@@ -242,7 +189,7 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
                     }, function(tbl) {
                         userTableB.set(tbl.get());
                     }, userTableB, matchUsersB, rapidNameB, userNameB);
-                    var td = new aurora.widgets.TableDialog(scope, validatedUserTableB, frp.createCallback(function(e) {
+                   	var td = new aurora.widgets.TableDialog(scope, validatedUserTableB, frp.createCallback(function(e) {
                         let addTable = userTableB.get();
                         let res = sourceB.get().unfreeze();
                         addTable.forEach(function(row) {
@@ -258,35 +205,8 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
                         resetPasswordRow = resetPasswordRow || (row.get(resetPasswordCol) ? row : false);
                     });
                     if (resetPasswordRow) {
-                        let tableB = createDialogTable(resetPasswordRow, sourceB, groupsB.get());
-                        let td = new aurora.widgets.TableDialog(scope, tableB, frp.createCallback(function(e) {
-                            let addTable = tableB.get();
-							let password = null;
-
-							addTable.forEach(function(row) {
-								password = row.get(userT.cols.password);
-							});
-							if (password == '') {
-								password = null;
-							}
-							let id = resetPasswordRow.get(userT.cols.id);
-							let res = sourceB.get().createEmpty();
-							changePasswordB.set({action: {
-								password: password,
-								oldPassword: '',
-								userid: id.db
-							}});
-                        }, sourceB, tableB, changePasswordB), 'Reset', function(row) {
-							if (row.get(confirmPasswordCK) !== row.get(userT.cols.password)) {
-								return aurora.messages.PASSWORDS_DO_NOT_MATCH;
-							}
-							if (row.get(userT.cols.password) == '') {
-								return aurora.messages.PASSWORD_MUST_NOT_BE_BLANK;
-							}
-							console.log('validate', row);
-							return null;
-						}, 'Reset Password');
-                        td.show(true);
+                        let id = resetPasswordRow.get(userT.cols.id);
+                        aurora.widgets.UserManagement.changePassword(scope, id.db, resetPasswordRow);
                     }
                     else {
                         let res = sourceB.get().createEmpty();
@@ -320,6 +240,163 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
     }, groupsFilterB);
 
     tableWidget.getComponent().render(container);
+};
+
+/**
+ * @const
+ */
+aurora.widgets.UserManagement.COLS = {
+    confirmPasswordCK: new recoil.structs.table.ColumnKey('confirmPassword'),
+    strength: new recoil.structs.table.ColumnKey('strength'),
+    oldPasswordCK: new recoil.structs.table.ColumnKey('oldPassword')
+};
+
+/**
+ * @param {recoil.structs.table.TableRowInterface}  sample
+ * @param {?} tblKeys
+ * @return {!recoil.structs.table.MutableTableRow}
+ */
+aurora.widgets.UserManagement.makeNewRow = function(sample, tblKeys) {
+    const COLS = aurora.widgets.UserManagement.COLS;
+    const userT = aurora.db.schema.tables.base.user;
+    var newRow = new recoil.structs.table.MutableTableRow();
+    for (var col in userT.meta) {
+        let meta = userT.meta[col];
+            if (meta.key === userT.info.pk) {
+                continue;
+            }
+        newRow.set(meta.key, meta.defaultVal == undefined ? null : meta.defaultVal);
+    }
+    newRow.set(tblKeys.username, sample ? sample.get(tblKeys.username) : '');
+    newRow.set(tblKeys.password, '');
+    newRow.set(COLS.strength, '');
+    newRow.set(tblKeys.active, true);
+    newRow.set(tblKeys.lockcount, 0);
+    newRow.set(tblKeys.lastinvalidtime, null);
+    newRow.set(tblKeys.groups, []);
+
+
+    newRow.set(tblKeys.mentorid, null); // todo remove this from here
+    newRow.set(COLS.confirmPasswordCK, '');
+    newRow.set(COLS.oldPasswordCK, '');
+
+    if (sample) {
+        newRow.setCellMeta(tblKeys.username, {enabled: recoil.ui.BoolWithExplanation.FALSE});
+        //            newRow.setCellMeta(tblKeys.role, {enabled: recoil.ui.BoolWithExplanation.FALSE});
+    }
+    newRow.addCellMeta(tblKeys.password, {immediate: true});
+    newRow.addCellMeta(COLS.confirmPasswordCK, {immediate: true});
+    newRow.addCellMeta(COLS.oldPasswordCK, {immediate: true});
+    return newRow;
+};
+
+/**
+ * @param {!aurora.WidgetScope} scope
+ * @param {recoil.structs.table.TableRowInterface} sample
+ * @param {aurora.columns.Selectize} groupCol
+ * @param {!recoil.frp.Behaviour<!Array>}  extraDataColsB
+ * @return {!recoil.frp.Behaviour<!recoil.structs.table.Table>}
+ */
+
+aurora.widgets.UserManagement.createDialogTable = function(scope, sample, groupCol, extraDataColsB) {
+    const COLS = aurora.widgets.UserManagement.COLS;
+    const userT = aurora.db.schema.tables.base.user;
+    let frp = scope.getFrp();
+    let secContextB = aurora.permissions.getContext(scope);
+
+    return recoil.frp.util.memoryOnlyB(frp.liftB(function(extraDataCols, secContext) {
+        var mTable = aurora.db.Helper.createEmptyTable(userT).createEmpty([], [COLS.oldPasswordCK, COLS.strength, COLS.confirmPasswordCK].concat(extraDataCols));
+        var columns = new recoil.ui.widgets.TableMetaData();
+        var oldPasswordCol = new recoil.ui.widgets.table.PasswordColumn(COLS.oldPasswordCK, 'Old Password');
+        let strengthCol = new recoil.ui.widgets.table.PasswordStrengthColumn(COLS.strength, 'Strength');
+        var changePasswordCol = new recoil.ui.widgets.table.PasswordColumn(userT.cols.password, 'Password');
+        var confirmPasswordCol = new recoil.ui.widgets.table.PasswordColumn(COLS.confirmPasswordCK, 'Confirm');
+        mTable.addColumnMeta(userT.cols.username, {displayLength: 15});
+        mTable.addColumnMeta(COLS.oldPasswordCK, {type: 'string', displayLength: 15, autocomplete: false, editable: true});
+        mTable.addColumnMeta(userT.cols.password, {displayLength: 15, autocomplete: false, editable: true});
+        mTable.addColumnMeta(COLS.confirmPasswordCK, {displayLength: 15, autocomplete: false});
+        columns.add(userT.cols.username, 'User Name');
+        if (sample) {
+            if (sample.get(userT.cols.id).db == secContext.userid) {
+                columns.addColumn(oldPasswordCol);
+            }
+        }
+        columns.addColumn(changePasswordCol);
+        columns.addColumn(confirmPasswordCol);
+        columns.addColumn(strengthCol);
+
+        if (!sample && groupCol) {
+            columns.addColumn(groupCol);
+        }
+        let row = aurora.widgets.UserManagement.makeNewRow(sample, userT.cols);
+
+        mTable.addRow(row);
+
+        mTable.addColumnMeta(COLS.confirmPasswordCK, {type: 'string'});
+
+        return columns.applyMeta(mTable.freeze());
+
+    }, extraDataColsB, secContextB));
+};
+
+/**
+ * @param {!aurora.WidgetScope} scope
+ * @param {number} userId
+ * @param {!recoil.structs.table.TableRowInterface} resetPasswordRow
+ */
+
+aurora.widgets.UserManagement.changePassword = function(scope, userId, resetPasswordRow) {
+    const COLS = aurora.widgets.UserManagement.COLS;
+    const userT = aurora.db.schema.tables.base.user;
+	let changePasswordB = scope.getDb().get(aurora.db.schema.actions.base.account.change_password.key);
+    let frp = scope.getFrp();
+    let extraDataColsB = frp.createB([]);
+    let tableB = aurora.widgets.UserManagement.createDialogTable(scope, resetPasswordRow, null, extraDataColsB);
+    let validatedB = frp.liftBI(function(tbl) {
+        let res = tbl.createEmpty();
+        tbl.forEach(function(row) {
+            let mrow = row.unfreeze();
+            let p1 = row.get(userT.cols.password);
+            let p2 = row.get(COLS.confirmPasswordCK);
+            mrow.set(COLS.strength, p1);
+            if (p1 == undefined || p1 === '') {
+                mrow.addCellMeta(userT.cols.password, {errors: [aurora.messages.PASSWORD_MUST_NOT_BE_BLANK]});
+            }
+            else if (p1 !== p2) {
+                mrow.addCellMeta(userT.cols.password, {errors: []});
+                mrow.addCellMeta(COLS.confirmPasswordCK, {errors: [aurora.messages.PASSWORDS_DO_NOT_MATCH]});
+            }
+            else {
+                mrow.addCellMeta(userT.cols.password, {errors: []});
+                mrow.addCellMeta(COLS.confirmPasswordCK, {errors: []});
+            }
+            res.addRow(mrow);
+        });
+        return res.freeze();
+    }, function(tbl) {
+        tableB.set(tbl);
+    }, tableB);
+
+    let td = new aurora.widgets.TableDialog(scope, validatedB, frp.createCallback(function(e) {
+		let password = null;
+        let oldPassword = '';
+        tableB.get().forEach(function(r) {
+            password = r.get(userT.cols.password);
+            oldPassword = r.get(COLS.oldPasswordCK);
+        });
+		if (password == '') {
+			password = null;
+		}
+		changePasswordB.set({action: {
+			password: password,
+			oldPassword: oldPassword,
+			userid: userId,
+		}});
+    }, tableB, changePasswordB), 'Reset', function(row) {
+		return null;
+	}, 'Reset Password', undefined, {blockErrors: true});
+    td.show(true);
+
 };
 
 /**

@@ -80,7 +80,6 @@ budget.actions.suggestUsername = function(coms, context, reader, inputs, callbac
             }
             username = username.replace(/[0-9+]$/, '');
             username = username.replace(/\^|\$|\*|\+|\?|\||\(|\)|\\|\{|\}|\[|\]/g, '_');
-            console.log('SELECT max(cast(substring(username,' + (username.length + 1) + ' ) as UNSIGNED )) username FROM `user` WHERE username rlike ?username', username.replace(/\./g, '\\.') + '[0-9]*');
             reader.query('SELECT max(cast(substring(username,?len) as UNSIGNED )) username FROM `user` WHERE username rlike ?username', {'len': (username.length + 1) , 'username': username.replace(/\./g, '\\.') + '[0-9]*'}, function(err, result) {
                 if (err) {
                     callback(err, []);
@@ -389,14 +388,14 @@ budget.actions.getGroupPermissions_ = function(context, reader, groups, callback
  * @param {number} userid
  * @param {?string} oldPassword
  * @param {?string} password
- * @param {function(?,!Array)} callback params are error, mentor user
+ * @param {function(?,!Array)} callback1 params are error, mentor user
  */
-budget.actions.changePassword = function(coms, context, reader, userid, oldPassword, password, callback) {
-	let admin = true;
+budget.actions.changePassword = function(coms, context, reader, userid, oldPassword, password, callback1) {
+	let admin = context.userid != userid; // no admin level password change if changing own password
 	if (!aurora.permissions.has('user-management')(context)) {
 		admin = false;
         if (context.userid != userid) {
-            callback('Access Denied', []);
+            callback1('Access Denied', []);
 			return;
         }
     }
@@ -405,71 +404,81 @@ budget.actions.changePassword = function(coms, context, reader, userid, oldPassw
 		password = null;
 	}
 	if (context.userid == userid && password == null) {
-        callback('Access Denied', []);
+        callback1('Access Denied', []);
     }
 
     let userT = aurora.db.schema.tables.base.user;
     let query = new recoil.db.Query();
 	let userQuery = query.eq(userT.cols.id, query.val(userid));
 
-
-	let updatePassword = function(password) {
-		reader.transaction(function(reader, callback) {
-			reader.updateOneLevel(
-				{}, userT, {'password': password},
-				userQuery, function(err) {
-					if (err) {
-						callback('Unable to  update password', null);
-					}
-					else {
-						callback(null);
-					}
-				});
-		}, function(err) {
-			callback(err, []);
-		});
-	};
-	let doUpdate = function() {
-		if (password === null) {
-			updatePassword(password);
-		}
-		else {
-			aurora.db.Pool.hashPassword(password, function(err, value) {
+	let updatePassword = function(password, reader, transCallback) {
+		reader.updateOneLevel(
+			{}, userT, {'password': password},
+			userQuery, function(err) {
 				if (err) {
-					callback('Unable to hash password', []);
+					transCallback('Unable to  update password', []);
 				}
 				else {
-					updatePassword(value);
+					transCallback(null, []);
 				}
 			});
-		}
 	};
 
-	if (admin) {
-		doUpdate();
-	}
-	else {
-		let user = null;
-		reader.readLevel({}, userT, userQuery, null, function() {}, function(err) {
-			if (err) {
-				callback(err, []);
-			}
-			else if (user === null) {
-				callback('No such user', []);
-			}
-			else {
-				aurora.db.Pool.checkPassword(oldPassword, user.password, function(valid) {
-					if (valid) {
-						doUpdate();
-					}
-					else {
-						callback('Access Denied', []);
-					}
 
-				});
-			}
-		});
-	}
+
+    let update = function(value) {
+        reader.transaction(function(reader, transCallback) {
+            if (admin) {
+			    updatePassword(value, reader, transCallback);
+		    }
+            else {
+                let user = null;
+		        reader.readLevel({}, userT, userQuery, null, function(entry, cb) {
+                    user = entry;
+                    cb();
+                }, function(err) {
+			        if (err) {
+                        transCallback(err);
+			        }
+			        else if (user === null) {
+				        transCallback('No such user');
+			        }
+			        else {
+				        aurora.db.Pool.checkPassword(oldPassword, user.password, function(valid) {
+					        if (valid) {
+						        updatePassword(value, reader, transCallback);
+					        }
+					        else {
+						        transCallback('Access Denied');
+					        }
+                            
+				        });
+			        }
+                });
+                
+		    }
+        },function(err) {
+            callback1(err, []);
+
+        });
+    };
+
+
+    if (password) {
+        aurora.db.Pool.hashPassword(password, function(err, value) {
+		    if (err) {
+			    callback1('Unable to hash password', []);
+		    }
+		    else {
+                update(value);
+            }
+        });
+    }
+    else {
+        update(password);
+    }
+
+
 
 };
 
@@ -528,7 +537,6 @@ budget.actions.getApptUsers_ = function(context, reader, mentorid, userid, email
                     userObj.name = (userObj.firstName + ' ' + userObj.lastName).trim();
                 }
             }
-            console.log(' put an index on end time, mentor and userid in appointments');
             budget.actions.getGroupPermissions_(context, reader, groups, function(perms) {
                 if (!perms['mentor']) {
                     callback('Mentor is not a mentor', null, null);
@@ -987,8 +995,6 @@ budget.actions.unscheduleAppointmentInternal = function(coms, context, reader, a
 
         });
     }, function(err) {
-        console.log('db done', err);
-
         if (err) {
             log.warn('Error unscheduling appointment', err);
             callback(err, []);
@@ -1070,7 +1076,6 @@ budget.actions.register = function(coms, context, reader, inputs, callback) {
                 }
             }
         }
-        console.log('in', object);
         // don't allow specification of primary key
         delete object[userT.cols.id.getName()];
         object[userT.cols.active.getName()] = true;
@@ -1130,8 +1135,6 @@ budget.actions.register = function(coms, context, reader, inputs, callback) {
                                 callback('Username already exists');
                             }
                             else {
-                                console.log('inserting new user', object);
-
                                 reader.insert({}, userT, object, function(err, res) {
                                     if (err) {
                                         callback('Unable to create user', null);

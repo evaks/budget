@@ -4,5 +4,6 @@ generated/
 letsencrypt/
 *~
 *.orig
-certificates/
+old-certs-*/
 test.log
+server.log

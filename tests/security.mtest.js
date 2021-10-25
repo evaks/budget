@@ -742,6 +742,75 @@ it('security-schedule', async () => {
     
 });
 
+
+it('security-change-password', async () => {
+
+    // can't change someone elses password
+    await expect(client1Client.action(
+        aurora.db.schema.actions.base.account.change_password,
+        {
+            userid: mentor1Id,
+            oldPassword: 'mentor1',
+            password: 'mentor2',
+        })).rejects.toBe('Access Denied');
+    
+    await expect(client1Client.action(
+        aurora.db.schema.actions.base.account.change_password,
+        {
+            userid: client1Id,
+            oldPassword: 'client-wrong',
+            password: 'xxxx',
+        })).rejects.toBe('Access Denied');
+
+    await client1Client.action(
+        aurora.db.schema.actions.base.account.change_password,
+        {
+            userid: client1Id,
+            oldPassword: 'client1',
+            password: 'client-new',
+        });
+
+    let clientX = await TestClient.connect(serverAddr, {username: 'client1', password: 'client-new'});
+    await clientX.close();
+
+    await adminClient.action(
+        aurora.db.schema.actions.base.account.change_password,
+        {
+            userid: client1Id,
+            oldPassword: '',
+            password: 'client1',
+        });
+    
+    clientX = await TestClient.connect(serverAddr, {username: 'client1', password: 'client1'});
+    await clientX.close();
+
+    await expect(adminClient.action(
+        aurora.db.schema.actions.base.account.change_password,
+        {
+            userid: 1,
+            oldPassword: 'client1',
+            password: 'admin',
+        })).rejects.toBe('Access Denied');
+
+    await adminClient.action(
+        aurora.db.schema.actions.base.account.change_password,
+        {
+            userid: 1,
+            oldPassword: 'admin',
+            password: 'admin2',
+        });
+
+    await adminClient.action(
+        aurora.db.schema.actions.base.account.change_password,
+        {
+            userid: 1,
+            oldPassword: 'admin2',
+            password: 'admin',
+        });
+
+    
+});
+
 it('security-appointments', async () => {
     let tableT = tables.appointments;
     function makeApt(mid, cid, start, opts) {
@@ -762,6 +831,7 @@ it('security-appointments', async () => {
         goog.object.extend(res, opts || {});
         return res;
     };
+    /*
     let apt1Id = await adminClient.add(makePath(tableT), makeApt(mentor1Id, client1Id, 100));
     let apt2Id = await adminClient.add(makePath(tableT), makeApt(mentor2Id, client2Id, 100));
     let apt3Id = await mentor1Client.add(makePath(tableT), makeApt(mentor1Id, client1Id, 200));
@@ -800,7 +870,7 @@ it('security-appointments', async () => {
     await client1Client.remove(makePath(tableT, apt4Id));
     
     
-        
+      */  
     // customers should not be able to see scheduled appointments for other people
 
     // test rpcs
@@ -862,13 +932,11 @@ afterAll(async () => {
     if (mentor1Client) {mentor1Client.close();}
     if (anonClient) {mentor1Client.close();}
 
-
-    
     await new Promise(function (resolve, error) {
         const req = https.request('https://' + serverAddr + '/shutdown', {rejectUnauthorized: false}, function (res) {
             resolve('done');
         });
         req.end();
 
-    });
+    }); 
 });

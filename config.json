@@ -48,7 +48,8 @@
 		"protocol": "https",
 		"websocket":true,
 		"certFile": "../letsencrypt/config/live/*/cert.pem",
-		"keyFile": "../letsencrypt/config/live/*/privkey.pem"
+			"keyFile": "../letsencrypt/config/live/*/privkey.pem",
+		"chainFile": "../letsencrypt/config/live/*/chain.pem"
 	    }
 	],
 	"hostname": "www.budgetservice.org.nz",

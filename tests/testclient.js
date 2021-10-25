@@ -439,6 +439,15 @@ TestClient.connect = function(serverAddr, login) {
                             error(res.statusCode);
                         }
                         else {
+
+                            let cookies = res.headers['set-cookie'];
+
+                            for (let i = 0; i < cookies.length; i++) {
+                                if (/^username=;/.test(cookies[i])) {
+                                    error('Not logged in');
+                                    return;
+                                }
+                            }
                             connectWebsocket(toClientCookies(res.headers['set-cookie']), resolve, error);
                         }
                     });
@@ -453,6 +462,8 @@ TestClient.connect = function(serverAddr, login) {
         // first we need to get a session id
         req.end();
     });
+    
+
 };
 
 
