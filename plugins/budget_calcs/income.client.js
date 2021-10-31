@@ -33,11 +33,11 @@ budget.widgets.calc.Income = function(scope, userid) {
         NET: 'Net Income (What you get in your account)',
         GROSS: 'Gross (Income before tax and other deductions)'
     };
-    let amountB = frp.createB(4238.86);
+    let amountB = frp.createB(0);
     let periodB = frp.createB(periodMeta.enum.fortnightly);
     let outPeriodB = frp.createB(periodMeta.enum.fortnightly);
     let typeB = frp.createB(INCOME_TYPE.GROSS);
-    let savingsB = frp.createB(4);
+    let savingsB = frp.createB(0);
     let studentLoanB = frp.createB(false);
     let otherB = frp.createB(0);
     const cls = budget.widgets.calc.Income;
