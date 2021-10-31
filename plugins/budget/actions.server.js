@@ -451,11 +451,11 @@ budget.actions.changePassword = function(coms, context, reader, userid, oldPassw
 					        else {
 						        transCallback('Access Denied');
 					        }
-                            
+
 				        });
 			        }
                 });
-                
+
 		    }
         },function(err) {
             callback1(err, []);

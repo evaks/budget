@@ -16,12 +16,13 @@
 	    {"id":4, "name": "Debt"}
 	]},
 	"PeriodType": {"type": "enum", "enum": [
-	    {"id":0, "name": "Daily", "info": {"rate": 1}},
-	    {"id":1, "name": "Weekly", "info": {"rate": 7}},
-	    {"id":2, "name": "Fortnightly", "info": {"rate": 14}},
-	    {"id":3, "name": "Monthly", "info": {"rate": 30.416666666667}},
-	    {"id":4, "name": "Quarterly", "info": {"rate": 91.25}},
-	    {"id":5, "name": "Yearly", "info": {"rate": 365}}
+	    {"id":0, "name": "Daily", "info": {"rate": 1, "weeklyRate": null}},
+	    {"id":1, "name": "Weekly", "info": {"rate": 7, "weeklyRate": 1}},
+	    {"id":2, "name": "Fortnightly", "info": {"rate": 14, "weeklyRate": 2}},
+	    {"id":6, "name": "4 Weekly", "info": {"rate": 28, "weeklyRate": 4}},
+	    {"id":3, "name": "Monthly", "info": {"rate": 30.416666666667, "weeklyRate":4.3333333}},
+	    {"id":4, "name": "Quarterly", "info": {"rate": 91.25, "weeklyRate": 13}},
+	    {"id":5, "name": "Yearly", "info": {"rate": 365, "weeklyRate": 52}}
 	], "null" : "None"}
     },
     "views": [

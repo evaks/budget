@@ -246,7 +246,11 @@ function parseType(type) {
 let serverOnlyTypes = ['order'];
 
 function jsEscape(name) {
-    return (reserved[name] || name).replace(/[ ]/, '_');
+    let v = (reserved[name] || name).replace(/[ ]/, '_');
+    if (/^[0-9]/.test(v)) {
+        v = '_' + v;
+    }
+    return v;
 }
 
 function toStr(txt) {

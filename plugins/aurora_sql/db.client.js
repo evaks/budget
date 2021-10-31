@@ -535,6 +535,9 @@ aurora.db.Helper.createSubTableB = function(schema, tableB, pkB, col) {
     return frp.liftBI(function(baseTable) {
         let pk = pkB.get();
         let row = null;
+        if (!baseTable) {
+            return null;
+        }
         let basePath = baseTable.getMeta().basePath;
         if (pk === null) {
             // just find a row should only be one if no pk specified
