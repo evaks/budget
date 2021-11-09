@@ -166,7 +166,7 @@ budget.widgets.calc.Income.getGrossTier = function(taxTiers, grossAmount) {
 
 
 /**
- * @param {number} weekly
+ * @param {boolean} weekly
  * @param {number} p
  * @return {number}
  */
@@ -177,7 +177,7 @@ budget.widgets.calc.Income.toYearly = function (weekly, p) {
         return 52/periodMeta.enumInfo[p].weeklyRate;
     }
     return 365/periodMeta.enumInfo[p].rate ;
-}
+};
 
 
 /**
