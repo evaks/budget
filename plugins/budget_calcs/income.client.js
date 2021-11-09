@@ -87,7 +87,7 @@ budget.widgets.calc.Income = function(scope, userid) {
         makeRow('Amount', this.amountWidget_, this.inPeriodWidget_, this.incomeTypeWidget_),
         makeRow('Date', this.dateWidget_),
         makeRow('Student Loan', this.studentLoanWidget_),
-        makeRow('Retirement Savings (Kiwisaver)', this.savingsWidget_),
+        makeRow('Retirement Savings (Kiwisaver)', this.savingsWidget_,'%'),
         makeRow('Other Deductions', this.otherWidget_),
         cd('tr', {}, cd('td', {colspan: 2, class: 'calc-result-sep'})),
         makeRow(this.totalTypeWidget_, this.outAmountWidget_, this.outPeriodWidget_),
@@ -139,7 +139,7 @@ budget.widgets.calc.Income = function(scope, userid) {
     this.otherWidget_.attachStruct({value: otherB, min: 0, max: 9999999, step: 0.01});
 
     this.dateWidget_.attachStruct({value: dateB});
-    this.savingsWidget_.attachStruct({value: savingsB, min: 0, max: 100, step: 0.01});
+    this.savingsWidget_.attachStruct({value: savingsB, min: 0, max: 90, step: 0.01});
     this.totalTypeWidget_.attachStruct({name: frp.liftB(x => x == INCOME_TYPE.NET ? 'Gross Income' : 'Net Income', typeB)});
 
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(container);
@@ -166,6 +166,21 @@ budget.widgets.calc.Income.getGrossTier = function(taxTiers, grossAmount) {
 
 
 /**
+ * @param {number} weekly
+ * @param {number} p
+ * @return {number}
+ */
+budget.widgets.calc.Income.toYearly = function (weekly, p) {
+    const budgetT = aurora.db.schema.tables.base.budget;
+    const periodMeta = aurora.db.schema.getMeta(budgetT.cols.period);
+    if (weekly) {
+        return 52/periodMeta.enumInfo[p].weeklyRate;
+    }
+    return 365/periodMeta.enumInfo[p].rate ;
+}
+
+
+/**
  * @param {!recoil.structs.table.TableInterface} tax
  * @param {!recoil.structs.table.TableInterface} acc
  * @param {recoil.structs.table.TableInterface} studentLoan
@@ -180,9 +195,11 @@ budget.widgets.calc.Income.getGrossTier = function(taxTiers, grossAmount) {
 budget.widgets.calc.Income.calcGrossIncome = function(tax, acc, studentLoan, date, amount, period, savings, other, outPeriod) {
     let taxTiers = budget.widgets.calc.Income.getTiers(tax, acc, studentLoan, date);
     const budgetT = aurora.db.schema.tables.base.budget;
-    const periodMeta = aurora.db.schema.getMeta(budgetT.cols.period);
-    const outAdj = periodMeta.enumInfo[outPeriod].rate / 365;
-    const adj = 365 / periodMeta.enumInfo[period].rate;
+    let weekly = true;
+
+    const toYearly = budget.widgets.calc.Income.toYearly;
+    const outAdj = 1/toYearly(weekly, outPeriod);
+    const adj = toYearly(weekly, period); 
 
     let otherYearly = Math.round(other * adj * 100);
     let yearlyNet = Math.round(Math.round(amount * 100) * adj) + otherYearly;
@@ -221,8 +238,10 @@ budget.widgets.calc.Income.calcNetIncome = function(tax, acc, studentLoan, date,
     let taxTiers = budget.widgets.calc.Income.getTiers(tax, acc, studentLoan, date);
     const budgetT = aurora.db.schema.tables.base.budget;
     const periodMeta = aurora.db.schema.getMeta(budgetT.cols.period);
-    const adj = 365 / periodMeta.enumInfo[period].rate;
-    const outAdj = periodMeta.enumInfo[outPeriod].rate / 365;
+    const toYearly = budget.widgets.calc.Income.toYearly;
+    const weekly = true;
+    const adj = toYearly(weekly, period);
+    const outAdj = 1/toYearly(weekly, outPeriod);
 
     let yearly = Math.round(Math.round(amount * 100) * adj);
     let otherYearly = Math.round(other * 100 * adj + yearly * savings / 100);

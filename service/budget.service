@@ -1,0 +1,16 @@
+[Unit]
+Description=Budget Web Server
+After=network.target mysqld.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+User=web
+ExecStart=/usr/bin/env node /var/www/server.min.js
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+
+[Install]
+WantedBy=multi-user.target
