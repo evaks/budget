@@ -30,6 +30,7 @@ budget.widgets.ClientView = function(scope) {
     let notesBodyDiv = cd('div', {class: 'notes-body-div'});
     let documentsBodyDiv = cd('div', {class: 'documents-body-div'});
     let appointmentDiv = cd('div', {class: 'appointment-div'});
+    let chatDiv = cd('div', {class: 'budget-client-chat'});
     let appointmentBodyDiv = cd('div', {class: 'appointment-body-div'});
     let mess = budget.messages;
     let bodyDiv = cd('div', {class: 'body-div'}, budgetBodyDiv, budgetImportBodyDiv, profileBodyDiv, notesBodyDiv, documentsBodyDiv, appointmentBodyDiv);
@@ -92,8 +93,10 @@ budget.widgets.ClientView = function(scope) {
     let documentsWidget = new budget.widgets.Documents(scope, userId);
     notesWidget.getComponent().render(notesBodyDiv);
     documentsWidget.getComponent().render(documentsBodyDiv);
+    let chatWidget = new aurora.widgets.Chat(scope, false);
+    chatWidget.getComponent().render(chatDiv);
 
-    let appointmentWidget = new budget.widgets.BusinessHours(scope, 'client', userId);
+    let appointmentWidget = new budget.widgets.BusinessHours(scope, 'client', userId, chatWidget);
     appointmentWidget.getComponent().render(appointmentBodyDiv);
 
     appointmentListWidget.attachStartDate(appointmentWidget.getStartDateB());
@@ -106,7 +109,7 @@ budget.widgets.ClientView = function(scope) {
               cd('h2', {class: 'group-header'}, aurora.messages.APPOINTMENTS.toString()), appointmentDiv),
            cd('div', {class: 'budget-budget-list'},
               cd('h2', {class: 'group-header'}, aurora.messages.BUDGETS.toString()),
-              budgetDiv));
+              budgetDiv), chatDiv);
 
     let query = new recoil.db.Query();
 

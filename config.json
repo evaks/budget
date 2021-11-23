@@ -24,6 +24,7 @@
 	    "auth": true,
 	    "settings" :{
 		"host":"localhost", "user": "budget-app", "password": "zUjA15U9ZrnI6cSkEp0P",
+		 "connectionLimit" : 10,
 		"database": "budget"
 	    },
 	

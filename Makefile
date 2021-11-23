@@ -55,9 +55,13 @@ endif
 debug-client:
 	node aurora/build build.json debug-client
 
+.PHONY: lint
+lint:
+	gjslint --disable 0100,0110,0120,0251,0012 `find plugins -name "*.js" -and -not -name "*_test.js" -and -not -path "plugins/closure-library/*" -not -name "*.min.js" -and -not -name "*.lib.js" -and -not -name build.js -and -not -type d -and -not -path "*/resources/htdocs/images/*.js" -and -not -path "*/resources/htdocs/scripts/*.js"`
+
 .PHONY: lintfix
 lintfix:
-	fixjsstyle --disable 0100,0110,0120,0251 `find plugins -name "*.js" -and -not -name "*_test.js" -and -not -path "plugins/closure-library/*" -not -name "*.min.js" -and -not -name "*.lib.js" -and -not -name build.js -and -not -type d -and -not -path "*/resources/htdocs/images/*.js"`
+	fixjsstyle --disable 0100,0110,0120,0251,0012 `find plugins -name "*.js" -and -not -name "*_test.js" -and -not -path "plugins/closure-library/*" -not -name "*.min.js" -and -not -name "*.lib.js" -and -not -name build.js -and -not -type d -and -not -path "*/resources/htdocs/images/*.js" -and -not -path "*/resources/htdocs/scripts/*.js"`
 
 .PHONY: test
 test:

@@ -1,5 +1,6 @@
 goog.provide('budget.Server');
 
+goog.require('aurora.Chat');
 goog.require('aurora.auth.Auth');
 goog.require('aurora.auth.DbSessionTable');
 goog.require('aurora.db.Coms');
@@ -9,6 +10,7 @@ goog.require('aurora.db.schema.init.base.updateDb');
 goog.require('aurora.db.sql.Reader');
 goog.require('aurora.log');
 goog.require('aurora.startup');
+goog.require('budget.Chat');
 goog.require('config');
 
 /**
@@ -102,6 +104,7 @@ budget.Server = function() {
 
     if (dbAuth) {
         new aurora.db.Coms(/** @type {!aurora.db.Authenticator} */ (dbAuth));
+        this.chat_ = new aurora.Chat(/** @type {!aurora.db.Authenticator} */ (dbAuth), new budget.Chat(this.reader_));
     }
     else {
         log.error('No authenticator cannot start up coms layer');

@@ -153,7 +153,7 @@ budget.widgets.import.Wizard = function(scope) {
     let prevActionB = frp.createCallback(moveScreen(-1), posB, nextEnabledBB);
 
     frp.accessTrans(function() {
-        nextEnabledBB.set(screensFactories[0].create(bodyContainer, null, this.finishedB_));
+        nextEnabledBB.set(screensFactories[0].create(bodyContainer, null, me.finishedB_));
     }, posB, nextEnabledBB);
 
     let nextEnabledB = frp.switchB(nextEnabledBB);

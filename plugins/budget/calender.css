@@ -179,6 +179,34 @@ div.budget-calendar-date {
     display: flex;
  /*   border: 1px solid blue;*/
 }
+.budget-calendar-chat-buttons {
+    display: inline;
+    position: absolute;
+    right: 0;
+}
+
+.budget-calendar-chat-button:hover {
+    background-color: #4f90d2;
+}
+
+.budget-calendar-chat-button.disabled {
+    background-color: gray;
+    cursor: not-allowed;
+}
+.budget-calendar-chat-button {
+    display: inline-block;
+    color: white;
+    border: 3px ridge #096ace;
+    width: 15px;
+    height: 15px;
+    padding: 3px;
+    margin:1px;
+    background-color: #0665c7;
+    vertical-align: middle;
+    text-align: center;
+    cursor:pointer;
+    
+}
 
 .legend-item {
     display: flex;

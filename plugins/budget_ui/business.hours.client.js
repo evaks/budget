@@ -27,9 +27,10 @@ goog.require('recoil.ui.widgets.table.TableWidget');
  * @param {!budget.WidgetScope} scope
  * @param {string=} opt_type
  * @param {number=} opt_clientId
+ * @param {aurora.widgets.Chat=} opt_chat
  * @implements {recoil.ui.Widget}
  */
-budget.widgets.BusinessHours = function(scope, opt_type, opt_clientId) {
+budget.widgets.BusinessHours = function(scope, opt_type, opt_clientId, opt_chat) {
     this.scope_ = scope;
     // types can be:
     //     admin - used to administer business hours and holidays
@@ -38,6 +39,7 @@ budget.widgets.BusinessHours = function(scope, opt_type, opt_clientId) {
 
     this.type_ = opt_type || 'admin';
     this.clientId_ = opt_clientId;
+    this.chat_ = opt_chat;
     let me = this;
     let frp = scope.getFrp();
     let mess = budget.messages;
@@ -46,6 +48,7 @@ budget.widgets.BusinessHours = function(scope, opt_type, opt_clientId) {
     let holidaysT = aurora.db.schema.tables.base.site_holidays;
     let appointmentsT = aurora.db.schema.tables.base.secure_appts;
     let availT = aurora.db.schema.tables.base.mentor_availablity;
+    let userT = aurora.db.schema.tables.base.user;
     this.contextB_ = aurora.permissions.getContext(scope);
     this.borderDimsB_ = frp.createB({x: 0, y: 0});
     let highlightedB = frp.createB(/** @type {{add: ?boolean, start:?{x:number,y:number},stop:?{x:number,y:number}}} */({start: null, stop: null}));
@@ -55,7 +58,20 @@ budget.widgets.BusinessHours = function(scope, opt_type, opt_clientId) {
         let str = ('0'.repeat(len) + v);
         return str.substring(str.length - len);
     };
+    if (this.clientId_ != undefined) {
+        let query = new recoil.db.Query();
 
+        this.clientB_ = frp.liftB(function (tbl) {
+            let res = null;
+            tbl.forEach(function (row) {
+                res = (row.get(userT.cols.firstName) || '') + ' ' + (row.get(userT.cols.lastName) || '') + ' (' + row.get(userT.cols.username) + ')';
+            });
+            return res.trim();
+        }, scope.getDb().get(userT.key, query.eq(userT.cols.id, query.val(this.clientId_))));
+    }
+    else {
+        this.clientB_ = frp.createB(null);
+    }
 
     let format = new Intl.DateTimeFormat(undefined, {
         weekday: 'short'
@@ -810,7 +826,7 @@ budget.widgets.BusinessHours.prototype.doScheduleAppointmentFunc_ = function(men
             let mentorList = [];
             let helper = me.createScheduleHelper_(when, me.availableB_.get());
             mentorsTbl.forEach(function (row) {
-                mentorList.push({name:row.get(mentorC.firstName) || row.get(mentorC.username) || '', val: row.get(mentorC.id).db});
+                mentorList.push({name:me.getMentorDisplayName(row), val: row.get(mentorC.id).db});
             });
 
             
@@ -900,7 +916,6 @@ budget.widgets.BusinessHours.prototype.doScheduleAppointmentFunc_ = function(men
         }, newAppointmentsB, me.mentorsB_, me.mentorIdB_, me.availableB_, me.appointmentsB_);
             
         var td = new aurora.widgets.TableDialog(scope, validatedTableB, frp.createCallback(function(e) {
-            console.log("schedule the appointment");
             newAppointmentsB.get().forEach(function (row) {
                 
                 me.scheduleActionB_.set({action: {
@@ -1114,7 +1129,14 @@ budget.widgets.BusinessHours.prototype.doRemoveAvailableFunc_ = function(menuInf
     }, this.curDateB_, this.availableB_, this.mentorB_, this.contextB_, this.siteIdB_);
 
 };
-
+/**
+ * @param {!recoil.structs.table.TableRowInterface} row
+ * @return {string} 
+ */
+budget.widgets.BusinessHours.prototype.getMentorDisplayName = function(row) {
+    let mentorC = aurora.db.schema.tables.base.mentor.cols;
+    return row.get(mentorC.firstName) || row.get(mentorC.username) || '';
+};
 /**
  * @private
  * @param {{dayIndex:number, hourIndex:number, clickPosMilli: number, clickPosTime:number}} menuInfo
@@ -2415,11 +2437,13 @@ budget.widgets.BusinessHours.prototype.updateRanges_ = function (list, cls, star
     let hourH = hourDim.height;
     let minY = hourDim.top - calDim.top;
     let cd = goog.dom.createDom;
-
+    let me = this;
     let divs = goog.dom.getElementsByClass(cls, this.calendarDiv_);
     for (let j = 0; j < divs.length; j++) {
         goog.dom.removeNode(divs[j]);
     }
+
+    let myId = BigInt(goog.net.cookies.get('userid'));
 
     for (let day = 0; day < 7; day++) {
         let curDateStart = moment(startDateMillis).add(day, 'd').toDate().getTime();
@@ -2443,14 +2467,51 @@ budget.widgets.BusinessHours.prototype.updateRanges_ = function (list, cls, star
                 
                 let yStart = (minY + hourH * startOffsetMillis / 3600000);
                 let yEnd = (minY + hourH * endOffsetMillis / 3600000);
-                
+
+
+                let canCall = (aurora.permissions.has('mentor')(this.contextB_.get()) ||
+                               myId === item.userid) && item.mentorid != undefined;
+
+
                 let curDiv = cd('div', {class: cls});
                 
                 curDiv.style.top = (1 + yStart) + 'px';
                 curDiv.style.height = (yEnd - yStart - 1) + 'px';
                 curDiv.style.left = '1px';
                 curDiv.style.width = (hourDim.width -1) + 'px';
-                
+
+                if (canCall && me.chat_) {
+                    let userT = aurora.db.schema.tables.base.user;
+                    let enabled = aurora.widgets.Chat.State.idle === me.chat_.getState().get().state;
+                    let enableCls = enabled ? '' : ' disabled';
+                    let toCall = myId === item.userid ? item.mentorid : item.userid;
+                    let video = cd('i', 'fas fa-video budget-calendar-chat-button' + enableCls);
+                    let voice = cd('i', 'fas fa-phone budget-calendar-chat-button' + enableCls);
+
+                    let toCallName = me.clientB_.get();
+
+                    me.mentorsB_.get().forEach(function (row) {
+                        if (row.get(aurora.db.schema.tables.base.mentor.cols.id).db == toCall) {
+                            toCallName = me.getMentorDisplayName(row);
+                        }
+                    });
+
+                    let makeDoCall = function (media) {
+                        return function(e) {
+                            if (!enabled || e.button !== 0) {
+                                return;
+                            }
+                            me.chat_.doCall(media, toCall, toCallName);
+                            e.preventDefault();
+                            e.stopPropagation();
+                        };
+                    };
+                    goog.events.listen(video, goog.events.EventType.MOUSEDOWN, makeDoCall({audio: true, video: true}));
+                    goog.events.listen(voice, goog.events.EventType.MOUSEDOWN, makeDoCall({audio: true, video: false}));
+
+                    curDiv.appendChild(cd('div', 'budget-calendar-chat-buttons', video,voice));
+                }
+
                 this.days_[day].div.appendChild(curDiv);
                 
             }
@@ -2556,11 +2617,14 @@ budget.widgets.BusinessHours.prototype.attachHelper_ = function(selectionB) {
     let bs = [this.siteB_, this.siteIdB_, this.highlightedB_, this.curDateB_,
               this.contentSizeB_, this.holidaysB_,
               this.borderDimsB_, this.hoursTblB_, this.appointmentsB_, this.availableB_,
-              this.contextB_, this.unscheduleActionB_, this.scheduleActionB_, this.mentorIdB_];
+              this.contextB_, this.unscheduleActionB_, this.scheduleActionB_, this.mentorIdB_, this.clientB_, this.mentorsB_];
 
 
     if (selectionB) {
         bs.push(selectionB);
+    }
+    if (this.chat_) {
+        bs.push(this.chat_.getState());
     }
     this.helper_.attach.apply(this.helper_, bs);
 };

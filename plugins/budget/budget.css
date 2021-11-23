@@ -1054,3 +1054,7 @@ div.budget-div:hover div {
     vertical-align: top;
 }
     
+
+.side-groups-container .aurora-chat-container {
+    z-index: 1;
+}

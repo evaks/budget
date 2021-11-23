@@ -284,7 +284,7 @@ aurora.db.Authenticator.prototype.getPermissions = function(token, socket, callb
                 permRows.forEach(function(row) {
                     permission[row.name] = true;
                 });
-                me.cacheAndContinue_(token, socket, {userid: data.userid, permissions: permission}, callback);
+                me.cacheAndContinue_(token, socket, {'@user': data.user, userid: data.userid, permissions: permission}, callback);
             });
         });
     }
@@ -327,5 +327,17 @@ aurora.db.Authenticator.prototype.getChannel = function(pluginName, channelId, m
         let token = message.token;
         me.getPermissions(token, message.connection.socket, function(context) {messageCallback(message, context);});
     }, opt_clientCloseCallback);
+
+    channel.onAuthRegister = function(cb) {
+        channel.onRegister(function(connection, token) {
+
+            me.getPermissions(token, connection.socket, function(context) {
+                if (channel.getRegistration()[connection.id]) {
+                    cb(connection, token, context);
+                }
+            });
+
+        });
+    };
     return channel;
 };

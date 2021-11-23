@@ -26,6 +26,7 @@ budget.print.ClientPrinter = function() {
 };
 
 /**
+ * @private
  * @param {!recoil.structs.table.TableRowInterface} user
  * @return {Object} pdfmake print object structure
  */
