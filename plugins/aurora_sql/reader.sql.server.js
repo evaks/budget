@@ -251,9 +251,11 @@ aurora.db.sql.Reader.readObject_ = function(driver, path, start, data, table, co
  * @param {!recoil.db.Query} filter
  * @param {{distinct:(undefined|boolean)}} options
  * @param {function(?,Object)} callback
+ * @param {!Array<{col:!recoil.structs.table.ColumnKey,name:string}>=} opt_cols extra columns to get so we can get more than 1 reference at a time
  */
 
-aurora.db.sql.Reader.prototype.selectReference = function(baseTable, links, filter, options, callback) {
+aurora.db.sql.Reader.prototype.selectReference = function(baseTable, links, filter, options, callback, opt_cols) {
+    let extraCols = opt_cols || [];
     let getTable = aurora.db.schema.getTable;
     let getParentTable = aurora.db.schema.getParentTable;
     let query = new recoil.db.Query();
@@ -303,7 +305,13 @@ aurora.db.sql.Reader.prototype.selectReference = function(baseTable, links, filt
         cols.push(escapeId(tName) + '.' + escapeId(k) + ' ' + escapeId(k));
     }
 
+    extraCols.forEach(function(info) {
+        let colPath = scope.resolve([info.col]).field.map(escapeId).join('.');
+        cols.push(colPath + ' ' + escapeId(info.name));
+    });
+
     let sql = 'SELECT ' + cols.join(',') + ' FROM ' + selectTables.join(',') + ' WHERE ' + filter.query(scope);
+
     driver.query(sql, function(err, results) {
         let rows = [];
         if (!err) {
@@ -312,9 +320,13 @@ aurora.db.sql.Reader.prototype.selectReference = function(baseTable, links, filt
                 for (let k in curTable.cols) {
                     row[k] = res[k];
                 }
+                extraCols.forEach(function(info) {
+                    row[info.name] = res[info.name];
+                });
                 rows.push(row);
             });
         }
+
         callback(err, rows);
 
     });
@@ -941,7 +953,6 @@ aurora.db.sql.Reader.prototype.updateOneLevel = function(context, table, object,
             }
         });
         sql += sets.join(',') + me.makeWhere_(scope, query, null);
-        aurora.db.sql.log.info('updating', sql);
         driver.query(sql, function(err) {
             if (err) {
                 aurora.db.sql.log.error(err);

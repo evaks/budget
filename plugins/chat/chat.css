@@ -1,23 +1,69 @@
 .aurora-chat-container {
-    position: absolute;
-    right: 1px;
-    bottom: 0;
-    border: 1px solid;
-    background: white;
 }
 
-.aurora-chat-answer, .aurora-chat-call {
+.aurora-chat-answer, .aurora-chat-call, .aurora-chat-error {
     position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
     margin-right: 50%;
-    background: darkcyan;
     border: 4px ridge;
+    z-index: 1;
+}
+.aurora-chat-incall .aurora-chat-answer-phone {
+    display: none;
+}
+.aurora-chat-answer, .aurora-chat-call {
+    background: darkcyan;
+}
+
+.aurora-chat-error {
+    background: white;
+}
+
+.aurora-chat-error button {
+    width: 100%;
+    margin: 0
+}
+.aurora-chat-error-message {
+    padding: 10px;
+    width: max-content;
+    max-width: 95vw;
+    max-height: calc(100vh - 300px);
+    overflow: auto;
+    
 }
 
 .aurora-chat-answer button.goog-button {
     margin-left: 0
+}
+span.aurora-chat-error-icon {
+    font-family: 'Font Awesome 5 Free';
+    font-weight: 900;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-font-smoothing: antialiased;
+    display: inline-block;
+    font-style: normal;
+    font-variant: normal;
+    text-rendering: auto;
+    line-height: 1;
+
+    font-size: 50pt;
+    width: 100%;
+
+    background-image: linear-gradient(50deg, rgb(251, 111, 111) 0%, 75%, rgb(145, 13, 13) 100%);
+    color: transparent;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -moz-background-clip: text;
+    -moz-text-fill-color: transparent;
+    -webkit-text-fill-color: transparent;
+    padding: 10px;
+    text-align: center;
+}
+
+span.aurora-chat-error-icon::before {
+    content: "\f071";
 }
 .aurora-chat-answer-phone {
     font-size: 50pt;
@@ -34,8 +80,21 @@
     
 }
 
+.aurora-chat-call .aurora-chat-call-button:first-child button {
+    margin: 0;
+}
+
+.aurora-chat-screen-off {
+    color: #3e3e3e;
+}
+.aurora-chat-incall .aurora-chat-call-button:last-child {
+    position: absolute;
+    right: 1px;
+}
+
 .aurora-chat-answer-buttons, .aurora-chat-call-buttons {
     white-space: nowrap;
+    width: 100%;
 }
 
 .aurora-chat-call-button button {

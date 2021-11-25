@@ -339,15 +339,23 @@ aurora.ui.getLeavePageMessage = function() {
 };
 
 (function() {
-    document.addEventListener('load', function() {
-        window.onbeforeunload = function() {
-            if (!aurora.ui.hasUserChanges()) {
-                return undefined;
-            }
-
-            return aurora.ui.getLeavePageMessage();
-        };
-    });
+    let unloadFunc = function(e) {
+        if (!aurora.ui.hasUserChanges()) {
+            return undefined;
+        }
+        let msg = aurora.ui.getLeavePageMessage();
+        (e || window.event).returnValue = msg;
+        console.log(msg, e);
+        return msg;
+    };
+    if (window) {
+        window.addEventListener('beforeunload', unloadFunc);
+    }
+    else {
+        document.addEventListener('load', function() {
+            window.addEventListener('beforeunload', unloadFunc);
+        });
+    }
 })();
 
 /**

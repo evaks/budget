@@ -227,6 +227,7 @@ budget.widgets.Menu.menu = [
         {'name': 'My Details', 'url': '/client', perm: aurora.permissions.has('client')},
         {seperator: true, perm: aurora.permissions.has('client')},
         {'name': 'Resources', url: '/resources'},
+        {'name': 'Administration', url: '/admin/admin', perm: aurora.permissions.has('site-management')},
         {seperator: true, perm: aurora.permissions.loggedIn(true)},
         {'name': 'Logout', 'url': '/logout', perm: aurora.permissions.loggedIn(true)}
     ]},

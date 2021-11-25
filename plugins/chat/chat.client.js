@@ -26,9 +26,11 @@ aurora.widgets.Chat = function(scope, opt_manageButtons) {
     let answerDiv = cd('div', {class: 'aurora-chat-answer-button'});
     let answerWhoDiv = cd('div', {class: 'aurora-chat-answer-who'});
     let callWhoDiv = cd('div', {class: 'aurora-chat-call-who'});
+    let errorTextDiv = cd('div', {class: 'aurora-chat-error-message'});
 
     let videoDiv = cd('div', {class: 'aurora-chat-call-button'});
     let muteDiv = cd('div', {class: 'aurora-chat-call-button'});
+    let screenDiv = cd('div', {class: 'aurora-chat-call-button'});
     let hangupDiv = cd('div', {class: 'aurora-chat-call-button'});
 
     this.ring_ = new Audio('/images/ring.mp3');
@@ -40,17 +42,27 @@ aurora.widgets.Chat = function(scope, opt_manageButtons) {
     this.videoCallButton_ = new recoil.ui.widgets.ButtonWidget(scope);
     this.hangupButton_ = new recoil.ui.widgets.ButtonWidget(scope);
     this.muteButton_ = new recoil.ui.widgets.ButtonWidget(scope);
+    this.screenButton_ = new recoil.ui.widgets.ButtonWidget(scope);
     this.videoButton_ = new recoil.ui.widgets.ButtonWidget(scope);
 
     this.answerButton_ = new recoil.ui.widgets.ButtonWidget(scope);
     this.declineButton_ = new recoil.ui.widgets.ButtonWidget(scope);
+    let errorCloseButton = new recoil.ui.widgets.ButtonWidget(scope);
 
     let answerButtons = cd('div', {class: 'aurora-chat-answer-buttons'}, answerDiv, declineDiv);
-    let callButtons = cd('div', {class: 'aurora-chat-call-buttons'}, videoDiv, muteDiv, hangupDiv);
+    let callButtons = cd('div', {class: 'aurora-chat-call-buttons'}, videoDiv, muteDiv, screenDiv, hangupDiv);
+    let errorClose = cd('div', 'aurora-chat-error-close-button');
+
+    errorCloseButton.getComponent().render(errorClose);
+
     this.answer_ = cd(
         'div', {class: 'aurora-chat-answer'}, answerWhoDiv,
         cd('i', 'fas fa-phone aurora-chat-answer-phone'),
         answerButtons);
+
+    this.error_ = cd(
+        'div', {class: 'aurora-chat-error'},
+        cd('span', 'aurora-chat-error-icon'), errorTextDiv, errorClose);
 
     this.call_ = cd(
         'div', {class: 'aurora-chat-call'}, callWhoDiv,
@@ -60,13 +72,14 @@ aurora.widgets.Chat = function(scope, opt_manageButtons) {
 
     this.container_ = cd(
         'div', {class: 'aurora-chat-container'},
-        this.answer_, this.call_);
+        this.answer_, this.call_, this.error_);
     if (opt_manageButtons !== false) {
         this.videoCallButton_.getComponent().render(this.container_);
         this.audioCallButton_.getComponent().render(this.container_);
     }
     this.hangupButton_.getComponent().render(hangupDiv);
     this.muteButton_.getComponent().render(muteDiv);
+//    this.screenButton_.getComponent().render(screenDiv);
     this.videoButton_.getComponent().render(videoDiv);
 
     this.answerButton_.getComponent().render(answerDiv);
@@ -91,7 +104,21 @@ aurora.widgets.Chat = function(scope, opt_manageButtons) {
                 return;
             }
 
-            if (obj.command === 'offer') {
+            if (obj.command === 'available') {
+                frp.accessTrans(function() {
+                    let avail = goog.object.clone(me.availB_.get());
+
+                    if (obj.val) {
+                        avail[obj.userid] = true;
+                    }
+                    else {
+                        delete avail[obj.userid];
+                    }
+                    me.availB_.set(avail);
+                }, me.availB_);
+
+            }
+            else if (obj.command === 'offer') {
                 me.ring({who: obj.who, description: obj.description, user: obj.user, clientId: obj.requestClientId});
             }
             else if (obj.command === 'disconnect' || obj.command === 'reject') {
@@ -112,21 +139,27 @@ aurora.widgets.Chat = function(scope, opt_manageButtons) {
             }
         });
 
+    this.availB_ = frp.createB({});
     this.stateB_ = frp.createB({state: State.idle, caller: null});
     this.whoB_ = frp.createB('');
     this.channelStateB_ = frp.createB({audio: true, video: true});
 
     html.innerText(answerWhoDiv, this.whoB_);
     html.innerText(callWhoDiv, this.whoB_);
+    html.innerText(errorTextDiv, frp.liftB(x => x.error || 'This is a long test message for testing it should not ever show', this.stateB_));
+    html.enableClass(this.call_, 'aurora-chat-incall', frp.liftB(s => s.state === State.inCall, this.stateB_));
+
 
     html.show(this.answer_, frp.liftB(x => x.state === State.ringing, this.stateB_));
+    html.show(this.error_, frp.liftB(x => x.state === State.error, this.stateB_));
+    html.show(screenDiv, frp.liftB(x => x.state === State.inCall && (navigator.getDisplayMedia || navigator.mediaDevices.getDisplayMedia), this.stateB_));
     html.show(this.call_, frp.liftB(function(state) {
         return [State.dialing, State.inCall, State.no_answer, State.connecting].indexOf(state.state) != -1;
     }, this.stateB_));
 
     this.videoCallButton_.attachStruct({
         action: frp.createCallback(function() {
-            me.doCall({audio: true, video: true}, 1,'unknown');
+            me.doCall({audio: true, video: true}, 1, 'unknown');
         }, this.stateB_), text: 'Video Call'
     });
 
@@ -148,6 +181,9 @@ aurora.widgets.Chat = function(scope, opt_manageButtons) {
     let video = cd('i', 'fas fa-video');
     let novideo = cd('i', 'fas fa-video-slash');
 
+    let screen = cd('i', 'fas fa-desktop');
+    let noscreen = cd('i', 'fas fa-desktop aurora-chat-screen-off');
+
     this.muteButton_.attachStruct({
         action: frp.createCallback(function() {
             let state = goog.object.clone(me.channelStateB_.get());
@@ -156,6 +192,18 @@ aurora.widgets.Chat = function(scope, opt_manageButtons) {
         }, this.channelStateB_),
         text: frp.liftB(function(v) {
             return v.audio ? unmute : mute;
+        }, this.channelStateB_)
+    });
+
+
+    this.screenButton_.attachStruct({
+        action: frp.createCallback(function() {
+            let state = goog.object.clone(me.channelStateB_.get());
+            state.screen = !state.screen;
+            me.channelStateB_.set(state);
+        }, this.channelStateB_),
+        text: frp.liftB(function(v) {
+            return v.screen ? screen : noscreen;
         }, this.channelStateB_)
     });
 
@@ -188,23 +236,87 @@ aurora.widgets.Chat = function(scope, opt_manageButtons) {
             me.decline();
         }, this.stateB_), text: 'Decline'
     });
+
+    errorCloseButton.attachStruct({
+        action: frp.createCallback(function() {
+            me.resetState_(aurora.widgets.Chat.State.idle);
+        }, this.stateB_), text: 'Ok'
+    });
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(this.container_);
 
     this.helper_ = new recoil.ui.ComponentWidgetHelper(scope, this.component_, this, this.updateState_);
-    this.helper_.attach(this.channelStateB_, this.stateB_);
+    this.helper_.attach(this.channelStateB_, this.stateB_, this.availB_);
 
 };
+/**
+ * @param {!Array<number>} userids
+ */
+aurora.widgets.Chat.prototype.interestedIn = function(userids) {
+    this.channel_.send({command: 'watch', users: userids});
+    let me = this;
+    this.scope_.getFrp().accessTrans(function() {
+        me.availB_.set({});
+    }, me.availB_);
+};
 
-
+/**
+ * @return {!recoil.frp.Behaviour<Object<string,boolean>>}
+ */
+aurora.widgets.Chat.prototype.getAvailableB = function() {
+    return this.availB_;
+};
 /**
  * @private
  * @param {recoil.ui.ComponentWidgetHelper} helper
  */
 aurora.widgets.Chat.prototype.updateState_ = function(helper) {
+    const widgetId = 'aurora.widgets.Chat';
+    let frp = this.scope_.getFrp();
+
     if (helper.isGood()) {
         let audio = this.channelStateB_.get().audio;
         let video = this.channelStateB_.get().video;
+        let screen = this.channelStateB_.get().screen;
         let state = this.stateB_.get().state;
+
+        if (navigator.getDisplayMedia || navigator.mediaDevices.getDisplayMedia) {
+            if (!this.localScreen_ && screen) {
+                let me = this;
+
+                let gotScreen = function(stream) {
+                    me.localScreen_ = stream;
+                    stream.getTracks().forEach(track => me.peerConnection_.addTrack(track, stream));
+
+                    console.log('got screen', stream);
+                };
+                let failedScreen = frp.accessTransFunc(function(e) {
+                    console.log('got screen', e);
+                    let state = goog.object.clone(me.channelStateB_.get());
+                    state.screen = false;
+                    me.channelStateB_.set(state);
+
+                }, this.channelStateB_);
+                try {
+                    let screenStream;
+                    if (navigator.getDisplayMedia) {
+                        navigator.getDisplayMedia({video: true}).then(gotScreen, failedScreen);
+                    }
+                    else if (navigator.mediaDevices.getDisplayMedia) {
+                        navigator.mediaDevices.getDisplayMedia({video: true}).then(gotScreen, failedScreen);
+                    }
+                    else {
+                        failedScreen('Not Supported');
+                    }
+                }
+                catch (e) {
+                }
+            } else {
+
+                if (!screen) {
+                    this.stopScreen_();
+                }
+            }
+        }
 
         if (this.local_.srcObject) {
             let tracks = this.local_.srcObject.getAudioTracks();
@@ -218,7 +330,12 @@ aurora.widgets.Chat.prototype.updateState_ = function(helper) {
             }
 
         }
+        const State = aurora.widgets.Chat.State;
+        aurora.ui.userChanges(widgetId, State.idle != state && State.error != state, 'Leaving the page will end the call');
         goog.style.setElementShown(this.remote_, state === aurora.widgets.Chat.State.inCall);
+    }
+    else {
+        aurora.ui.userChanges(widgetId, false);
     }
 };
 
@@ -227,12 +344,24 @@ aurora.widgets.Chat.prototype.updateState_ = function(helper) {
  * @private
  */
 aurora.widgets.Chat.prototype.closeConnection_ = function() {
+    this.stopScreen_();
     if (this.peerConnection_) {
         this.peerConnection_.close();
         this.peerConnection_ = null;
     }
 };
 
+/**
+ * @private
+ */
+aurora.widgets.Chat.prototype.stopScreen_ = function() {
+    if (this.localScreen_) {
+        this.localScreen_.getTracks().forEach(function(track) {
+            track.stop();
+        });
+        this.localScreen_ = null;
+    }
+};
 /**
  * @private
  * closes the connection and puts the state back to
@@ -264,6 +393,35 @@ aurora.widgets.Chat.prototype.resetState_ = function(state) {
     this.scope_.getFrp().accessTrans(function() {
 
         me.stateB_.set({state: state, caller: null});
+    }, me.stateB_);
+
+};
+
+
+/**
+ * @private
+ * closes the connection and puts the state back to
+ * the intial one
+ * @param {string} error
+ */
+aurora.widgets.Chat.prototype.setErrorState_ = function(error) {
+    let frp = this.scope_.getFrp();
+    let me = this;
+    const State = aurora.widgets.Chat.State;
+
+    let state = frp.accessTrans(x => me.stateB_.get(), me.stateB_);
+    if (State.ringing == state.state) {
+        this.hangup('reject');
+    }
+    else if (State.inCall == state.state) {
+        this.hangup();
+    }
+    this.closeConnection_();
+    this.silence_();
+    this.resetTimeout_();
+
+    frp.accessTrans(function() {
+        me.stateB_.set({state: aurora.widgets.Chat.State.error, error: error || 'Unknown Error'});
     }, me.stateB_);
 
 };
@@ -310,12 +468,21 @@ aurora.widgets.Chat.prototype.gotRemoteStream = function(e) {
  */
 aurora.widgets.Chat.prototype.makePeerConnection_ = async function() {
 
-
-    const stream = await navigator.mediaDevices.getUserMedia({audio: true, video: true});
-    console.log('Received local stream');
-    this.local_.srcObject = stream;
-    let localStream = stream;
-
+    let stream;
+    try {
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({audio: true, video: true});
+        }
+        catch (e) {
+            // we failed to get camera and video just try to get video
+            stream = await navigator.mediaDevices.getUserMedia({audio: true, video: false});
+        }
+        this.local_.srcObject = stream;
+    }
+    catch (e) {
+        this.setErrorState_('Unable to connect to Video or Microphone. Please check your browser permissions.');
+        throw e;
+    }
 
     const configuration = {};
     let pc = new RTCPeerConnection(configuration);
@@ -325,7 +492,7 @@ aurora.widgets.Chat.prototype.makePeerConnection_ = async function() {
 
     const gotRemoteStream = this.gotRemoteStream.bind(this);
     pc.addEventListener('track', gotRemoteStream);
-    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+    stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
     return pc;
 };
@@ -387,7 +554,7 @@ aurora.widgets.Chat.prototype.callAnswered = async function(obj) {
 /**
  * @return {!recoil.frp.Behaviour}
  */
-aurora.widgets.Chat.prototype.getState = function () {
+aurora.widgets.Chat.prototype.getState = function() {
     return this.stateB_;
 };
 /**
@@ -412,8 +579,6 @@ aurora.widgets.Chat.prototype.doCall = async function(media, userid, name) {
             this.channelStateB_.set(media);
         }.bind(this), this.channelStateB_, this.whoB_);
 
-        //        const videoTracks = localStream.getVideoTracks();
-        //        const audioTracks = localStream.getAudioTracks();
         this.peerConnection_ = await this.makePeerConnection_(undefined);
 
         const offer = await this.peerConnection_.createOffer(offerOptions);

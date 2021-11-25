@@ -248,6 +248,56 @@ aurora.db.Authenticator.prototype.cacheAndContinue_ = function(token, socket, co
     callback(this.makeServerInfo_(socket, cached.context));
 };
 
+
+/**
+ * get permissions for mutiple users that may or may not be logged in
+ * @param {!Array<number>} users
+ * @param {function(!Array<!aurora.db.access.SecurityContext>)} callback
+ */
+aurora.db.Authenticator.prototype.getUserPermissions = function(users, callback) {
+    let me = this;
+    let reader = this.reader_;
+    let query = new recoil.db.Query();
+
+    let userT = aurora.db.schema.tables.base.user;
+    let groupT = aurora.db.schema.tables.base.group;
+
+    if (users.length === 0) {
+        callback([]);
+        return;
+    }
+    reader.selectReference(userT, [userT.groups.cols.groupid, groupT.permission.cols.permissionid], query.isIn(userT.cols.id, users.map(
+        x => query.val(x)
+    )), {distinct: true}, function(err, permRows) {
+        if (err) {
+            callback([]);
+            return;
+        }
+        try {
+            let users = {};
+            permRows.forEach(function(row) {
+                let context = recoil.util.map.safeRecGet(users, [row['userid']], {
+                    userid: BigInt(row.userid),
+                    '@user': row.username,
+                    permissions: {}
+
+                });
+                context.permissions[row.name] = true;
+            });
+            let res = [];
+            for (let k in users) {
+                res.push(users[k]);
+            }
+            callback(res);
+        }
+        catch (e) {
+            me.log_.error(e);
+            callback([]);
+        }
+//        me.cacheAndContinue_(token, socket, {'@user': data.user, userid: data.userid, permissions: permission}, callback);
+    }, [{col: userT.cols.id, name: 'userid'}, {col: userT.cols.username, name: 'username'}]);
+
+};
 /**
  * @param {string} token
  * @param {?} socket

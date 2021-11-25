@@ -61,9 +61,9 @@ budget.widgets.BusinessHours = function(scope, opt_type, opt_clientId, opt_chat)
     if (this.clientId_ != undefined) {
         let query = new recoil.db.Query();
 
-        this.clientB_ = frp.liftB(function (tbl) {
+        this.clientB_ = frp.liftB(function(tbl) {
             let res = null;
-            tbl.forEach(function (row) {
+            tbl.forEach(function(row) {
                 res = (row.get(userT.cols.firstName) || '') + ' ' + (row.get(userT.cols.lastName) || '') + ' (' + row.get(userT.cols.username) + ')';
             });
             return res.trim();
@@ -2431,13 +2431,16 @@ budget.widgets.BusinessHours.prototype.updateUsage_ = function(dayUsage, calDim,
  * @param {number} startDateMillis
  * @param {{height:number, width:number, top:number, left:number}} hourDim
  * @param {{height:number, width:number, top:number, left:number}} calDim
+ * @param {!Array<number>} callUsers
  */
-budget.widgets.BusinessHours.prototype.updateRanges_ = function (list, cls, startDateMillis, hourDim, calDim) {
+budget.widgets.BusinessHours.prototype.updateRanges_ = function (list, cls, startDateMillis, hourDim, calDim, callUsers) {
     let milliPerDay = budget.widgets.BusinessHours.MILLI_PER_DAY;
     let hourH = hourDim.height;
     let minY = hourDim.top - calDim.top;
     let cd = goog.dom.createDom;
     let me = this;
+    let frp = this.scope_.getFrp();
+    let html = new recoil.ui.HtmlHelper(this.scope_);
     let divs = goog.dom.getElementsByClass(cls, this.calendarDiv_);
     for (let j = 0; j < divs.length; j++) {
         goog.dom.removeNode(divs[j]);
@@ -2483,13 +2486,18 @@ budget.widgets.BusinessHours.prototype.updateRanges_ = function (list, cls, star
                 if (canCall && me.chat_) {
                     let userT = aurora.db.schema.tables.base.user;
                     let enabled = aurora.widgets.Chat.State.idle === me.chat_.getState().get().state;
-                    let enableCls = enabled ? '' : ' disabled';
                     let toCall = myId === item.userid ? item.mentorid : item.userid;
-                    let video = cd('i', 'fas fa-video budget-calendar-chat-button' + enableCls);
-                    let voice = cd('i', 'fas fa-phone budget-calendar-chat-button' + enableCls);
+                    let video = cd('i', 'fas fa-video budget-calendar-chat-button');
+                    let voice = cd('i', 'fas fa-phone budget-calendar-chat-button');
+                    let disabledB = frp.liftB(function (avail) {
+                        return !(enabled && avail[toCall]);
+                    }, me.chat_.getAvailableB());
+                    html.enableClass(video, 'disabled', disabledB);
+                    html.enableClass(voice, 'disabled', disabledB);
 
                     let toCallName = me.clientB_.get();
 
+                    callUsers.push(toCall);
                     me.mentorsB_.get().forEach(function (row) {
                         if (row.get(aurora.db.schema.tables.base.mentor.cols.id).db == toCall) {
                             toCallName = me.getMentorDisplayName(row);
@@ -2498,7 +2506,10 @@ budget.widgets.BusinessHours.prototype.updateRanges_ = function (list, cls, star
 
                     let makeDoCall = function (media) {
                         return function(e) {
-                            if (!enabled || e.button !== 0) {
+                            let disabled = frp.accessTrans(function () {return disabledB.get();}, disabledB);
+                            if (disabled || e.button !== 0) {
+                                e.preventDefault();
+                                e.stopPropagation();
                                 return;
                             }
                             me.chat_.doCall(media, toCall, toCallName);
@@ -2527,7 +2538,6 @@ budget.widgets.BusinessHours.prototype.update_ = function(helper) {
     goog.style.setElementShown(this.errorContainer_, !helper.isGood() && helper.errors().length !== 0);
     goog.style.setElementShown(this.calendarDiv_, helper.isGood());
     let cd = goog.dom.createDom;
-
     let me = this;
     if (helper.isGood()) {
         goog.style.setElementShown(this.yourAvailableLegend_, me.mentorIdB_.get() != null);
@@ -2601,8 +2611,13 @@ budget.widgets.BusinessHours.prototype.update_ = function(helper) {
 
         let startDateMillis = this.dateWidget_.convertLocaleDate(curDate).getTime();
 
-        this.updateRanges_(holidayUsage, 'budget-holiday', startDateMillis, hourDim, calDim);
-        this.updateRanges_(this.createAppointments_(true), 'budget-cal-appoint', startDateMillis, hourDim, calDim);
+        let callUsers = [];
+        this.updateRanges_(holidayUsage, 'budget-holiday', startDateMillis, hourDim, calDim, []);
+        this.updateRanges_(this.createAppointments_(true), 'budget-cal-appoint', startDateMillis, hourDim, calDim, callUsers);
+
+        if (this.chat_) {
+            this.chat_.interestedIn(callUsers);
+        }
 
     }
 };

@@ -29,8 +29,8 @@ budget.widgets.management.calc.TaxRates = function(scope, userid) {
     let selDiv = cd('div', {class: 'date-selector-table'});
     let tiersDiv = cd('div');
     let container = cd('div', {class: 'calc-admin'},
-                       cd('h2', {}, 'Date Ranges'), selDiv,
-                       cd('h2', {},'Tiers'), tiersDiv);
+                       cd('h2', 'page-heading', 'Date Ranges'), selDiv,
+                       cd('h3', 'page-heading', 'Tiers'), tiersDiv);
 
 
     this.tiersTable_ = new budget.widgets.SelectTable(scope);

@@ -6,7 +6,7 @@
 	"access": "aurora.db.access.basic([{'user-management':'crud'},{'': 'rud'}])",
 	"accessFilter": [
 	    {"user-management" : "all"},
-	    {"": "aurora.db.access.filter.equal('user,$userid)"}],
+	    {"": "aurora.db.access.filter.equal('user','@userid')"}],
 	"initial": [
 	    {"active": true, "username": "admin", "password":"admin", "email":"", "groups" : [
 		{"!select": {"cols":

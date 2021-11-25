@@ -25,7 +25,7 @@ budget.Chat.prototype.allowOffer = function(offerer, offeree, callback) {
     let toPerm = offeree.permissions || {};
     let elevatedPerms = ['user-management', 'site-management', 'mentor'];
     let me = this;
-    let getUserName = function (id, mentor) {
+    let getUserName = function(id, mentor) {
         let query = new recoil.db.Query();
         let userT = aurora.db.schema.tables.base.user;
         me.reader_.readObjects(
@@ -34,20 +34,20 @@ budget.Chat.prototype.allowOffer = function(offerer, offeree, callback) {
             , null, //
             function(err, users) {
                 if (err || users.length !== 1) {
-                    callback(false,'');
+                    callback(false, '');
                 }
                 else {
                     let name = users[0].firstName || users.username || '';
                     if (!mentor) {
-                        name = ((users[0].firstName || '')  + ' ' + (users[0].lastName || '') +
+                        name = ((users[0].firstName || '') + ' ' + (users[0].lastName || '') +
                                 ' (' + users[0].username + ')').trim();
-                        
+
                     }
                     callback(true, name);
                 }
             });
     };
-        
+
         // employees can call anyone
     for (let i = 0; i < elevatedPerms.length; i++) {
         if (fromPerm[elevatedPerms[i]]) {

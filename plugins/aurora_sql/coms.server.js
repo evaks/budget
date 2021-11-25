@@ -1,5 +1,6 @@
 goog.provide('aurora.db.Coms');
 
+goog.require('aurora.SystemSettings');
 goog.require('aurora.db.Authenticator');
 goog.require('aurora.db.Serializer');
 goog.require('aurora.db.shared');
@@ -467,6 +468,7 @@ aurora.db.Coms = function(authenticator) {
     aurora.startup.doOnceStarted(function() {
         reader = new aurora.db.sql.Reader(aurora.db.Pool.getDefault());
         me.reader_ = reader;
+        aurora.SystemSettings.instance.update(reader);
         me.writer_ = new aurora.db.sql.ChangeWriter(aurora.db.schema, reader);
     });
 
@@ -940,6 +942,7 @@ aurora.db.Coms.prototype.doChanges_ = function(reader, e, secContext) {
     let schema = new aurora.db.Schema();
     let changes = recoil.db.ChangeSet.Change.deserializeList(e.data['list'], schema, new aurora.db.Coms.ValSerializer());
     let me = this;
+    let settingPath = recoil.db.ChangeSet.Path.fromString(aurora.db.schema.tables.base.system_settings.info.path);
     this.writer_.applyChanges(changes, secContext, function(result) {
         me.channel_.send({'command': 'set', 'id': e.data['id'], 'results': result}, e.clientId);
         if (!result.error) {
@@ -948,6 +951,8 @@ aurora.db.Coms.prototype.doChanges_ = function(reader, e, secContext) {
             // update the id of the top level adds
 
             let notifyChanges = [];
+            let systemSettingsChanged = false;
+
             for (let i = 0; i < changes.length; i++) {
                 let change = changes[i];
                 // adds need their ids updated
@@ -955,7 +960,14 @@ aurora.db.Coms.prototype.doChanges_ = function(reader, e, secContext) {
                     // set the paths for all hc
                     change = change.setPathKeys([result[i].id]);
                 }
+                if (settingPath.isAncestor(change.path())) {
+                    systemSettingsChanged = true;
+                }
+
                 notifyChanges.push(change);
+            }
+            if (systemSettingsChanged) {
+                aurora.SystemSettings.instance.update(reader, secContext ? secContext['@user'] : 'unknown');
             }
 
             me.notifyListeners(notifyChanges, myClient);
@@ -1613,6 +1625,19 @@ aurora.db.Coms.ValSerializer.prototype.deserialize = function(path, val) {
     return val;
 };
 
+/**
+ * @param {?} err
+ * @return {?}
+ */
+aurora.db.Coms.fixError = function (err) {
+    if (err && err.response) {
+        return err.response;
+    }
+    else if (err && err.message) {
+        return err.message;
+    }
+    return err;
+};
 /**
  * @type {aurora.db.Coms} 
  */

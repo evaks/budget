@@ -302,6 +302,13 @@ h4.page-heading {
     font-variant-caps: all-petite-caps;
 }
 
+.aurora-admin-content h2.page-heading, .aurora-admin-content h3.page-heading {
+    text-align: left;
+}
+
+.aurora-admin-content th {
+    color: #636363;
+}
 ul.feature-list li {
 }
 
@@ -1054,7 +1061,38 @@ div.budget-div:hover div {
     vertical-align: top;
 }
     
-
+.side-groups-container {
+    display: flex;
+    flex-direction: column;
+}
 .side-groups-container .aurora-chat-container {
     z-index: 1;
+}
+
+.budget-side-list-cont .aurora-chat-call.aurora-chat-incall {
+    position: relative;
+    left: unset;
+    top: unset;
+    display: inline-block;
+    transform: unset;
+    width: 100%;
+    background: green;
+    margin: 0;
+}
+
+.budget-side-list-cont .aurora-chat-call.aurora-chat-incall video {
+    margin: 0 0 2px 0;
+}
+
+
+
+
+.budget-side-list-cont .aurora-chat-call-button button {
+    min-width: 45px;
+    margin-left: 1px; 
+
+}
+
+.aurora-admin-content {
+    padding: 10px;
 }

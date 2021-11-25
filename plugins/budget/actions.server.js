@@ -121,7 +121,7 @@ budget.actions.getEmailTransporterInfo_ = function(secContext, callback) {
         }
     };
 
-    let mailInfo = ((config.authentication) || {}).mail;
+    let mailInfo = aurora.SystemSettings.instance.getSettings('email', ((config.authentication) || {}).mail);
 
     if (mailInfo) {
         let url = secContext['@base-url'] + '/account/do-reset?id=$url$';

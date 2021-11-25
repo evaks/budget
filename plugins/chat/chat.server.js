@@ -25,10 +25,12 @@ aurora.ChatInterface.prototype.allowOffer = function(offerer, offeree, callback)
  */
 aurora.Chat = function(authenticator, security) {
     let log = aurora.log.createModule('CHAT');
+    let async = require('async');
 
     let availUsers = new recoil.structs.MultiKeyMap(['clientid', 'userid']);
     let calling = new recoil.structs.MultiKeyMap(['from', 'to']);
     let inCall = new recoil.structs.MultiKeyMap(['from', 'to']);
+    let watching = new recoil.structs.MultiKeyMap(['watcher', 'watched']);
 
     let me = this;
 
@@ -42,7 +44,43 @@ aurora.Chat = function(authenticator, security) {
             let command = data['command'];
 
 
-            if (command == 'offer') {
+            if (command == 'watch' && data['users'] instanceof Array) {
+                let users = data['users'];
+                authenticator.getUserPermissions(users, async function(permissions) {
+                    async.map(permissions, function(perm, cb) {
+                        setTimeout(function() {
+                            console.log('doing perm2', perm);
+                            security.allowOffer(secContext, perm, function(allow, name) {
+                                console.log('checked', allow, perm);
+
+                                cb(null, allow ? perm.userid : null);
+                            });
+                        }, 1);
+                    }, function(err, users) {
+                        watching.removeIntersection(['watcher'], {watcher: e.clientId});
+                        users = users.filter(v => v !== null);
+                        if (!err && users.length > 0) {
+                            // user still here
+                            if (availUsers.get(['clientid'], {clientid: e.clientId}).length > 0) {
+
+
+                                for (let i = 0; i < users.length; i++) {
+                                    let userid = users[i];
+                                    watching.add({watcher: e.clientId, watched: userid});
+                                    // send watch indicator of the user
+
+                                    let avail = availUsers.get(['userid'], {userid: userid}).length > 0;
+                                    me.channel_.send({command: 'available', userid: userid, val: avail}, e.clientId);
+                                }
+                            }
+                        }
+
+                    });
+
+                });
+
+            }
+            else if (command == 'offer') {
                 let found = [];
                 availUsers.get(['userid'], {userid: BigInt(data.who)}).forEach(function(entry) {
                     if (entry.clientid != e.clientId) {
@@ -77,7 +115,15 @@ aurora.Chat = function(authenticator, security) {
                 let callData = {to: e.clientId, from: data.who};
                 let active = calling.get(['from', 'to'], callData);
                 if (active.length > 0) {
-                    calling.removeIntersection(['to', 'from'], callData);
+
+                    let allCalled = calling.removeIntersection(['from'], callData);
+                    // hangup on all other clients recieving the call
+                    allCalled.forEach(function({from, to}) {
+                        if (to != e.clientId) {
+                            me.channel_.send({command: 'reject'}, to);
+
+                        }
+                    });
                     inCall.add(callData);
                     me.channel_.send(data, data.who);
                 }
@@ -126,7 +172,7 @@ aurora.Chat = function(authenticator, security) {
 
         } catch (e) {
             log.error(e);
-            data['error'] = e;
+            data['error'] = aurora.db.Coms.fixError(e);
             me.channel_.send(data, e.clientId);
         }
 
@@ -142,16 +188,39 @@ aurora.Chat = function(authenticator, security) {
         stopCalling.forEach(function(sendTo) {
             me.disconnect(clientid, sendTo);
         });
-        availUsers.removeIntersection(['clientid'], {clientid});
+
+        delete watching[clientid];
+        let removed = availUsers.removeIntersection(['clientid'], {clientid});
+        if (removed.length > 0) {
+            me.sendAvail(availUsers, watching, removed[0].userid);
+
+
+        }
+
     });
 
     this.channel_.onAuthRegister(function(connection, token, context) {
         if (context.userid !== null) {
             availUsers.add({userid: BigInt(context.userid), clientid: connection.id, context});
+            me.sendAvail(availUsers, watching, context.userid);
         }
     });
 };
 
+/**
+ * @param {!recoil.structs.MultiKeyMap} availUsers
+ * @param {!recoil.structs.MultiKeyMap} watching
+ * @param {number} userid
+ */
+aurora.Chat.prototype.sendAvail = function(availUsers, watching, userid) {
+    userid = BigInt(userid);
+    let avail = availUsers.get(['userid'], {userid: userid}).length > 0;
+    let watchers = watching.get(['watched'], {watched: userid});
+    for (let i = 0; i < watchers.length; i++) {
+        let e = watchers[i];
+        this.channel_.send({command: 'available', userid: e.watched, val: avail}, e.watcher);
+    }
+};
 /**
  * sends a message that the call has ended
  * @param {string} client the client that ended the call
