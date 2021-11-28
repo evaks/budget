@@ -149,7 +149,7 @@ aurora.db.sql.Reader.fromDbType = function(driver, type, val) {
     if (val == undefined) {
         return null;
     }
-    
+
     let converter = aurora.db.sql.Reader.converters_[type];
 
     return converter && converter.fromDb ? converter.fromDb(driver, val) : val;

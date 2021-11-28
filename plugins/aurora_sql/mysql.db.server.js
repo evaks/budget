@@ -20,7 +20,7 @@ aurora.db.mysql.Pool = function(options, opt_connection) {
 	if (!opt_connection) {
 	    poolCount++;
 	}
-    
+
     this.mysql_ = mysql;
     this.options_ = options;
     this.transactionCount_ = 0;

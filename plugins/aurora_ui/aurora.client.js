@@ -51,19 +51,17 @@ aurora.Client = function(scope, loadDone) {
         if (err.error === aurora.websocket.error.NO_SESSION) {
             // if this is the first thing then don't reload it goes
             // into an infinate loop
-            if (false && canReload) {
-                aurora.ui.forceReload();
-            }
-            else if (!reloading) {
+
+            if (!reloading) {
                 console.error('got socket error');
                 // this is probably a cookie being wrong to just get send any http request to reset the
                 // cookie
                 reloading = true;
-                let doReloadWhenReady = function () {
+                let doReloadWhenReady = function() {
                     let sender = new goog.net.XhrIo();
                     sender.setResponseType(goog.net.XhrIo.ResponseType.TEXT);
-                    sender.listen(goog.net.EventType.COMPLETE, function (e) {
-                        console.log("done", sender.isSuccess());
+                    sender.listen(goog.net.EventType.COMPLETE, function(e) {
+                        console.log('done', sender.isSuccess());
                         if (sender.isSuccess()) {
                             aurora.ui.forceReload();
                         }

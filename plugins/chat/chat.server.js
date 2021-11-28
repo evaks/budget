@@ -49,10 +49,7 @@ aurora.Chat = function(authenticator, security) {
                 authenticator.getUserPermissions(users, async function(permissions) {
                     async.map(permissions, function(perm, cb) {
                         setTimeout(function() {
-                            console.log('doing perm2', perm);
                             security.allowOffer(secContext, perm, function(allow, name) {
-                                console.log('checked', allow, perm);
-
                                 cb(null, allow ? perm.userid : null);
                             });
                         }, 1);
@@ -78,6 +75,22 @@ aurora.Chat = function(authenticator, security) {
                     });
 
                 });
+
+            }
+            else if (command == 'webrtc-offer') {
+                // the partner has already accepted we are talking
+                let active = inCall.get(['from'], {from: e.clientId});
+                if (active.length > 0) {
+                    me.channel_.send(data, active[0].to);
+
+                }
+                else {
+                    active = inCall.get(['to'], {to: e.clientId});
+                    if (active.length > 0) {
+                        me.channel_.send(data, active[0].from);
+                    }
+
+                }
 
             }
             else if (command == 'offer') {
@@ -152,8 +165,6 @@ aurora.Chat = function(authenticator, security) {
             }
             else if (command == 'reject') {
                 let found = calling.get(['from', 'to'], {from: data.client, to: e.clientId}).length > 0;
-                console.log('rejecting', found, data.client);
-
                 if (found) {
                     calling.removeIntersection(['from'], {from: data.client});
                     me.channel_.send({command: 'reject'}, data.clientId);

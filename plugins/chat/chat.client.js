@@ -20,8 +20,9 @@ aurora.widgets.Chat = function(scope, opt_manageButtons) {
     let frp = scope.getFrp();
     this.scope_ = scope;
     this.remote_ = cd('video', {playsinline: true, autoplay: true});
-    this.local_ = cd('video', {playsinline: true, autoplay: true, muted: true});
-    goog.style.setElementShown(this.local_, false);
+    this.local_ = cd('video', {class: 'aurora-chat-local', playsinline: true, autoplay: true, muted: true});
+    this.showLocal_ = true;
+//    goog.style.setElementShown(this.local_, false);
     let declineDiv = cd('div', {class: 'aurora-chat-answer-button'});
     let answerDiv = cd('div', {class: 'aurora-chat-answer-button'});
     let answerWhoDiv = cd('div', {class: 'aurora-chat-answer-who'});
@@ -85,7 +86,6 @@ aurora.widgets.Chat = function(scope, opt_manageButtons) {
     this.answerButton_.getComponent().render(answerDiv);
     this.declineButton_.getComponent().render(declineDiv);
 
-    this.pendingIceCandidates_ = [];
 
 
     let me = this;
@@ -118,8 +118,12 @@ aurora.widgets.Chat = function(scope, opt_manageButtons) {
                 }, me.availB_);
 
             }
+            else if (obj.command === 'webrtc-offer') {
+                console.log('got offer', obj.description);
+                me.remoteOffer_(obj.description);
+            }
             else if (obj.command === 'offer') {
-                me.ring({who: obj.who, description: obj.description, user: obj.user, clientId: obj.requestClientId});
+                me.ring({who: obj.who, user: obj.user, clientId: obj.requestClientId});
             }
             else if (obj.command === 'disconnect' || obj.command === 'reject') {
                 me.resetState_(aurora.widgets.Chat.State.idle);
@@ -129,12 +133,8 @@ aurora.widgets.Chat = function(scope, opt_manageButtons) {
 
             }
             else if (obj.command === 'iceCandidate') {
-                if (me.peerConnection_ && me.peerConnection_.currentRemoteDescription) {
-                    console.log('add ice', obj.candidate);
-                    me.peerConnection_.addIceCandidate(new RTCIceCandidate(obj.candidate)).then(() => 1, e => 0);
-                }
-                else {
-                    me.pendingIceCandidates_.push(obj);
+                if (me.peerConnection_ && obj.candidate) {
+                    me.peerConnection_.addIceCandidate(obj.candidate).then(() => 1, e => 0);
                 }
             }
         });
@@ -333,6 +333,7 @@ aurora.widgets.Chat.prototype.updateState_ = function(helper) {
         const State = aurora.widgets.Chat.State;
         aurora.ui.userChanges(widgetId, State.idle != state && State.error != state, 'Leaving the page will end the call');
         goog.style.setElementShown(this.remote_, state === aurora.widgets.Chat.State.inCall);
+        goog.style.setElementShown(this.local_, state === aurora.widgets.Chat.State.inCall && this.showLocal_);
     }
     else {
         aurora.ui.userChanges(widgetId, false);
@@ -345,6 +346,10 @@ aurora.widgets.Chat.prototype.updateState_ = function(helper) {
  */
 aurora.widgets.Chat.prototype.closeConnection_ = function() {
     this.stopScreen_();
+    this.makingOffer_ = false;
+    this.ignoreOffer_ = false;
+    this.polite_ = true;
+    console.log('reseting state');
     if (this.peerConnection_) {
         this.peerConnection_.close();
         this.peerConnection_ = null;
@@ -464,9 +469,13 @@ aurora.widgets.Chat.prototype.gotRemoteStream = function(e) {
 
 /**
  * @private
+ * @param {boolean} polite
  * @return {RTCPeerConnection}
  */
-aurora.widgets.Chat.prototype.makePeerConnection_ = async function() {
+aurora.widgets.Chat.prototype.makePeerConnection_ = async function(polite) {
+    this.polite_ = polite;
+    this.makingOffer_ = false;
+    this.ignoreOffer_ = false;
 
     let stream;
     try {
@@ -475,6 +484,7 @@ aurora.widgets.Chat.prototype.makePeerConnection_ = async function() {
         }
         catch (e) {
             // we failed to get camera and video just try to get video
+            console.warn('unable to get video device trying voice only');
             stream = await navigator.mediaDevices.getUserMedia({audio: true, video: false});
         }
         this.local_.srcObject = stream;
@@ -485,9 +495,28 @@ aurora.widgets.Chat.prototype.makePeerConnection_ = async function() {
     }
 
     const configuration = {};
+    if (this.remote_.srcObject) {
+        this.remote_.srcObject = new MediaStream();
+    }
     let pc = new RTCPeerConnection(configuration);
     pc.addEventListener('icecandidate', this.onIceCandidate.bind(this));
     pc.addEventListener('iceconnectionstatechange', this.onIceStateChange.bind(this));
+    let me = this;
+    pc.addEventListener('negotiationneeded', async() => {
+        try {
+            this.makingOffer_ = true;
+            const offer = await pc.createOffer();
+            if (pc.signalingState != 'stable') return;
+            await pc.setLocalDescription(offer);
+            me.channel_.send({command: 'webrtc-offer', description: pc.localDescription});
+        } catch (e) {
+            me.setErrorState_(e.message || e);
+        }
+        finally {
+            me.makingOffer_ = false;
+        }
+    });
+
 
 
     const gotRemoteStream = this.gotRemoteStream.bind(this);
@@ -508,19 +537,6 @@ aurora.widgets.Chat.prototype.silence_ = function() {
     this.dial_.currentTime = 0;
 
 
-};
-/**
- * @param {string} partner
- */
-aurora.widgets.Chat.prototype.addPendingIceCandidates_ = async function(partner) {
-    let pc = this.peerConnection_;
-
-    this.pendingIceCandidates_.forEach(function(v) {
-        if (v.who == partner) {
-            pc.addIceCandidate(v.candidate).then(() => 1, e => console.error(e));
-        }
-    });
-    this.pendingIceCandidates_ = [];
 };
 
 /**
@@ -544,10 +560,20 @@ aurora.widgets.Chat.prototype.callAnswered = async function(obj) {
     frp.accessTrans(function() {
         me.stateB_.set({state: aurora.widgets.Chat.State.connecting, caller: {userid: state.who, clientid: obj.who}});
     }, me.stateB_);
+
+    this.peerConnection_ = await this.makePeerConnection_(false);
+
+    /*
+
+      const offerOptions = {
+      offerToReceiveAudio: 1,
+      offerToReceiveVideo: 1
+      };
+    const offer = await this.peerConnection_.createOffer(offerOptions);
+    await this.peerConnection_.setLocalDescription(offer);
+    */
     me.silence_();
 
-    await me.peerConnection_.setRemoteDescription(obj.description);
-    this.addPendingIceCandidates_(obj.who);
 
 };
 
@@ -564,12 +590,7 @@ aurora.widgets.Chat.prototype.getState = function() {
  */
 aurora.widgets.Chat.prototype.doCall = async function(media, userid, name) {
     const cls = aurora.widgets.Chat;
-
     // we can recieve anything that depends on what the other side decides
-    const offerOptions = {
-        offerToReceiveAudio: 1,
-        offerToReceiveVideo: 1
-    };
     let frp = this.scope_.getFrp();
 
     try {
@@ -579,12 +600,8 @@ aurora.widgets.Chat.prototype.doCall = async function(media, userid, name) {
             this.channelStateB_.set(media);
         }.bind(this), this.channelStateB_, this.whoB_);
 
-        this.peerConnection_ = await this.makePeerConnection_(undefined);
-
-        const offer = await this.peerConnection_.createOffer(offerOptions);
-        await this.peerConnection_.setLocalDescription(offer);
         let me = this;
-        this.channel_.send({command: 'offer', description: offer, who: userid});
+        this.channel_.send({command: 'offer', who: userid});
 
         this.dial_.loop = true;
         this.dial_.play().then(x => undefined, x => undefined);
@@ -677,6 +694,39 @@ aurora.widgets.Chat.prototype.ring = function(info) {
 
 };
 
+
+/**
+ * we have got an offer now answer the call, and the user has accepted it
+ *
+ * @private
+ * @param {?} description
+ */
+aurora.widgets.Chat.prototype.remoteOffer_ = async function(description) {
+    if (!this.peerConnection_ || !description) {
+        return;
+    }
+    let pc = this.peerConnection_;
+
+    const isStable =
+          pc.signalingState == 'stable' ||
+          (pc.signalingState == 'have-local-offer' && this.srdAnswerPending_);
+
+
+    this.ignoreOffer_ = description.type == 'offer' && !this.polite_ && (this.makingOffer_ || !isStable);
+
+    if (this.ignoreOffer_) {
+        return;
+    }
+    this.srdAnswerPending_ = description.type == 'answer';
+    console.log('answer', description.type == 'answer');
+    await pc.setRemoteDescription(description);
+    this.srdAnswerPending_ = false;
+    if (description.type == 'offer') {
+        await pc.setLocalDescription(),
+        this.channel_.send({command: 'webrtc-offer', description: pc.localDescription});
+    }
+};
+
 /**
  * we have got an offer now answer the call, and the user has accepted it
  *
@@ -691,14 +741,10 @@ aurora.widgets.Chat.prototype.answerCall_ = async function() {
         this.resetTimeout_();
         let state = frp.accessTrans(() => me.stateB_.get(), me.stateB_);
 
-        this.peerConnection_ = await this.makePeerConnection_(state.caller.clientId);
-        await this.peerConnection_.setRemoteDescription(state.caller.description);
-        this.addPendingIceCandidates_();
-        const answer = await this.peerConnection_.createAnswer();
-        await this.peerConnection_.setLocalDescription(answer);
+        this.peerConnection_ = await this.makePeerConnection_(true);
 
         let clientId = state.caller.requestClientId;
-        this.channel_.send({command: 'answered', description: answer, who: state.caller.clientId});
+        this.channel_.send({command: 'answered', who: state.caller.clientId});
 
         frp.accessTrans(function() {
             me.stateB_.set({state: aurora.widgets.Chat.State.connecting, caller: {userid: state.who, clientid: clientId}});
@@ -731,6 +777,7 @@ aurora.widgets.Chat.prototype.onIceStateChange = function(event) {
     if (this.peerConnection_) {
         let frp = this.scope_.getFrp();
         let conState = this.peerConnection_.iceConnectionState;
+        console.log('ICE state: ' + this.peerConnection_.iceConnectionState);
         if (conState === 'connected') {
             this.resetTimeout_();
             frp.accessTrans(function() {
@@ -750,104 +797,8 @@ aurora.widgets.Chat.prototype.onIceStateChange = function(event) {
             }.bind(this), this.stateB_);
         }
         else {
-            console.log('ICE state: ' + this.peerConnection_.iceConnectionState);
             console.log('ICE state change event: ', event);
         }
     }
 };
 
-
-/*
-
-function peer(other, polite, fail = undefined) {
-    if (!fail) fail = e => void send(window.parent, {error: `${e.name}: ${e.message}`});
-    const send = (target, msg) => void target.postMessage(JSON.parse(JSON.stringify(msg)), '*');
-
-
-    const log = str => void console.log(`[${polite ? 'POLITE' : 'IMPOLITE'}] ${str}`);
-    const assert_equals = !window.assert_equals ?
-          (a, b, msg) => a === b || void fail(new Error(`${msg} expected ${b} but got ${a}`)) :
-          window.assert_equals;
-    const pc = new RTCPeerConnection();
-
-
-    const localVideo1 = document.getElementById('localVideo1');
-    const localVideo2 = document.getElementById('localVideo2');
-    const remoteVideo = document.getElementById('remoteVideo');
-    const transceiversForSending = [];
-    try {
-        pc.ontrack = e => {
-            log('ontrack');
-            remoteVideo.srcObject = new MediaStream();
-            remoteVideo.srcObject.addTrack(e.track);
-        };
-        pc.onicecandidate = ({candidate}) => void send(other, {candidate});
-
-        let makingOffer = false;
-        let ignoreOffer = false;
-        let srdAnswerPending = false;
-        pc.onnegotiationneeded = async () => {
-            try {
-                log('SLD due to negotiationneeded');
-                assert_equals(pc.signalingState, 'stable', 'negotiationneeded always fires in stable state');
-                assert_equals(makingOffer, false, 'negotiationneeded not already in progress');
-                makingOffer = true;
-                await pc.setLocalDescription();
-                assert_equals(pc.signalingState, 'have-local-offer', 'negotiationneeded not racing with onmessage');
-                assert_equals(pc.localDescription.type, 'offer', 'negotiationneeded SLD worked');
-                send(other, {description: pc.localDescription});
-            } catch (e) {
-                fail(e);
-            } finally {
-                makingOffer = false;
-            }
-        };
-        window.onmessage = async ({data: {description, candidate, run}}) => {
-            try {
-                if (description) {
-                    // If we have a setRemoteDescription() answer operation pending, then
-                    // we will be "stable" by the time the next setRemoteDescription() is
-                    // executed, so we count this being stable when deciding whether to
-                    // ignore the offer.
-                    const isStable =
-                          pc.signalingState == 'stable' ||
-                          (pc.signalingState == 'have-local-offer' && srdAnswerPending);
-                    ignoreOffer =
-                        description.type == 'offer' && !polite && (makingOffer || !isStable);
-                    if (ignoreOffer) {
-                        log('glare - ignoring offer');
-                        return;
-                    }
-                    srdAnswerPending = description.type == 'answer';
-                    log(`SRD(${description.type})`);
-                    await pc.setRemoteDescription(description);
-                    srdAnswerPending = false;
-                    if (description.type == 'offer') {
-                        assert_equals(pc.signalingState, 'have-remote-offer', 'Remote offer');
-                        assert_equals(pc.remoteDescription.type, 'offer', 'SRD worked');
-                        log('SLD to get back to stable');
-                        await pc.setLocalDescription();
-                        assert_equals(pc.signalingState, 'stable', 'onmessage not racing with negotiationneeded');
-                        assert_equals(pc.localDescription.type, 'answer', 'onmessage SLD worked');
-                        send(other, {description: pc.localDescription});
-                    } else {
-                        assert_equals(pc.remoteDescription.type, 'answer', 'Answer was set');
-                        assert_equals(pc.signalingState, 'stable', 'answered');
-                        pc.dispatchEvent(new Event('negotiated'));
-                    }
-                } else if (candidate) {
-                    try {
-                        await pc.addIceCandidate(candidate);
-                    } catch (e) {
-                        if (!ignoreOffer) throw e;
-                    }
-                }
-            } catch (e) {
-                fail(e);
-            }
-    };
-  } catch (e) {
-    fail(e);
-  }
-  return pc;
-}*/
