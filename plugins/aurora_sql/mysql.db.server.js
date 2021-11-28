@@ -18,8 +18,9 @@ let conCount = 0;
 aurora.db.mysql.Pool = function(options, opt_connection) {
     const mysql = require('mysql');
 	if (!opt_connection) {
-		poolCount++;
+	    poolCount++;
 	}
+    
     this.mysql_ = mysql;
     this.options_ = options;
     this.transactionCount_ = 0;
@@ -27,7 +28,10 @@ aurora.db.mysql.Pool = function(options, opt_connection) {
         this.connection_ = opt_connection;
     }
     else {
-        this.pool_ = mysql.createPool(options);
+        let opts = goog.object.clone(options);
+        opts.supportBigNumbers = true;
+        opts.bigNumberStrings = true;
+        this.pool_ = mysql.createPool(opts);
     }
 
 };

@@ -96,6 +96,27 @@ aurora.db.sql.Reader.converters_ = {
             return BigInt(val);
         }
     },
+    'datetime': {
+        fromDb(driver, val) {
+            return parseInt(val);
+        }
+    },
+    'string': {
+        fromDb(driver, val) {
+            return val;
+        }
+    },
+
+    'bigint': {
+        fromDb(driver, val) {
+            return BigInt(val);
+        }
+    },
+    'file': {
+        fromDb(driver, val) {
+            return BigInt(val);
+        }
+    },
     'int64': {
         fromDb(driver, val) {
             return BigInt(val);
@@ -128,6 +149,7 @@ aurora.db.sql.Reader.fromDbType = function(driver, type, val) {
     if (val == undefined) {
         return null;
     }
+    
     let converter = aurora.db.sql.Reader.converters_[type];
 
     return converter && converter.fromDb ? converter.fromDb(driver, val) : val;
@@ -211,7 +233,7 @@ aurora.db.sql.Reader.readObject_ = function(driver, path, start, data, table, co
                     return;
                 }
                 let val = row[colMap[col.getId()]];
-                let type = fileT.meta[col.getName()];
+                let type = fileT.meta[col.getName()].type;
                 curObject[col.getName()] = aurora.db.sql.Reader.fromDbType(driver, type, val);
             });
             curObject[k] = aurora.db.sql.Reader.fromDbType(driver, type, val);
@@ -881,7 +903,6 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
                         return;
                     }
                     // sort by sort order, then id, id is the parent so should be ok
-                    console.log('todo test large integers from database, sort by items, clear passwords option');
                     if (isCount) {
                         callback(null, data[0]['count']);
                         return;
