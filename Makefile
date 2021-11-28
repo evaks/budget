@@ -19,8 +19,11 @@ create-db:
 output/server.min.js: node_modules $(wildcard plugins/**/*.server.js)  $(wildcard plugins/**/*.shared.js) $(wildcard aurora/plugins/**/*.server.js) $(wildcard aurora/plugins/**/*.shared.js) $(wildcard plugins/recoil/**/*.js) $(wildcard plugins/closure-library/**/*.js) $(wildcard plugins/**/*.schema.json)
 	node aurora/build build.json server
 
+output/config.json: config.json
+	cp config.json output/config.json
+
 .PHONY: server
-server: output/server.min.js
+server: output/server.min.js output/config.json
 
 
 resources: node_modules
