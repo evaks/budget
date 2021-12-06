@@ -207,7 +207,13 @@ budget.widgets.BudgetImportCategory.prototype.createDefaultMappings = function(r
  */
 budget.widgets.BudgetImportCategory.prototype.attach = function(mappingsSourceB, budgetB, storedMappingsB, dateRangeBs) {
     let COLS = budget.widgets.BudgetImportCategory.COLS;
-    let categoryCol = new recoil.ui.widgets.table.InputComboColumn(COLS.CATEGORY, 'Category', []);
+    let categoryCol = new aurora.columns.Selectize(COLS.CATEGORY, 'Category', {
+        maxValues: 1,
+        create: function (v) { return v;},
+        createOnBlur: true,
+        placeholder: 'Enter a category',
+        createFilter: function (v) { return v && v.length > 0;}
+    });
     let TYPES = aurora.db.schema.getEnum(COLS.TYPE);
     let baseTypes = [TYPES.income, TYPES.payment, TYPES.transfer, TYPES.debt];
     let frp = this.scope_.getFrp();
@@ -272,7 +278,12 @@ budget.widgets.BudgetImportCategory.prototype.attach = function(mappingsSourceB,
         });
 
         function removeDups(a) {
-            return a.sort((x, y) => x.localeCompare(y, undefined, {sensitivity: 'accent'})).filter(function(v, idx, arr) {return idx === 0 || v.localeCompare(arr[idx - 1], undefined, {sensitivity: 'accent'});});
+            return a.sort((x, y) => x.localeCompare(y, undefined, {sensitivity: 'accent'}))
+                .filter(function(v, idx, arr) {
+                    if (!v) {
+                        return false;
+                    }
+                    return idx === 0 || v.localeCompare(arr[idx - 1], undefined, {sensitivity: 'accent'});});
         }
         payments = removeDups(payments);
         income = removeDups(income);
@@ -308,7 +319,15 @@ budget.widgets.BudgetImportCategory.prototype.attach = function(mappingsSourceB,
                 subRows = [];
             }
         }
-
+        let newCategories = {};
+        
+        tbl.forEachModify(function(row, pks) {
+            let cat = row.get(COLS.CATEGORY);
+            if (cat && cat.trim().length > 0) {
+                recoil.util.map.safeGet(newCategories, row.get(COLS.TYPE), {})[cat] = true;
+            }
+        });
+        
         tbl.forEachModify(function(row, pks) {
             row.setPos(pos++);
             let type = row.get(COLS.TYPE);
@@ -319,10 +338,13 @@ budget.widgets.BudgetImportCategory.prototype.attach = function(mappingsSourceB,
             row.set(COLS.ORIG_TYPE, row.get(COLS.TYPE));
             row.set(COLS.ORIG_CATEGORY, row.get(COLS.CATEGORY));
             let categories = type === TYPES.income ? income : payments;
+            categories = Object.keys(recoil.util.map.safeGet(newCategories, type, {})).concat(categories);
+            categories = removeDups(categories);
+            
             if (type == TYPES.debt) {
                 categories = [particulars].concat(categories);
             }
-            row.addCellMeta(COLS.CATEGORY, {list: categories, displayLength: 15, maxLength: descriptionMeta.maxLength});
+            row.addCellMeta(COLS.CATEGORY, {options: categories, displayLength: 15, maxLength: descriptionMeta.maxLength});
 
             if (curSplit !== null && id.indexOf(curSplit + '.') !== 0) {
                 appendSplitRows();
@@ -535,8 +557,26 @@ budget.widgets.BudgetImportCategory.prototype.attach = function(mappingsSourceB,
     }, idToPageMapB, pageB);
 
     let filteredB = recoil.structs.table.Filter.createColFilterB(mappingsB, COLS.ID, filterB);
+    let displayB = frp.liftBI(function (tbl) {
+        let res = tbl.createEmpty();
+        tbl.forEachModify(function (row) {
+            let catStr = (row.get(COLS.CATEGORY) || '').trim();
+            row.set(COLS.CATEGORY, catStr.length ? [catStr]: []);
+            res.addRow(row);
+        });
+        return res.freeze();
+    }, function (tbl) {
 
-    this.pager_.attach(null, filteredB, pageB, countB);
+        let res = tbl.createEmpty();
+        tbl.forEachModify(function (row) {
+            let cat = row.get(COLS.CATEGORY);
+            row.set(COLS.CATEGORY, cat ? (cat[0] || '') : '');
+            res.addRow(row);
+        });
+        filteredB.set(res.freeze());
+    }, filteredB);
+
+    this.pager_.attach(null, displayB, pageB, countB);
 
 };
 /**

@@ -14,11 +14,11 @@ aurora.widgets.Selectize = function(scope) {
     let self = this;
     this.scope_ = scope;
     this.controlInput_ = createDom('input', {type: 'text', autocomplete: 'off'});
-
+    this.errorDiv_ = createDom('div', {class:'recoil-error'});
     this.control_ = createDom('div', {class: 'selectize-input items'}, this.controlInput_);
     this.dropdownContent_ = createDom('div', {class: 'selectize-dropdown-content'});
     this.dropdown_ = createDom('div', {class: 'selectize-dropdown', style: 'display:none'}, this.dropdownContent_);
-    this.wrapper_ = createDom('div', {class: 'selectize-control'}, this.control_, this.dropdown_);
+    this.wrapper_ = createDom('div', {class: 'selectize-control'}, this.control_, this.dropdown_, this.errorDiv_);
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(this.wrapper_);
     this.optionsHelper_ = new recoil.ui.ComponentWidgetHelper(scope, this.component_, this, this.updateOptions_, function() {});
 
@@ -174,9 +174,12 @@ aurora.widgets.Selectize.prototype.updateOptions_ = function(helper) {
         let results = self.search(goog.string.trim(this.controlInput_.value), self.optionsB_.get());
         self.activeOption_ = null;
         let defOptionRenderer = function(opt) {
-                return goog.dom.createTextNode(opt);
+            if (opt === undefined) {
+                console.log('undefined !!!');
+            }
+            return goog.dom.createTextNode(opt);
         };
-	goog.dom.classlist.enable(self.wrapper_, 'selectize-disabled', self.isDisabled_());
+	    goog.dom.classlist.enable(self.wrapper_, 'selectize-disabled', self.isDisabled_());
         let renderOption = function(v) {
             let outer = createDom('div', {class: 'option'}, (settings.optionRenderer || defOptionRenderer) (v));
             goog.events.listen(outer, 'mouseenter', function() { self.onOptionHover.apply(self, arguments); });
@@ -193,7 +196,7 @@ aurora.widgets.Selectize.prototype.updateOptions_ = function(helper) {
         let valMap = new goog.structs.AvlTree(recoil.util.compare);
         self.valueB_.get().forEach(valMap.add.bind(valMap));
         let rawOpts = self.optionsB_.get();
-        let options = results.items.map(function(v) {
+        let options = results.items.filter(v => rawOpts.hasOwnProperty(v.id)).map(function(v) {
             return rawOpts[v.id];
         }).filter(function(v) {
             return hideSelected ? !valMap.findFirst(v) : true;
@@ -224,6 +227,49 @@ aurora.widgets.Selectize.prototype.updateOptions_ = function(helper) {
     }
 };
 /**
+ * @param {boolean} multi
+ * @param {?} settings
+ * @return {function (?):?}
+ */
+aurora.widgets.Selectize.prototype.renderValue_ = function (multi, settings) {
+    let createDom = goog.dom.createDom;
+    let self = this;
+    if (multi) {
+        return function (v) {
+            let remove = createDom('a', {
+                class: 'remove',
+                title: 'Remove',
+                tabindex: '-1',
+                href: 'javascript:void(0)'}, 'x');
+            
+            let res = createDom('div', {class: 'item', 'data-value': v.id}, settings.renderer(v.value), remove);
+            
+            goog.events.listen(res, 'mousedown', function(e) {
+                self.onItemSelect(e, v);
+            });
+            
+            goog.events.listen(remove, 'mousedown', function(e) {
+                self.deleteItem(v);
+                e.preventDefault();
+                e.stopPropagation();
+            });
+            
+            res['data-value'] = v;
+            return res;
+        };
+    }
+    return function (v) {
+        let res = createDom('div', {class: 'item', 'data-value': v.id}, settings.renderer(v.value));
+        goog.events.listen(res, 'mousedown', function(e) {
+            self.onItemSelect(e, v);
+        });
+        
+        res['data-value'] = v;
+        return res;
+    };
+};
+
+/**
  * @private
  * @param {!recoil.ui.ComponentWidgetHelper} helper
  */
@@ -236,38 +282,20 @@ aurora.widgets.Selectize.prototype.update_ = function(helper) {
     let me = this;
     let self = this;
     cl.set(me.control_, controlClasses.join(' '));
-
+    goog.dom.removeChildren(this.errorDiv_);
+    goog.style.setElementShown(this.errorDiv_, false);
     if (helper.isGood()) {
+        let inputMode = me.mode_();
 
         let settings = this.settingsB_.get();
-        let renderValue = function(v) {
-            let remove = createDom('a', {class: 'remove',
-                                         title: 'Remove',
-                                         tabindex: '-1',
-                                         href: 'javascript:void(0)'}, 'x');
 
-            let res = createDom('div', {class: 'item', 'data-value': v.id}, settings.renderer(v.value), remove);
-
-            goog.events.listen(res, 'mousedown', function(e) {
-                self.onItemSelect(e, v);
-            });
-
-            goog.events.listen(remove, 'mousedown', function(e) {
-                self.deleteItem(v);
-                e.preventDefault();
-                e.stopPropagation();
-            });
-
-            res['data-value'] = v;
-            return res;
-        };
-
-        let inputMode = me.mode_();
         if (inputMode === 'multi') {
             wrapperClasses.push('plugin-remove_button');
         }
 
-        me.curValues_ = aurora.widgets.Selectize.updateValueList(this.control_, this.curValues_, this.uniqValueB_.get(), renderValue, this.controlInput_);
+        me.curValues_ = aurora.widgets.Selectize.updateValueList(
+            this.control_, this.curValues_, this.uniqValueB_.get(),
+            this.renderValue_(inputMode == 'multi', settings), this.controlInput_);
         me.curValues_.forEach(function(el) {
             cl.enable(el.node, 'active', !!self.activeB_.get().findFirst(el.value));
         });
@@ -303,12 +331,25 @@ aurora.widgets.Selectize.prototype.update_ = function(helper) {
 
 
         self.controlInput_.removeAttribute('placeHolder');
-        if (self.valueB_.get().length > 0 && settings.placeholder) {
+        if (self.valueB_.get().length == 0 && settings.placeholder) {
             goog.dom.setProperties(this.controlInput_, {'placeholder': settings.placeholder});
         }
     }
     else {
         cl.enable(me.control_, 'disabled', true);
+
+        let errors = helper.isGood() ? [] : helper.errors();
+        goog.style.setElementShown(this.errorDiv_, errors.length > 0);
+        errors.forEach(function(error) {
+            var div = goog.dom.createDom('div', {class: 'error'}, goog.dom.createTextNode(error.toString()));
+            div.onclick = function() {
+                console.error('Error was', error);
+            };
+            me.errorDiv_.appendChild(
+            div);
+            
+        });
+
     }
 
     cl.set(this.wrapper_, wrapperClasses.join(' '));
@@ -457,7 +498,6 @@ aurora.widgets.Selectize.prototype.updateSize_ = function(opt_e, opt_options) {
                     (keyCode >= 48 && keyCode <= 57) || // 0-9
                     keyCode === 32 // space
             );
-
             if (keyCode === KeyCodes.DELETE || keyCode === KeyCodes.BACKSPACE) {
                 selection = {start: input.selectionStart, length: input.selectionEnd - input.selectionStart};
                 if (selection.length) {
@@ -484,7 +524,7 @@ aurora.widgets.Selectize.prototype.updateSize_ = function(opt_e, opt_options) {
         // we need the width of the widest char because the input box must be at least that wide otherwise it
         // shuffles the text to the left then resizes this causes it to jitter
 
-        width = aurora.widgets.Selectize.measureString(oldVal + 'M', input);
+        width = aurora.widgets.Selectize.measureString(value + 'M', input);
 
         if (width === self.currentWidth_) {
             return;
@@ -506,9 +546,12 @@ aurora.widgets.Selectize.prototype.updateSize_ = function(opt_e, opt_options) {
  */
 aurora.widgets.Selectize.prototype.onClick = function(e) {
     let self = this;
-
+    console.log('on click', self.isFocused, self.isInputHidden);
     // necessary for mobile webkit devices (manual focus triggering
     // is ignored unless invoked within a click event)
+    if (self.mode_() === 'single' && !self.isInputHidden) {
+        self.controlInput_.focus();
+    }
     if (!self.isFocused) {
         self.focus();
         e.preventDefault();
@@ -592,6 +635,7 @@ aurora.widgets.Selectize.prototype.onKeyDown = function(e) {
         }
         return;
     }
+    let frp = this.scope_.getFrp();
 
     switch (e.keyCode) {
     case KeyCodes.A:
@@ -636,6 +680,15 @@ aurora.widgets.Selectize.prototype.onKeyDown = function(e) {
     case KeyCodes.ENTER:
         if (self.isOpen && self.activeOption_) {
             self.onOptionSelect({currentTarget: self.activeOption_});
+            e.preventDefault();
+        } else if (self.canCreate(self.controlInput_.value)) {
+            let res = self.createItem(self.controlInput_.value);
+            if (res) {
+                frp.accessTrans(function() {
+                    self.setActiveOption(res, true);
+                }, self.activeOptionB_);
+                //                self.optionsHelper_.forceUpdate();
+            }
             e.preventDefault();
         }
         return;
@@ -682,7 +735,6 @@ aurora.widgets.Selectize.prototype.onKeyDown = function(e) {
  */
 aurora.widgets.Selectize.prototype.onKeyUp = function(e) {
     let self = this;
-
     if (self.isLocked) return e && e.preventDefault();
 
     let value = self.controlInput_.value || '';
@@ -766,7 +818,6 @@ aurora.widgets.Selectize.prototype.onFocus = function(opt_e) {
             self.activeB_.set(new goog.structs.AvlTree(recoil.util.compare));
             let active = self.curOptions_.length ? self.curOptions_[0].value : null;
             if (self.activeOptionB_.get() === null) {
-                console.log('set active');
                 self.activeOptionB_.set(active);
             }
             if (self.settingsB_.get().openOnFocus) {
@@ -815,7 +866,7 @@ aurora.widgets.Selectize.prototype.onBlur = function(e, dest) {
         self.ignoreFocus = true;
         let settings = self.settingsB_.get();
         if (settings.create && settings.createOnBlur) {
-            self.createItem(null, false);
+            self.createItem(null);
         }
         deactivate();
     });
@@ -994,6 +1045,19 @@ aurora.widgets.Selectize.prototype.extendActiveItems = function(item, e) {
         }
     });
 };
+/**
+ * @private
+ */
+aurora.widgets.Selectize.prototype.clearScrollAnimate_ = function() {
+    let self = this;
+    if (self.scrollAniTimeout_) {
+        clearTimeout(self.scrollAniTimeout_);
+    }
+    if (self.animate) {
+        self.animate.dispose();
+        self.animate = null;
+    }
+};
 
 /**
  * Sets the selected item in the dropdown menu
@@ -1007,13 +1071,14 @@ aurora.widgets.Selectize.prototype.setActiveOption = function(option, opt_scroll
     let scroll_top, scroll_bottom;
     let self = this;
 
+    
     self.helper_.accessTrans(function() {
-        console.log('set active option', option);
-
         self.activeOptionB_.set(option);
         let settings = self.settingsB_.get();
         if (opt_scroll) {
-            setTimeout(function() {
+            self.clearScrollAnimate_();
+            self.scrollAniTimeout_ = setTimeout(function() {
+                self.clearScrollAnimate_();
                 if (!self.activeOption_) {
                     return;
                 }
@@ -1025,22 +1090,23 @@ aurora.widgets.Selectize.prototype.setActiveOption = function(option, opt_scroll
                 y = activeBounds.top - dropdownBounds.top + scroll;
                 scroll_top = y;
                 scroll_bottom = y - height_menu + height_item;
-                let doAnimate = function(pos)  {
-                    if (self.animate) {
-                        self.animate.dispose();
-                        self.animate = null;
-                        }
+                let scrollTo = null;
 
-                    self.animate = new goog.fx.Animation([0], [pos], settings.scrollDuration || 0);
+                let doAnimate = function(pos)  {
+                    self.clearScrollAnimate_();
+                    self.animate = new goog.fx.Animation([self.dropdownContent_.scrollTop], [pos], settings.scrollDuration || 0);
                     goog.events.listen(self.animate, goog.fx.Animation.EventType.ANIMATE, function(e) {
-                        self.dropdownContent_.scroolTop = e.coords[0];
+                        self.dropdownContent_.scrollTop = e.coords[0];
+                    });
+                    goog.events.listen(self.animate, goog.fx.Animation.EventType.FINISH, function(e) {
+                        self.dropdownContent_.scrollTop = e.coords[0];
                     });
                     self.animate.play();
                 };
                 if (y + height_item > height_menu + scroll) {
                     doAnimate(scroll_bottom);
                 } else if (y < scroll) {
-                        doAnimate(scroll_top);
+                    doAnimate(scroll_top);
                 }
             }, 1);
         }
@@ -1300,22 +1366,32 @@ aurora.widgets.Selectize.prototype.addItem = function(value) {
  * to the item list.
  *
  * @param {?string} value
- * @param {boolean=} opt_triggerDropdown }
+ * @return {?}
  */
-aurora.widgets.Selectize.prototype.createItem = function(value, opt_triggerDropdown) {
+aurora.widgets.Selectize.prototype.createItem = function(value) {
     let self = this;
     let caret = self.calcCaret_();
-    let triggerDropdown = opt_triggerDropdown == undefined ? true : opt_triggerDropdown;
-
-    this.helper_.accessTrans(function() {
+    
+    if (value === null) {
+        // get the value from the input box
+        value = self.controlInput_.value;
+        if (value.trim().length == 0) {
+            return null;
+        }
+    }
+    return this.helper_.accessTrans(function() {
         let create = self.settingsB_.get().create;
         if (create) {
             let data = create(value);
             self.setTextboxValue('');
-            self.userOptionsB_.set([data].concat(self.userOptionsB_.get()));
+            // only add to options if not already present
+            let options = self.userOptionsB_.get();
+            self.userOptionsB_.set([data].concat(options));
             self.setCaret(caret);
             self.addItem(data);
+            return data;
         }
+        return null;
 
     });
 
@@ -1351,7 +1427,6 @@ aurora.widgets.Selectize.prototype.open = function() {
     self.isOpen = true;
     // todo self.refreshState();
     goog.style.setStyle(self.dropdown_, {visibility: 'hidden', display: 'block'});
-    console.log('open');
     self.positionDropdown();
     goog.style.setStyle(self.dropdown_, {visibility: 'visible'});
 };

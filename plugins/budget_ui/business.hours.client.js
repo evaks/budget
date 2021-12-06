@@ -21,6 +21,8 @@ goog.require('recoil.ui.widgets.DateWidget2');
 goog.require('recoil.ui.widgets.TimeWidget');
 goog.require('recoil.ui.widgets.table.TableWidget');
 
+
+
 /**
  * @constructor
  * @export
@@ -89,9 +91,10 @@ budget.widgets.BusinessHours = function(scope, opt_type, opt_clientId, opt_chat)
     }, selectedMentorB, this.contextB_, mentorListB);
 
     me.mentorsB_ = budget.widgets.UserManagement.getMentors(scope);
+    this.timezoneWidget_ = new recoil.ui.widgets.SelectorWidget(scope);
     this.dateWidget_ = new recoil.ui.widgets.DateWidget2(scope);
     this.mentorWidget_ = new recoil.ui.widgets.SelectorWidget(scope);
-
+    
 
     let milliPerDay = budget.widgets.BusinessHours.MILLI_PER_DAY;
     let weekdayize = budget.widgets.BusinessHours.lastMonday;
@@ -101,6 +104,23 @@ budget.widgets.BusinessHours = function(scope, opt_type, opt_clientId, opt_chat)
     this.mentorWidget_.attachStruct({value: this.mentorB_, list: mentorListB, renderer: budget.widgets.UserManagement.getMentorRenderer(scope)});
 
     this.siteB_ = scope.getDb().get(siteT.key);
+
+    this.timezoneB_ = frp.liftBI(function (site) {
+        let res = null;
+        site.forEach(function(row) {
+            res = row.get(siteT.cols.timezone);
+        });
+        return res;
+        
+    }, function (tz) {
+        let res = me.siteB_.get().createEmpty();
+        me.siteB_.get().forEachModify(function (row) {
+            row.set(siteT.cols.timezone, tz);
+            res.addRow(row);
+        });
+        me.siteB_.set(res.freeze());
+    }, this.siteB_);
+    this.timezoneWidget_.attachStruct({value: this.timezoneB_, list : budget.widgets.BusinessHours.timeZoneNames});
     this.scheduleActionB_ = scope.getDb().get(aurora.db.schema.actions.base.schedule.add.key);
     this.unscheduleActionB_ = scope.getDb().get(aurora.db.schema.actions.base.schedule.remove.key);
 
@@ -117,9 +137,14 @@ budget.widgets.BusinessHours = function(scope, opt_type, opt_clientId, opt_chat)
     this.hoursTblB_ = budget.Client.instance.createSubTableB(this.siteB_, frp.createB(
         /** @type {Array} */ (null)), siteT.cols.regular);
 
-    this.holidaysB_ = frp.switchB(frp.liftB(function(date) {
+    let cls = budget.widgets.BusinessHours;
+
+    this.holidaysB_ = frp.switchB(frp.liftB(function(date, timezone) {
         let query = new recoil.db.Query();
-        let startTime = recoil.ui.widgets.DateWidget2.convertLocaleDate(date).getTime();
+        let startTime = cls.convertDateToSite(
+            recoil.ui.widgets.DateWidget2.convertLocaleDate(date).getTime(),
+            timezone,
+            useSiteTime);
 
         let endTime = startTime + 7 * milliPerDay;
 
@@ -128,7 +153,7 @@ budget.widgets.BusinessHours = function(scope, opt_type, opt_clientId, opt_chat)
             query.lt(query.field(holidaysT.cols.start), query.val(endTime))
         ));
 
-    }, this.curDateB_));
+    }, this.curDateB_, this.timezoneB_));
 
     if (this.clientId_ != undefined) {
         let query = new recoil.db.Query();
@@ -146,9 +171,13 @@ budget.widgets.BusinessHours = function(scope, opt_type, opt_clientId, opt_chat)
         this.mentorIdB_ = frp.createB(null);
     }
 
-    this.availableB_ = frp.switchB(frp.liftB(function(date) {
+    this.availableB_ = frp.switchB(frp.liftB(function(date, mentor, timezone) {
         let query = new recoil.db.Query();
-        let startTime = recoil.ui.widgets.DateWidget2.convertLocaleDate(date).getTime();
+        let startTime =
+            cls.convertDateToSite(
+                recoil.ui.widgets.DateWidget2.convertLocaleDate(date).getTime(),
+                timezone,
+                useSiteTime);
 
         let endTime = startTime + 7 * milliPerDay;
         let rangeQuery = query.and(
@@ -165,11 +194,13 @@ budget.widgets.BusinessHours = function(scope, opt_type, opt_clientId, opt_chat)
 
         ));
 
-    }, this.curDateB_, this.mentorB_));
+    }, this.curDateB_, this.mentorB_, this.timezoneB_));
 
-    this.appointmentsB_ = frp.switchB(frp.liftB(function(date) {
+    this.appointmentsB_ = frp.switchB(frp.liftB(function(date, timezone) {
         let query = new recoil.db.Query();
-        let startTime = recoil.ui.widgets.DateWidget2.convertLocaleDate(date).getTime();
+        let startTime = cls.convertDateToSite(
+            recoil.ui.widgets.DateWidget2.convertLocaleDate(date).getTime(),
+            timezone, useSiteTime);
 
         let endTime = startTime + 7 * milliPerDay;
 
@@ -259,11 +290,15 @@ budget.widgets.BusinessHours = function(scope, opt_type, opt_clientId, opt_chat)
     }
 
     let dateDiv = cd('div', 'budget-date');
+    let timezoneDiv = cd('div', 'budget-cal-timezone');
     let mentorDiv = cd('div', 'budget-cal-mentor goog-inline-block');
     this.mentorDiv_ = cd('div', {}, cd('div', {class: 'budget-calendar-mentor-label'}, mess.MENTOR.toString()), mentorDiv);
     this.dateWidget_.getComponent().render(dateDiv);
+    this.timezoneWidget_.getComponent().render(timezoneDiv);
     this.mentorWidget_.getComponent().render(mentorDiv);
-    this.calendarHeader_ = cd('div', {class: 'budget-calendar-header'}, dateDiv, this.mentorDiv_, this.legendDiv_);
+    const useSiteTime = this.type_ === 'admin';
+    goog.style.setElementShown(timezoneDiv, useSiteTime);
+    this.calendarHeader_ = cd('div', {class: 'budget-calendar-header'}, dateDiv, timezoneDiv, this.mentorDiv_, this.legendDiv_);
 //    this.dateWidget_.getComponent().render(this.calendarHeader_);
 
     this.yourAvailableLegend_ = yourAvailableLegend;
@@ -307,6 +342,434 @@ budget.widgets.BusinessHours = function(scope, opt_type, opt_clientId, opt_chat)
     resizeObserver.observe(this.calendarDiv_);
 
 };
+/**
+ * @param {number} time milli since epoch
+ * @param {string} timezone 
+ * @return {number}
+ */
+budget.widgets.BusinessHours.getDayOffset = function (time, timezone) {
+
+    let d = new Date(time);
+
+    let getItem = function (format) {
+        let opts = {};
+        if (timezone) {
+            opts.timeZone = timezone;
+        }
+        goog.object.extend(opts, format);
+        return parseInt(d.toLocaleString(
+            'en-NZ', opts));
+    };
+    return ((getItem({hour:'numeric' ,hour12: false}) * 60 + getItem({minute: 'numeric'})) * 60 + getItem({second: 'numeric'})) * 1000 + d.getMilliseconds();
+};
+
+/**
+ * @param {number} time milli since epoch
+ * @param {?string} timezone 
+ * @param {boolean} doAdjustment if false returns zero
+ * @return {number}
+ */
+budget.widgets.BusinessHours.getTZAdjustment = function (time, timezone, doAdjustment) {
+    if (!doAdjustment || !timezone) {
+        return 0;
+    }
+    let d = new Date(time);
+    let milli = d.getMilliseconds();
+    d.setMilliseconds(0);
+    
+    let getItem = function (format) {
+        let opts = {timeZone: timezone};
+        goog.object.extend(opts, format);
+            return parseInt(d.toLocaleString(
+                'en-NZ', opts));
+    };
+    let wrongSiteDate = new Date(
+        getItem({year: 'numeric'}),
+        getItem({month: 'numeric'}) - 1, // months are zero based
+        getItem({day: 'numeric'}),
+        getItem({hour:'numeric' ,hour12: false}),
+        getItem({minute: 'numeric'}),
+        getItem({second: 'numeric'}));
+    
+    return d.getTime() - wrongSiteDate.getTime();
+};
+
+/**
+ * @param {number} time milli since epoch
+ * @param {string} timezone 
+ * @param {boolean} useSiteTime if false returns zero
+ * @return {number}
+ */
+
+budget.widgets.BusinessHours.convertDateToSite = function (time, timezone, useSiteTime) {
+    return time + budget.widgets.BusinessHours.getTZAdjustment(time, timezone, useSiteTime);
+};
+
+
+
+/**
+ * @param {number} time milli since epoch
+ * @param {string} timezone 
+ * @return {number}
+ */
+
+budget.widgets.BusinessHours.convertSiteToDate = function (time, timezone) {
+    return time - budget.widgets.BusinessHours.getTZAdjustment(time, timezone, true);
+};
+
+/**
+ * @final
+ */
+budget.widgets.BusinessHours.timeZoneNames = (function () { return [
+  'Europe/Andorra',
+  'Asia/Dubai',
+  'Asia/Kabul',
+  'Europe/Tirane',
+  'Asia/Yerevan',
+  'Antarctica/Casey',
+  'Antarctica/Davis',
+  //'Antarctica/DumontDUrville', // https://bugs.chromium.org/p/chromium/issues/detail?id=928068
+  'Antarctica/Mawson',
+  'Antarctica/Palmer',
+  'Antarctica/Rothera',
+  'Antarctica/Syowa',
+  'Antarctica/Troll',
+  'Antarctica/Vostok',
+  'America/Argentina/Buenos_Aires',
+  'America/Argentina/Cordoba',
+  'America/Argentina/Salta',
+  'America/Argentina/Jujuy',
+  'America/Argentina/Tucuman',
+  'America/Argentina/Catamarca',
+  'America/Argentina/La_Rioja',
+  'America/Argentina/San_Juan',
+  'America/Argentina/Mendoza',
+  'America/Argentina/San_Luis',
+  'America/Argentina/Rio_Gallegos',
+  'America/Argentina/Ushuaia',
+  'Pacific/Pago_Pago',
+  'Europe/Vienna',
+  'Australia/Lord_Howe',
+  'Antarctica/Macquarie',
+  'Australia/Hobart',
+  'Australia/Currie',
+  'Australia/Melbourne',
+  'Australia/Sydney',
+  'Australia/Broken_Hill',
+  'Australia/Brisbane',
+  'Australia/Lindeman',
+  'Australia/Adelaide',
+  'Australia/Darwin',
+  'Australia/Perth',
+  'Australia/Eucla',
+  'Asia/Baku',
+  'America/Barbados',
+  'Asia/Dhaka',
+  'Europe/Brussels',
+  'Europe/Sofia',
+  'Atlantic/Bermuda',
+  'Asia/Brunei',
+  'America/La_Paz',
+  'America/Noronha',
+  'America/Belem',
+  'America/Fortaleza',
+  'America/Recife',
+  'America/Araguaina',
+  'America/Maceio',
+  'America/Bahia',
+  'America/Sao_Paulo',
+  'America/Campo_Grande',
+  'America/Cuiaba',
+  'America/Santarem',
+  'America/Porto_Velho',
+  'America/Boa_Vista',
+  'America/Manaus',
+  'America/Eirunepe',
+  'America/Rio_Branco',
+  'America/Nassau',
+  'Asia/Thimphu',
+  'Europe/Minsk',
+  'America/Belize',
+  'America/St_Johns',
+  'America/Halifax',
+  'America/Glace_Bay',
+  'America/Moncton',
+  'America/Goose_Bay',
+  'America/Blanc-Sablon',
+  'America/Toronto',
+  'America/Nipigon',
+  'America/Thunder_Bay',
+  'America/Iqaluit',
+  'America/Pangnirtung',
+  'America/Atikokan',
+  'America/Winnipeg',
+  'America/Rainy_River',
+  'America/Resolute',
+  'America/Rankin_Inlet',
+  'America/Regina',
+  'America/Swift_Current',
+  'America/Edmonton',
+  'America/Cambridge_Bay',
+  'America/Yellowknife',
+  'America/Inuvik',
+  'America/Creston',
+  'America/Dawson_Creek',
+  'America/Fort_Nelson',
+  'America/Vancouver',
+  'America/Whitehorse',
+  'America/Dawson',
+  'Indian/Cocos',
+  'Europe/Zurich',
+  'Africa/Abidjan',
+  'Pacific/Rarotonga',
+  'America/Santiago',
+  'America/Punta_Arenas',
+  'Pacific/Easter',
+  'Asia/Shanghai',
+  'Asia/Urumqi',
+  'America/Bogota',
+  'America/Costa_Rica',
+  'America/Havana',
+  'Atlantic/Cape_Verde',
+  'America/Curacao',
+  'Indian/Christmas',
+  'Asia/Nicosia',
+  'Asia/Famagusta',
+  'Europe/Prague',
+  'Europe/Berlin',
+  'Europe/Copenhagen',
+  'America/Santo_Domingo',
+  'Africa/Algiers',
+  'America/Guayaquil',
+  'Pacific/Galapagos',
+  'Europe/Tallinn',
+  'Africa/Cairo',
+  'Africa/El_Aaiun',
+  'Europe/Madrid',
+  'Africa/Ceuta',
+  'Atlantic/Canary',
+  'Europe/Helsinki',
+  'Pacific/Fiji',
+  'Atlantic/Stanley',
+  'Pacific/Chuuk',
+  'Pacific/Pohnpei',
+  'Pacific/Kosrae',
+  'Atlantic/Faroe',
+  'Europe/Paris',
+  'Europe/London',
+  'Asia/Tbilisi',
+  'America/Cayenne',
+  'Africa/Accra',
+  'Europe/Gibraltar',
+  'America/Godthab',
+  'America/Danmarkshavn',
+  'America/Scoresbysund',
+  'America/Thule',
+  'Europe/Athens',
+  'Atlantic/South_Georgia',
+  'America/Guatemala',
+  'Pacific/Guam',
+  'Africa/Bissau',
+  'America/Guyana',
+  'Asia/Hong_Kong',
+  'America/Tegucigalpa',
+  'America/Port-au-Prince',
+  'Europe/Budapest',
+  'Asia/Jakarta',
+  'Asia/Pontianak',
+  'Asia/Makassar',
+  'Asia/Jayapura',
+  'Europe/Dublin',
+  'Asia/Jerusalem',
+  'Asia/Kolkata',
+  'Indian/Chagos',
+  'Asia/Baghdad',
+  'Asia/Tehran',
+  'Atlantic/Reykjavik',
+  'Europe/Rome',
+  'America/Jamaica',
+  'Asia/Amman',
+  'Asia/Tokyo',
+  'Africa/Nairobi',
+  'Asia/Bishkek',
+  'Pacific/Tarawa',
+  'Pacific/Enderbury',
+  'Pacific/Kiritimati',
+  'Asia/Pyongyang',
+  'Asia/Seoul',
+  'Asia/Almaty',
+  'Asia/Qyzylorda',
+  //'Asia/Qostanay', // https://bugs.chromium.org/p/chromium/issues/detail?id=928068
+  'Asia/Aqtobe',
+  'Asia/Aqtau',
+  'Asia/Atyrau',
+  'Asia/Oral',
+  'Asia/Beirut',
+  'Asia/Colombo',
+  'Africa/Monrovia',
+  'Europe/Vilnius',
+  'Europe/Luxembourg',
+  'Europe/Riga',
+  'Africa/Tripoli',
+  'Africa/Casablanca',
+  'Europe/Monaco',
+  'Europe/Chisinau',
+  'Pacific/Majuro',
+  'Pacific/Kwajalein',
+  'Asia/Yangon',
+  'Asia/Ulaanbaatar',
+  'Asia/Hovd',
+  'Asia/Choibalsan',
+  'Asia/Macau',
+  'America/Martinique',
+  'Europe/Malta',
+  'Indian/Mauritius',
+  'Indian/Maldives',
+  'America/Mexico_City',
+  'America/Cancun',
+  'America/Merida',
+  'America/Monterrey',
+  'America/Matamoros',
+  'America/Mazatlan',
+  'America/Chihuahua',
+  'America/Ojinaga',
+  'America/Hermosillo',
+  'America/Tijuana',
+  'America/Bahia_Banderas',
+  'Asia/Kuala_Lumpur',
+  'Asia/Kuching',
+  'Africa/Maputo',
+  'Africa/Windhoek',
+  'Pacific/Noumea',
+  'Pacific/Norfolk',
+  'Africa/Lagos',
+  'America/Managua',
+  'Europe/Amsterdam',
+  'Europe/Oslo',
+  'Asia/Kathmandu',
+  'Pacific/Nauru',
+  'Pacific/Niue',
+  'Pacific/Auckland',
+  'Pacific/Chatham',
+  'America/Panama',
+  'America/Lima',
+  'Pacific/Tahiti',
+  'Pacific/Marquesas',
+  'Pacific/Gambier',
+  'Pacific/Port_Moresby',
+  'Pacific/Bougainville',
+  'Asia/Manila',
+  'Asia/Karachi',
+  'Europe/Warsaw',
+  'America/Miquelon',
+  'Pacific/Pitcairn',
+  'America/Puerto_Rico',
+  'Asia/Gaza',
+  'Asia/Hebron',
+  'Europe/Lisbon',
+  'Atlantic/Madeira',
+  'Atlantic/Azores',
+  'Pacific/Palau',
+  'America/Asuncion',
+  'Asia/Qatar',
+  'Indian/Reunion',
+  'Europe/Bucharest',
+  'Europe/Belgrade',
+  'Europe/Kaliningrad',
+  'Europe/Moscow',
+  'Europe/Simferopol',
+  'Europe/Kirov',
+  'Europe/Astrakhan',
+  'Europe/Volgograd',
+  'Europe/Saratov',
+  'Europe/Ulyanovsk',
+  'Europe/Samara',
+  'Asia/Yekaterinburg',
+  'Asia/Omsk',
+  'Asia/Novosibirsk',
+  'Asia/Barnaul',
+  'Asia/Tomsk',
+  'Asia/Novokuznetsk',
+  'Asia/Krasnoyarsk',
+  'Asia/Irkutsk',
+  'Asia/Chita',
+  'Asia/Yakutsk',
+  'Asia/Khandyga',
+  'Asia/Vladivostok',
+  'Asia/Ust-Nera',
+  'Asia/Magadan',
+  'Asia/Sakhalin',
+  'Asia/Srednekolymsk',
+  'Asia/Kamchatka',
+  'Asia/Anadyr',
+  'Asia/Riyadh',
+  'Pacific/Guadalcanal',
+  'Indian/Mahe',
+  'Africa/Khartoum',
+  'Europe/Stockholm',
+  'Asia/Singapore',
+  'America/Paramaribo',
+  'Africa/Juba',
+  'Africa/Sao_Tome',
+  'America/El_Salvador',
+  'Asia/Damascus',
+  'America/Grand_Turk',
+  'Africa/Ndjamena',
+  'Indian/Kerguelen',
+  'Asia/Bangkok',
+  'Asia/Dushanbe',
+  'Pacific/Fakaofo',
+  'Asia/Dili',
+  'Asia/Ashgabat',
+  'Africa/Tunis',
+  'Pacific/Tongatapu',
+  'Europe/Istanbul',
+  'America/Port_of_Spain',
+  'Pacific/Funafuti',
+  'Asia/Taipei',
+  'Europe/Kiev',
+  'Europe/Uzhgorod',
+  'Europe/Zaporozhye',
+  'Pacific/Wake',
+  'America/New_York',
+  'America/Detroit',
+  'America/Kentucky/Louisville',
+  'America/Kentucky/Monticello',
+  'America/Indiana/Indianapolis',
+  'America/Indiana/Vincennes',
+  'America/Indiana/Winamac',
+  'America/Indiana/Marengo',
+  'America/Indiana/Petersburg',
+  'America/Indiana/Vevay',
+  'America/Chicago',
+  'America/Indiana/Tell_City',
+  'America/Indiana/Knox',
+  'America/Menominee',
+  'America/North_Dakota/Center',
+  'America/North_Dakota/New_Salem',
+  'America/North_Dakota/Beulah',
+  'America/Denver',
+  'America/Boise',
+  'America/Phoenix',
+  'America/Los_Angeles',
+  'America/Anchorage',
+  'America/Juneau',
+  'America/Sitka',
+  'America/Metlakatla',
+  'America/Yakutat',
+  'America/Nome',
+  'America/Adak',
+  'Pacific/Honolulu',
+  'America/Montevideo',
+  'Asia/Samarkand',
+  'Asia/Tashkent',
+  'America/Caracas',
+  'Asia/Ho_Chi_Minh',
+  'Pacific/Efate',
+  'Pacific/Wallis',
+  'Pacific/Apia',
+    'Africa/Johannesburg'].sort();})();
+
 
 /**
  * @param {Date=} opt_date if provided will use this date instead of today
@@ -523,14 +986,14 @@ budget.widgets.BusinessHours.prototype.doRemoveHolidayFunc_ = function(menuInfo)
     let scope = me.scope_;
     return frp.accessTransFunc(function(e) {
         let holidays = me.holidaysB_.get();
-        let selDate = me.getSelectionDate_(menuInfo, me.curDateB_.get());
+        let selDate = budget.widgets.BusinessHours.convertDateToSite(me.getSelectionDate_(menuInfo, me.curDateB_.get()), me.timezoneB_.get(), true);
         let holidayUsage = me.createHolidayUsage_(holidays);
 
         let selectedStopTime = selDate + budget.widgets.BusinessHours.MILLI_PER_DAY;
 
         let res = me.removeDateRange_(holidayUsage, selDate, selectedStopTime);
         me.holidaysB_.set(me.updateHolidayUsage_(me.siteB_.get(), holidays, res));
-    }, this.siteB_, this.curDateB_, this.holidaysB_);
+    }, this.siteB_, this.curDateB_, this.holidaysB_, this.timezoneB_);
 
 };
 
@@ -948,13 +1411,15 @@ budget.widgets.BusinessHours.prototype.doMakeHolidayFunc_ = function(menuInfo) {
         let hols = me.holidaysB_.get();
         let milliPerDay = budget.widgets.BusinessHours.MILLI_PER_DAY;
         let holidays = me.createHolidayUsage_(hols);
-        let selectDate = me.getSelectionDate_(menuInfo, me.curDateB_.get());
-
+        let selectDate = budget.widgets.BusinessHours.convertDateToSite(me.getSelectionDate_(menuInfo, me.curDateB_.get()), me.timezoneB_.get(), true);
+        // might be wrong when we have daylight savings not sure how to deal with this if we are not in the
+        // timezone of the site
+        
         holidays.push({start: selectDate, stop: selectDate + milliPerDay});
         me.mergeDayUsage_(holidays, true);
         me.holidaysB_.set(me.updateHolidayUsage_(site, hols, holidays));
 
-    }, this.siteB_, this.curDateB_, this.holidaysB_);
+    }, this.siteB_, this.curDateB_, this.holidaysB_, this.timezoneB_);
 };
 
 
@@ -978,18 +1443,20 @@ budget.widgets.BusinessHours.prototype.makeDateDialog_ = function(tblB, start, s
     let site = me.siteB_.get();
     let holidayUsage = me.createHolidayUsage_(hols);
     let holidaysT = aurora.db.schema.tables.base.site_holidays;
+    const cls = budget.widgets.BusinessHours;
 
     let td = new aurora.widgets.TableDialog(scope, modTableB, frp.createCallback(function(e) {
         let res = me.holidaysB_.get().unfreeze();
         let modTable = modTableB.get();
 
         modTable.forEach(function(row) {
-            let origStartTime = recoil.ui.widgets.DateWidget2.convertLocaleDate(start).getTime();
-            let origStopTime = recoil.ui.widgets.DateWidget2.convertLocaleDate(stop).getTime();
-            let modStartTime = recoil.ui.widgets.DateWidget2.convertLocaleDate(row.get(holidaysT.cols.start)).getTime();
-            let modStopTime = recoil.ui.widgets.DateWidget2.convertLocaleDate(row.get(holidaysT.cols.stop)).getTime();
+            let origStartTime = cls.convertDateToSite(recoil.ui.widgets.DateWidget2.convertLocaleDate(start).getTime(), me.timezoneB_.get(), true);
+            let origStopTime = cls.convertDateToSite(recoil.ui.widgets.DateWidget2.convertLocaleDate(stop).getTime(), me.timezoneB_.get(), true);
+            let modStartTime = cls.convertDateToSite(recoil.ui.widgets.DateWidget2.convertLocaleDate(row.get(holidaysT.cols.start)).getTime(), me.timezoneB_.get(), true);
+            let modStopTime = cls.convertDateToSite(recoil.ui.widgets.DateWidget2.convertLocaleDate(row.get(holidaysT.cols.stop)).getTime(), me.timezoneB_.get(), true);
             //            let millisPerDay = + 3600000 * 24;
             let millisPerDay = 3600000 * 24;
+
 
             if (selectedIndex !== null && (modStopTime < origStopTime || modStartTime > origStartTime)) {
 
@@ -1001,7 +1468,7 @@ budget.widgets.BusinessHours.prototype.makeDateDialog_ = function(tblB, start, s
         me.mergeDayUsage_(holidayUsage, true);
         me.holidaysB_.set(me.updateHolidayUsage_(site, hols, holidayUsage));
 
-    }, modTableB, me.siteB_, me.holidaysB_), title, function() {return null;}, title);
+    }, modTableB, me.siteB_, me.holidaysB_, me.timezoneB_), title, function() {return null;}, title);
     return td;
 };
 
@@ -1036,7 +1503,7 @@ budget.widgets.BusinessHours.prototype.doAddHolidaysDialogFunc_ = function(menuI
     let me = this;
     let frp = me.scope_.getFrp();
     let scope = me.scope_;
-
+    
     return frp.accessTransFunc(function(e) {
 
         let siteT = aurora.db.schema.tables.base.site;
@@ -1277,7 +1744,7 @@ budget.widgets.BusinessHours.prototype.doModifyHolidayDialogFunc_ = function(men
     let me = this;
     let frp = me.scope_.getFrp();
     let scope = me.scope_;
-
+    const cls = budget.widgets.BusinessHours;
     return frp.accessTransFunc(function(e) {
         let siteT = aurora.db.schema.tables.base.site;
         let holidaysT = aurora.db.schema.tables.base.site_holidays;
@@ -1301,8 +1768,8 @@ budget.widgets.BusinessHours.prototype.doModifyHolidayDialogFunc_ = function(men
         columns.addColumn(stopCol);
 
         let row = new recoil.structs.table.MutableTableRow();
-        let startTime = recoil.ui.widgets.DateWidget2.convertDateToLocal(new Date(holidayUsage[selectedIndex].start));
-        let stopTime = recoil.ui.widgets.DateWidget2.convertDateToLocal(new Date(holidayUsage[selectedIndex].stop - budget.widgets.BusinessHours.MILLI_PER_DAY));
+        let startTime = recoil.ui.widgets.DateWidget2.convertDateToLocal(new Date(cls.convertSiteToDate(holidayUsage[selectedIndex].start, me.timezoneB_.get())));
+        let stopTime = recoil.ui.widgets.DateWidget2.convertDateToLocal(new Date(cls.convertSiteToDate(holidayUsage[selectedIndex].stop - budget.widgets.BusinessHours.MILLI_PER_DAY, me.timezoneB_.get())));
 
         row.set(tblKeys.siteid, 0);
         row.set(tblKeys.start, startTime);
@@ -1314,7 +1781,7 @@ budget.widgets.BusinessHours.prototype.doModifyHolidayDialogFunc_ = function(men
         let td = me.makeDateDialog_(modTableB, startTime, stopTime, selectedIndex, budget.messages.MODIFY_HOLIDAY.toString());
         td.show(true);
 
-    }, this.siteB_, this.curDateB_, this.holidaysB_);
+    }, this.siteB_, this.curDateB_, this.holidaysB_, this.timezoneB_);
 };
 
 /**
@@ -2198,7 +2665,14 @@ budget.widgets.BusinessHours.prototype.createDayUsage_ = function(site) {
     let siteT = aurora.db.schema.tables.base.site;
     let regT = siteT.regular;
     let dayUsage = [];
+    const cls = budget.widgets.BusinessHours;
+    let timezone = null;
+    
+    site.forEach(function(row) {
+        timezone = row.get(siteT.cols.timezone);
+    });
 
+    
     site.forEach(function(row) {
         let reg = row.get(siteT.cols.regular);
         reg.forEach(function(entry) {
@@ -2345,17 +2819,21 @@ budget.widgets.BusinessHours.prototype.isHoliday_ = function(time, holidays) {
  * @param {?} hourDim
  * @param {string} cls the class of the div to add
  * @param {boolean} handleDaylightSaving
+ * @param {?string} timezone
  */
-budget.widgets.BusinessHours.prototype.updateUsage_ = function(dayUsage, calDim, hourDim, cls, handleDaylightSaving) {
+budget.widgets.BusinessHours.prototype.updateUsage_ = function(dayUsage, calDim, hourDim, cls, handleDaylightSaving, timezone) {
     let milliPerDay = budget.widgets.BusinessHours.MILLI_PER_DAY;
     let milliPerWeek = milliPerDay * 7;
     let cd = goog.dom.createDom;
     let hourH = hourDim.height;
     let minY = hourDim.top - calDim.top;
     let weekStart = this.dateWidget_.convertLocaleDate(this.curDateB_.get()).getTime();
+    const isAdmin = this.type_ === 'admin';
     let getDstAdjust = function(day) {
         if (!handleDaylightSaving) {
-            return 0;
+            // if we are not handling daylight savings we are repeating times
+            // so adjust for time zone
+            return budget.widgets.BusinessHours.getTZAdjustment(weekStart, timezone, !!timezone);
         }
         let dayEnd = budget.widgets.BusinessHours.addDays(weekStart, day + 1);
         return (weekStart + milliPerDay * (day + 1)) - dayEnd;
@@ -2432,8 +2910,9 @@ budget.widgets.BusinessHours.prototype.updateUsage_ = function(dayUsage, calDim,
  * @param {{height:number, width:number, top:number, left:number}} hourDim
  * @param {{height:number, width:number, top:number, left:number}} calDim
  * @param {!Array<number>} callUsers
+ * @param {?string} timezone
  */
-budget.widgets.BusinessHours.prototype.updateRanges_ = function (list, cls, startDateMillis, hourDim, calDim, callUsers) {
+budget.widgets.BusinessHours.prototype.updateRanges_ = function (list, cls, startDateMillis, hourDim, calDim, callUsers, timezone) {
     let milliPerDay = budget.widgets.BusinessHours.MILLI_PER_DAY;
     let hourH = hourDim.height;
     let minY = hourDim.top - calDim.top;
@@ -2454,8 +2933,7 @@ budget.widgets.BusinessHours.prototype.updateRanges_ = function (list, cls, star
 
         function getOffset(val) {
             // handles daylight savings
-            let timeM = moment(val);
-            return ((timeM.hour() * 60 + timeM.minute()) * 60 + timeM.seconds()) * 1000 + timeM.millisecond();
+            return budget.widgets.BusinessHours.getDayOffset(val, timezone);
         }
         for (let i = 0; i < list.length; i++) {
             let item = list[i];
@@ -2464,7 +2942,7 @@ budget.widgets.BusinessHours.prototype.updateRanges_ = function (list, cls, star
             if (curDateEnd <= start || curDateStart >= stop) {
                 
             } else {
-                let startOffsetMillis = Math.max(getOffset(start), 0);
+                let startOffsetMillis = start < curDateStart ? 0 : Math.max(getOffset(start), 0);
                 let stopOffset = getOffset(stop);
                 let endOffsetMillis = Math.min(milliPerDay, stop  >= curDateEnd ? milliPerDay : stopOffset);
                 
@@ -2534,6 +3012,7 @@ budget.widgets.BusinessHours.prototype.updateRanges_ = function (list, cls, star
  * @param {!recoil.ui.ComponentWidgetHelper} helper
  */
 budget.widgets.BusinessHours.prototype.update_ = function(helper) {
+    const cls = budget.widgets.BusinessHours;
     goog.style.setElementShown(this.loadingContainer_, !helper.isGood() && helper.errors().length === 0);
     goog.style.setElementShown(this.errorContainer_, !helper.isGood() && helper.errors().length !== 0);
     goog.style.setElementShown(this.calendarDiv_, helper.isGood());
@@ -2542,7 +3021,7 @@ budget.widgets.BusinessHours.prototype.update_ = function(helper) {
     if (helper.isGood()) {
         goog.style.setElementShown(this.yourAvailableLegend_, me.mentorIdB_.get() != null);
         goog.style.setElementShown(this.mentorDiv_, me.type_ == 'mentor' && aurora.permissions.has('user-management')(this.contextB_.get()));
-
+        let timezone = this.timezoneB_.get();
         let border = this.borderDimsB_.get();
         let range = this.highlightedB_.get();
         goog.style.setElementShown(this.highlightDiv_, range.start !== null);
@@ -2588,8 +3067,7 @@ budget.widgets.BusinessHours.prototype.update_ = function(helper) {
 
         let milliPerDay = budget.widgets.BusinessHours.MILLI_PER_DAY;
         let milliPerWeek = milliPerDay * 7;
-        
-        me.updateUsage_(dayUsage, calDim, hourDim, 'avail', false);
+        me.updateUsage_(dayUsage, calDim, hourDim, 'avail', false, me.type_ === 'admin' ? null : timezone);
         if (me.type_ === 'mentor' || me.type_ === 'client') {
             let pStart = this.dateWidget_.convertLocaleDate(curDate).getTime();
             let mainFilter = function (mentor) {
@@ -2600,20 +3078,22 @@ budget.widgets.BusinessHours.prototype.update_ = function(helper) {
             };
             
             me.updateUsage_(
-                this.createAvailable_(this.availableB_.get(), pStart, pStart + milliPerWeek, mainFilter),
+                this.createAvailable_(this.availableB_.get(), pStart, pStart + milliPerWeek, mainFilter, null),
                 calDim, hourDim, 'mentor-avail', true);
             me.updateUsage_(
-                this.createAvailable_(this.availableB_.get(), pStart, pStart + milliPerWeek, myFilter),
+                this.createAvailable_(this.availableB_.get(), pStart, pStart + milliPerWeek, myFilter, null),
                 calDim, hourDim, 'your-mentor-avail', true);
 
         }
 
-
-        let startDateMillis = this.dateWidget_.convertLocaleDate(curDate).getTime();
+        
+        let startDateMillis =
+            cls.convertDateToSite(
+                this.dateWidget_.convertLocaleDate(curDate).getTime(), timezone, me.type_ == 'admin');
 
         let callUsers = [];
-        this.updateRanges_(holidayUsage, 'budget-holiday', startDateMillis, hourDim, calDim, []);
-        this.updateRanges_(this.createAppointments_(true), 'budget-cal-appoint', startDateMillis, hourDim, calDim, callUsers);
+        this.updateRanges_(holidayUsage, 'budget-holiday', startDateMillis, hourDim, calDim, [], me.type_ == 'admin' ? timezone : null);
+        this.updateRanges_(this.createAppointments_(true), 'budget-cal-appoint', startDateMillis, hourDim, calDim, callUsers, me.type_ == 'admin' ? timezone : null);
 
         if (this.chat_) {
             this.chat_.interestedIn(callUsers);
@@ -2632,7 +3112,7 @@ budget.widgets.BusinessHours.prototype.attachHelper_ = function(selectionB) {
     let bs = [this.siteB_, this.siteIdB_, this.highlightedB_, this.curDateB_,
               this.contentSizeB_, this.holidaysB_,
               this.borderDimsB_, this.hoursTblB_, this.appointmentsB_, this.availableB_,
-              this.contextB_, this.unscheduleActionB_, this.scheduleActionB_, this.mentorIdB_, this.clientB_, this.mentorsB_];
+              this.contextB_, this.unscheduleActionB_, this.scheduleActionB_, this.mentorIdB_, this.clientB_, this.mentorsB_, this.timezoneB_];
 
 
     if (selectionB) {

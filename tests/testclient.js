@@ -185,7 +185,7 @@ TestClient.prototype.sendAndWait = async function (pluginName, channel,  data, o
     });
 };
 
-TestClient.prototype.getData = async function (table, query, options) {
+TestClient.prototype.getData = async function (table, query, options,  opt_debug) {
     query = query || recoil.db.Query.True;
 
     let squery = query.serialize(new aurora.db.Serializer());
@@ -208,7 +208,63 @@ TestClient.prototype.getData = async function (table, query, options) {
     if (res['error-value']) {
         throw res['error-value'];
     }
-    return res.value;
+    let debug = opt_debug;
+    let deserialize = function (tableT, val, meta) {
+        if (val == undefined) {
+            return val;
+        }
+        if (meta && !tableT) {
+
+            if (meta.type === 'bigint') {
+                return BigInt(val);
+            }
+            return val;
+        }
+        
+        if (!tableT && !meta) {
+            return val;
+        }
+            
+        if (tableT.info.keys && tableT.info.keys.length > 0 && val instanceof Array) {
+            let res = [];
+            for (let i = 0;i < val.length; i++) {
+                res.push(deserialize(tableT, val[i], null));
+            }
+            return res;
+        }
+        let hasFile = false;
+        for (let k in val) {
+            let meta = tableT.meta[k];
+            hasFile = hasFile || (meta && meta.type === 'file');
+        }
+
+
+        let res = {};
+        for (let k in val) {
+            let meta = tableT.meta[k];
+            if (val == undefined) {
+                res[k] = val;
+                continue;
+            }
+            if (!meta && hasFile) {
+                
+                let subMeta = aurora.db.schema.tables.base.file_storage.meta[k];
+                if (subMeta) {
+                    res[k] = deserialize(null, val[k], subMeta, true);
+                    continue;
+                }
+            }
+            
+            let subTable = aurora.db.schema.getTableByName(tableT.info.path + '/' + k);
+            res[k] = deserialize(subTable, val[k], meta);
+            
+        }
+
+        return res;
+    };
+
+    let r = deserialize(table, res.value, null);
+    return r;
     
 };
 

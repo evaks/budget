@@ -554,7 +554,7 @@ it('security-documents', async () => {
     
     const query = new recoil.db.Query();
     
-    let documents = (await adminClient.getData(tables.user, query.eq(query.field(tables.user.cols.id), query.val(client1Id))))[0].documents;
+    let documents = (await adminClient.getData(tables.user, query.eq(query.field(tables.user.cols.id), query.val(client1Id)), undefined, true))[0].documents;
 
     function findByName(list, name) {
         for (let i of list) {
@@ -565,7 +565,7 @@ it('security-documents', async () => {
         return null;
     }
     expect(documents.length).toBe(3);
-    expect(findByName(documents, 'bob1.txt').size).toBe(data.length);
+    expect(findByName(documents, 'bob1.txt').size).toBe(BigInt(data.length));
 
     let id1 = BigInt(findByName(documents, 'bob1.txt').id);
     let id2 = BigInt(findByName(documents, 'bob2.txt').id);

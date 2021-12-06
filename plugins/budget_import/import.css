@@ -186,3 +186,43 @@ td.budget-import-link .goog-checkbox.goog-checkbox-unchecked::before {
     content: "\f127";
 }
 
+.budget-import-category-list .selectize-input .item {
+	white-space: nowrap;
+}
+
+
+.budget-import-category-list .selectize-dropdown-content .option {
+		white-space: nowrap;
+}
+
+.budget-import-category-list div.selectize-control.single {
+	min-width: 200px;
+	padding-right: 25px;
+}
+.budget-import-category-list  div.selectize-control.single .selectize-input {
+	height: 28px;
+	margin-top: 5px;
+}
+
+div.budget-import-category-dates > .goog-control {
+	line-height: normal;
+}
+
+div.budget-import-category-dates {
+	line-height: 23px;
+}
+
+div.budget-import-info {
+    color: var(--def-dark-font-color);
+    background: url(images/info.png) no-repeat 5px 12px;
+    background-color: rgba(0, 0, 0, 0);
+    padding: 10px 10px 10px 25px;
+    border: 1px solid #41b2d7;
+    background-color: #41b2d73d;
+    margin-bottom: 10px;
+}
+
+.selectize-control.single .selectize-input .item {
+    font-weight: bold;
+    color: var(--def-font-color);
+}

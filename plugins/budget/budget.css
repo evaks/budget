@@ -1,3 +1,8 @@
+:root {
+    --def-font-color: #636363;
+    --def-dark-font-color: #404040;
+}
+
 body {
     /*    background: cadetblue;*/
 }
@@ -766,7 +771,7 @@ div.side-list-side h2.group-header {
 .budget-loading > div {
     width: 130px;
     height: 130px;
-    background: url(images/spinner2.webp) center center no-repeat;
+    background: url(/images/spinner2.webp) center center no-repeat;
     right: calc(50% - 75px);
     top: calc(50% - 75px);
     position: absolute;
@@ -1095,4 +1100,9 @@ div.budget-div:hover div {
 
 .aurora-admin-content {
     padding: 10px;
+}
+
+
+.budget-contact td.label {
+    color: var(--def-font-color);
 }

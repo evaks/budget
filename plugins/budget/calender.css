@@ -241,3 +241,23 @@ div.budget-legend .hours {
 .holidays {
     background: #d0a50820;
 }
+
+.daily-hours-closed {
+    color: #ff6000
+}
+
+.budget-reopens {
+    color: var(--def-font-color);
+    font-weight: bold;
+    padding: 10px 0;
+    font-variant: small-caps;
+    font-size: 24px;
+    color: var(--def-font-color);
+}
+
+.budget-cal-timezone {
+    padding: 0 2px;
+    padding-top: 0px;
+    vertical-align: middle;
+    margin-top: -2px;
+}

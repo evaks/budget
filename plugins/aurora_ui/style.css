@@ -177,3 +177,14 @@ th .aurora-icon-button {
     background-size:cover;
     margin: 2px;
 }
+
+.selectize-control.single .selectize-input, .selectize-dropdown.single {
+	margin-right: 25px;
+}
+
+.selectize-control.single .selectize-input .item {
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+}

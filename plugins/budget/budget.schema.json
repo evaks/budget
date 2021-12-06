@@ -16,7 +16,7 @@
 	    {"id":4, "name": "Debt"}
 	]},
 	"PeriodType": {"type": "enum", "enum": [
-	    {"id":0, "name": "Daily", "info": {"rate": 1, "weeklyRate": null}},
+	    {"id":0, "name": "Daily", "info": {"rate": 1, "weeklyRate": 0.142857}},
 	    {"id":1, "name": "Weekly", "info": {"rate": 7, "weeklyRate": 1}},
 	    {"id":2, "name": "Fortnightly", "info": {"rate": 14, "weeklyRate": 2}},
 	    {"id":6, "name": "4 Weekly", "info": {"rate": 28, "weeklyRate": 4}},
@@ -50,7 +50,7 @@
 		 "email": "info@budgetservice.org.nz",
 		 "mapAddress": "Level 1, 40-44 Bloomfield Terrace, (corner Bloomfield Terrace & Knights Road) Lower Hutt City , Wellington.",
 		 "address": "Woburn House, Level 1, 40-44 Bloomfield Terrace, (corner Bloomfield Terrace & Knights Road) Lower Hutt City , Wellington.",
-
+		 "timezone": "Pacific/Auckland",
 		 "regular": [
 		     
 		     {"start":32400000,"stop": 61200000},
@@ -66,6 +66,7 @@
 		{ "name": "name", "type": "string(100)"},
 		{ "name": "phone", "type": "Phone"},
 		{ "name": "email", "type": "string(128)"},
+		{ "name": "timezone", "type":"string(128)"},
 		{ "name": "mapAddress", "type": "string(255)"},
 		{ "name": "address", "type": "string(255)"},
 		{ "name": "regular", "type": "owned-list(siteid)",

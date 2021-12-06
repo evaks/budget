@@ -53,6 +53,12 @@ budget.widgets.import.FileWidget = function(scope) {
     });
     this.importInput_ = importInput;
     let container = cd('div', {}, cd('h2', {}, 'Select files to import'),
+                       cd('div', 'budget-import-info',
+                          'Currently we support the following file formats:',
+                          cd('ul', {},
+                             cd('li', {}, 'CSV - ASB, ANZ visa.'),
+                             cd('li', {}, 'QIF - ANZ, ASB, maybe others.'),
+                            ), 'If you would like us to support another format contact us and we will see what we can do.'),
                        importDiv, filesContainer, dateContainer);
     let filesWidget = new recoil.ui.widgets.table.TableWidget(scope);
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(container);

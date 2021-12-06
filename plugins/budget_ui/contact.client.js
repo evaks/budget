@@ -21,8 +21,26 @@ budget.widgets.Contact = function(scope) {
     let mess = budget.messages;
     let cd = goog.dom.createDom;
     let siteT = aurora.db.schema.tables.base.site;
+    let holidaysT = aurora.db.schema.tables.base.site_holidays;
+    let milliPerDay = budget.widgets.BusinessHours.MILLI_PER_DAY;
+
     let html = new recoil.ui.HtmlHelper(scope);
+    let dateB = recoil.frp.util.dateB(frp);
     this.hoursT_ = siteT.regular;
+
+    this.holidaysB_ = frp.switchB(frp.liftB(function(date) {
+        let query = new recoil.db.Query();
+        let startTime = date;
+        let endDate = new Date(date);
+        endDate.setDate(endDate.getDate() + 7);
+        
+        // all holidays after today just in case the holiday covers the whole week
+        // we need to know when the next non holiday is
+        return scope.getDb().get(holidaysT.key, query.and(
+            query.gt(query.field(holidaysT.cols.stop), query.val(startTime))
+        ));
+
+    }, dateB));
 
     this.siteTblB_ = scope.getDb().get(siteT.key);
     this.hoursB_ = budget.Client.instance.createSubTableB(this.siteTblB_, frp.createB(/** @type {Array} **/ (null)), siteT.cols.regular);
@@ -81,7 +99,7 @@ budget.widgets.Contact = function(scope) {
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(this.container_);
 
     this.helper_ = new recoil.ui.ComponentWidgetHelper(scope, this.component_, this, this.update_);
-    this.helper_.attach(this.siteTblB_, this.hoursB_);
+    this.helper_.attach(this.siteTblB_, this.hoursB_, this.holidaysB_);
 
 };
 
@@ -91,8 +109,11 @@ budget.widgets.Contact = function(scope) {
  */
 budget.widgets.Contact.prototype.update_ = function(helper) {
     let siteT = aurora.db.schema.tables.base.site;
+    let milliPerDay = budget.widgets.BusinessHours.MILLI_PER_DAY;
     let cd = goog.dom.createDom;
-
+    const holidaysT = aurora.db.schema.tables.base.site_holidays;
+    const bh = budget.widgets.BusinessHours;
+    
     let getRow = function(tbl) {
         let res = null;
         tbl.forEach(function(r) {
@@ -128,27 +149,57 @@ budget.widgets.Contact.prototype.update_ = function(helper) {
             weekday: 'long'
         });
 
-
+        let calcIsHoliday = function(timeStart, timeStop) {
+            let isHoliday = false;
+            me.holidaysB_.get().forEach(function (row) {
+                isHoliday = isHoliday || (
+                    row.get(holidaysT.cols.start) < timeStop &&
+                        row.get(holidaysT.cols.stop) > timeStart);
+            });
+            return isHoliday;
+        };
+        
+        let today = new Date();
+        today.setHours(0,0,0,0);
+        // javascript days start on sunday so adjust
+        let todayDay = (today.getDay() + 6) % 7;
+        let timezone = site.get(siteT.cols.timezone);
+        let siteLastMonday =bh.convertDateToSite(budget.widgets.BusinessHours.lastMonday().getTime(), timezone, true);
+        let siteNextMonday = bh.addDays(siteLastMonday, 7);
+        let sitePrevMonday = bh.addDays(siteLastMonday, -7);
+        
+        console.log('site last monday');
+        
         for (let day = 0; day < 7; day++) {
-            let dayStart = day * budget.widgets.BusinessHours.MILLI_PER_DAY;
-           let dayStop = (day + 1) * budget.widgets.BusinessHours.MILLI_PER_DAY;
+            let curDay = new Date(today.getTime());
+
+
+            curDay.setDate(curDay.getDate() + (day - todayDay + 7) % 7);
+
+            let timeStart = curDay.getTime();
+            let timeStop = curDay.setDate(curDay.getDate() + 1);
+            
             let keys = [];
 
-            hours.forEach(function(row) {
+            let isHoliday = calcIsHoliday(timeStart, timeStop);
+            let addHours = function (monday) {
+                return function(row) {
 
-
-                let start = row.get(me.hoursT_.cols.start);
-                let stop = row.get(me.hoursT_.cols.stop);
-
-                if (stop <= dayStart || start >= dayStop) {
-                    return;
-                }
-
-                let relStart = Math.max(0, start - dayStart);
-                let relStop = Math.min(budget.widgets.BusinessHours.MILLI_PER_DAY, stop - dayStart);
-
-                keys.push({start: relStart, stop: relStop});
-            });
+                    let start = monday + row.get(me.hoursT_.cols.start);
+                    let stop = monday  + row.get(me.hoursT_.cols.stop);
+                    if (stop <= timeStart || start >= timeStop) {
+                        return;
+                    }
+                    
+                    let relStart = Math.min(start - timeStart, 0);
+                    let relStop = Math.min(budget.widgets.BusinessHours.MILLI_PER_DAY, stop - timeStart);
+                    
+                    keys.push({start: relStart, stop: relStop, holiday: isHoliday});
+                };
+            };
+            hours.forEach(addHours(sitePrevMonday));
+            hours.forEach(addHours(siteLastMonday));
+            hours.forEach(addHours(siteNextMonday));
 
             keys.sort(recoil.util.object.compare);
             map.safeFind({key: keys, days: []}).days.push(day);
@@ -160,9 +211,12 @@ budget.widgets.Contact.prototype.update_ = function(helper) {
         list.sort(function(x, y) {
             // this works because a day can only appear in 1 element
             // and the first element is always the smallest
+            if (x.holiday != y.holiday) {
+                return x.holiday - y.holiday;
+            }
             return x.days[0] - y.days[0];
         });
-
+        
 
         let getDays = function(arr) {
             let res = [];
@@ -228,14 +282,71 @@ budget.widgets.Contact.prototype.update_ = function(helper) {
             return recoil.ui.messages.join(res, budget.messages.X_COMMA_Y).toString();
         };
         goog.dom.removeChildren(me.officeHours_);
+        let hasOpen = false;
         list.forEach(function(v) {
             let days = getDays(v.days);
             let hours = getHours(v.key);
             let weekdays = cd('tr', {class: 'weekdays'}, cd('td', {class: 'days'}, days));
+            let closed = v.key.length > 0 && v.key[0].holiday;
             weekdays.appendChild(cd('td', {class: 'daily-hours'}, hours));
+            if (closed) {
+                weekdays.appendChild(cd('td', {class: 'daily-hours-closed'}, 'Closed due to holiday'));
+            }
+            else {
+                hasOpen = true;
+            }
             me.officeHours_.appendChild(weekdays);
-
         });
+        // there are no open days find out when the next open day is
+        if (list.length > 0 && !hasOpen) {
+            let sortedHolidays = [];
+            
+            this.holidaysB_.get().forEach(function (row) {
+                let start = row.get(holidaysT.cols.start);
+                let stop = row.get(holidaysT.cols.stop);
+
+                if (stop >= today.getTime()) {
+                    sortedHolidays.push({
+                        start, stop });
+                }
+            });
+            sortedHolidays.sort((x, y) => x.start - y.start);
+
+            let addTime = function (time, mills) {
+                let res = new Date(time.getTime());
+                let timeDay = (time.getDay() + 6) % 7;
+                
+                let days = (Math.floor(mills/milliPerDay) - timeDay + 7) % 7;
+                let left = mills % milliPerDay;
+                res.setDate(res.getDate() + days);
+                res.setHours(
+                    Math.floor(left/3600000), Math.floor((left % 3600000)/ 60000),
+                    Math.floor((left % 60000)/ 1000), Math.floor(left % 1000));
+                return res;
+            };
+            let found = null;
+            for (let i = 0; i < sortedHolidays.length; i++) {
+                let entry = sortedHolidays[i];
+                let endTime = new Date(entry.stop);
+                
+                hours.forEach(function(row) {
+                    if (found) {
+                        return;
+                    }
+                    let start = addTime(endTime, row.get(me.hoursT_.cols.start));
+                    let stop = addTime(endTime, row.get(me.hoursT_.cols.stop));
+                    if (!calcIsHoliday(start.getTime(), stop.getTime())) {
+                        if (!found || found.getTime() > start.getTime()) {
+                            found = start;
+                        }
+                    }
+                });
+            }
+
+            if (found) {
+                me.officeHours_.appendChild(cd('tr', {}, cd('td', {colSpan: 3, class: 'budget-reopens'}, 'Re-opens ' + new Intl.DateTimeFormat(undefined, {dateStyle:'long'}).format(found))));
+            }
+        }
 
     }
 
