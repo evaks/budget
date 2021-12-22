@@ -1,0 +1,163 @@
+{
+    "namespace": "base",
+    "tables": [
+	{
+	    "name" : "benefit",
+	    "access": "aurora.db.access.basic([{'site-management': 'crud'}, {'': 'r'}])",
+	    "accessFilter": [{"" : "all"}],
+
+	    "initial": [
+			{"name": "$5k to Work"},
+			{"name": "Accommodation Supplement"},
+			{"name": "Apprenticeship Boost"},
+			{"name": "Away from Home Allowance"},
+			{"name": "Business Training and Advice Grant"},
+			{"name": "Child Disability Allowance"},
+			{"name": "Childcare Subsidy"},
+			{"name": "Christchurch mosques attack payment"},
+			{"name": "Civil Defence Payment"},
+			{"name": "Civilian Amputee Assistance"},
+			{"name": "Clothing Allowance for Orphan's Benefit and Unsupported Child's Benefit"},
+			{"name": "Community Costs"},
+			{"name": "Community Services Card"},
+			{"name": "Course Participation Assistance"},
+			{"name": "COVID-19 Emergency Benefit for temporary visa holders"},
+			{"name": "COVID-19 Leave Payment"},
+			{"name": "Disability Allowance"},
+			{"name": "Early Learning Payment"},
+			{"name": "Emergency Benefit"},
+			{"name": "Emergency Maintenance Allowance"},
+			{"name": "Employment Transition Grant"},
+			{"name": "Establishment Grant"},
+			{"name": "Extraordinary Care Fund"},
+			{"name": "Flexi-wage – job seeker information"},
+			{"name": "Flexi-wage for self-employment"},
+			{"name": "Flexible Childcare Assistance"},
+			{"name": "Funeral Grant"},
+			{"name": "Guaranteed Childcare Assistance Payment"},
+			{"name": "Holiday and Birthday Allowance"},
+			{"name": "Home Help"},
+			{"name": "Income Relief Payment"},
+			{"name": "International Custody Dispute Payment"},
+			{"name": "Jobseeker Support"},
+			{"name": "Leave Support Scheme"},
+			{"name": "Mainstream programmes"},
+			{"name": "Mana in Mahi - Strength in Work"},
+			{"name": "Modification Grant"},
+			{"name": "New Employment Transition Grant"},
+			{"name": "New Zealand Seasonal Work Scheme"},
+			{"name": "New Zealand Superannuation"},
+			{"name": "New Zealand Superannuation with non-qualifying spouse"},
+			 
+			{"name": "Orphan's Benefit"},
+			{"name": "Out of School Care and Recreation (OSCAR) Subsidy"},
+			{"name": "Re-establishment grant (Special Needs Grant)"},
+			{"name": "Recoverable Assistance Payment"},
+			{"name": "Rent arrears assistance"},
+			{"name": "Residential Care Loan"},
+			{"name": "Residential Care Subsidy"},
+			{"name": "Residential Support Subsidy"},
+			{"name": "Rural Assistance Payments"},
+			{"name": "School and Year Start-up Payment"},
+			{"name": "Seasonal Work Assistance"},
+			{"name": "Self-employment start up payment"},
+			{"name": "Social Rehabilitation Assistance"},
+			{"name": "Sole Parent Support"},
+			{"name": "Special Disability Allowance"},
+			{"name": "Special Needs Grant"},
+			{"name": "Steps to Freedom Grant"},
+			{"name": "Student Allowance"},
+			{"name": "Supported Living Payment"},
+			{"name": "Temporary Additional Support"},
+			{"name": "Training Incentive Allowance"},
+			{"name": "Transition to Work Grant"},
+			{"name": "Unsupported Child's Benefit"},
+			{"name": "Veteran's Pension"},
+			{"name": "Wage Subsidy - resurgence"},
+			{"name": "Wage Subsidy August 2021"},
+			{"name": "Wage Subsidy Extension"},
+			{"name": "Wage Subsidy March 2021"},
+			{"name": "Winter Energy Payment"},
+			{"name": "Work Bonus"},
+			{"name": "Working for Families"},
+			{"name": "Young Parent Payment"},
+			{"name": "Youth Payment"}
+		], 
+	    "columns": [
+			{"name": "id", "type": "id"},
+			{"name": "name", "type": "string(100)"}
+	    ]
+
+	}, {
+		"name" : "benefit_abatement",
+	    "access": "aurora.db.access.basic([{'site-management': 'crud'}, {'': 'r'}])",
+	    "accessFilter": [{"" : "all"}],
+		"indexes": [{"columns": ["start","stop"]}],
+		"initial":  [
+			{
+				"start": 20200101,"stop": 20400101, 
+				
+				"benefit":{"name": "Jobseeker Support"},
+				"exceptions": [],
+				"tiers": [{"amount": 16000, "rate": 70}]
+			},
+			{
+				"start": 20200101,"stop": 20400101, 				
+				"benefit":{"name": "Young Parent Payment"},
+				"exceptions": [],
+				"tiers": [{"amount": 16000, "rate": 70}]
+			},
+			{
+				"start": 20200101,"stop": 20400101, 				
+				"benefit":{"name": "Youth Payment"},
+				"exceptions": [],
+				"tiers": [{"amount": 16000, "rate": 70}]
+			},
+			{
+				"start": 20200101,"stop": 20400101, 				
+				"benefit":{"name": "Sole Parent Support"},
+				"exceptions": [],
+				"tiers": [{"amount": 16000, "rate": 30},{"amount": 25000, "rate": 70}]
+			},
+			{
+				"start": 20200101,"stop": 20400101, 				
+				"benefit":{"name": "New Zealand Superannuation with non-qualifying spouse"},
+				"exceptions": [],
+				"tiers": [{"amount": 16000, "rate": 70}]
+			}
+
+			
+			
+		],
+	    "columns": [
+			{"name": "id", "type": "id"},
+			{"name": "start", "type": "date"},	
+			{"name": "stop", "type": "date"},
+			{"name": "benefit", "type": "ref(benefit)"},
+			{"name": "exceptions", "type": "owned-list(abatementid)",
+			  "table": {
+				  "name": "benefit_abatement_extra",
+				  "columns": [
+					  {"name": "id", "type": "id"},
+					  {"name": "reason", "type": "string(100)"},
+					  {"name": "amount", "type": "int"}
+				  ]
+			  }
+			},
+			{"name": "tiers", "type": "owned-list(abatementid)",
+			  "table": {
+				  "name": "benefit_abatement_tier",
+				  "columns": [
+					  {"name": "id", "type": "id"},
+					  {"name": "amount", "type": "int"},
+					  {"name": "rate", "type": "int"}
+				  ]
+			  }
+			}
+		]
+	}		
+		
+	]
+    
+}
+

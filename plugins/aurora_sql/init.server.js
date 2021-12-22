@@ -46,6 +46,41 @@ aurora.db.schema.init.processDependants = function(dependants, depMap, done) {
 
 /**
  * @param {!aurora.db.Pool} pool
+ * @param {string} table
+ * @param {!Object<string,?>} row
+ * @param {!Array<{col:string, table:string, key: string, fields: !Array<{name:string, value:?}>}>} lookups
+ * @param {function(?,?aurora.db.type.InsertDef)} cb (error, results)
+ */
+aurora.db.schema.init.insert = function (pool, table, row,  lookups, cb) {
+    let doInsert = function () {
+        if (lookups.length == 0) {
+            pool.insert(table, row , cb);
+        }
+        else {
+            let lookup = lookups.pop();
+            let query = 'SELECT ' + pool.escapeId(lookup.key) +  '  FROM ' + pool.escapeId(lookup.table) +
+                ' WHERE ' + lookup.fields.map(v => pool.escapeId(v.name) + ' = ' + pool.escape(v.value)).join (' AND ');
+            pool.query(query,
+                function (err, data) {
+                    if (err) {
+                        cb(err);
+                    }
+                    else if (data.length != 1) {
+                        cb('expected only 1 result from ' + query);
+                    }
+                    else {
+                        row[lookup.col] = data[0][lookup.key];
+                        doInsert();
+                    }
+                }
+            );
+        }
+    };
+    doInsert();
+
+};
+/**
+ * @param {!aurora.db.Pool} pool
  * @param {function(!aurora.db.Pool,function(?))} updateFunc
  * @param {function(?)} done
  */

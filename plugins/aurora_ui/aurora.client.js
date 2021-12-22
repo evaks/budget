@@ -66,7 +66,7 @@ aurora.Client = function(scope, loadDone) {
                             aurora.ui.forceReload();
                         }
                         else {
-//                            setTimeout(doReloadWhenReady, 4000);
+                            setTimeout(doReloadWhenReady, 2000);
                         }
                     });
                     sender.send('/');

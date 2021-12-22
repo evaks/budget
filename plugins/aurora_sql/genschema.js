@@ -920,7 +920,11 @@ function makeForeignKeys(def, types) {
                     let tableKeys = foreignKeys[tableName] = foreignKeys[tableName] || {};
                     let colKeys = tableKeys[data.name] = tableKeys[data.name] || {};
                     colKeys.table = typeInfo.table;
-                    colKeys.col = getPkColumn(tableDefs[colKeys.table]);
+                    let refTable = tableDefs[colKeys.table];
+                    if (!refTable) {
+                        throw "Invalid reference to table " + colKeys.table + " from " + fullTableName + '.' + name;
+                    }
+                    colKeys.col = getPkColumn(refTable);
                 }
                 else if (typeInfo.type === 'file') {
                     let tableKeys = foreignKeys[tableName] = foreignKeys[tableName] || {};
@@ -1086,6 +1090,7 @@ function generateDbInit(def, ns, types, out) {
             row = {...row};
 
             let subInserts = [];
+            let lookups = [];
             for (let k in row) {
                 if (colMap[k] && colMap[k].table) {
                     subInserts = subInserts.concat(row[k].map(function(v) { return {table: colMap[k].table, values: [v]};}));
@@ -1095,6 +1100,29 @@ function generateDbInit(def, ns, types, out) {
                     hasPassword = true;
                     pRow[k] = row[k];
                 } else {
+                    
+                    if (colMap[k] && colMap[k].type && row[k] instanceof Object) {
+                        let type =  parseType(colMap[k].type);
+                        if (type.type == 'ref' && type.params && type.params.length == 1)  {
+                            let val = row[k];
+                            let table =  type.params[0];
+                            let tableInfo = tableMap[table];
+                            let id = '';
+                            tableInfo.columns.forEach(function (col) {
+                                if (col.type === 'id') {
+                                    id = col.name;
+                                }
+                            });
+                                    
+
+                            let l = {col: k, table, key: id, fields: []};
+                            for (let f in val) {
+                                l.fields.push({name:f, value : val[f]});
+                            }
+                            lookups.push(l);
+                        }
+                
+                    }
                     basicRow[k] = row[k];
                 }
             }
@@ -1147,7 +1175,10 @@ function generateDbInit(def, ns, types, out) {
                     fs.appendFileSync(out, padding + '            row[' + stringify(parentKey) + '] = res.insertId;\n');
                 }
                 fs.appendFileSync(out, padding + '            log.info(\'Insert row\', row , \'into\',' + stringify('\'' + table.toUpperCase() + '\'') + ');\n');
-                fs.appendFileSync(out, padding + '            pool.insert(' + stringify(table) + ',row ');
+
+                
+                fs.appendFileSync(out, padding + '            aurora.db.schema.init.insert(pool,' + stringify(table) + ', row, ' + stringify(lookups));
+
             }
             if (subInserts.length > 0) {
 

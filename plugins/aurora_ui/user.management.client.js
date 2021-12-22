@@ -154,7 +154,6 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
                         let res = tbl.get().createEmpty();
                         tbl.get().forEach(function(row) {
                             let uname = row.get(userT.cols.username);
-                            console.log('username', uname, ready, uname, slow);
                             let mrow = row.unfreeze();
                             if (uname == undefined || uname.trim().length === 0) {
                                 mrow.addCellMeta(userT.cols.username, {errors: [aurora.messages.USERNAME_MUST_NOT_BE_BLANK]});
@@ -170,6 +169,8 @@ aurora.widgets.UserManagement = function(scope, options, opt_extraCols) {
                             }
                             let p1 = row.get(userT.cols.password);
                             let p2 = row.get(COLS.confirmPasswordCK);
+                            
+                            mrow.set(COLS.strength, p1);
 
                             if (p1 == undefined || p1 === '') {
                                 mrow.addCellMeta(userT.cols.password, {errors: [aurora.messages.PASSWORD_MUST_NOT_BE_BLANK]});
