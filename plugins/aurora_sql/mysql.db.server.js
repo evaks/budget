@@ -16,7 +16,7 @@ let conCount = 0;
  * @param {!mysql.Connection=} opt_connection
  */
 aurora.db.mysql.Pool = function(options, opt_connection) {
-    const mysql = require('mysql');
+    const mysql = require('mysql2');
 	if (!opt_connection) {
 	    poolCount++;
 	}
