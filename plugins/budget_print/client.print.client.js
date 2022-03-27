@@ -479,29 +479,49 @@ budget.print.ClientPrinter.prototype.createDoc_ = function(user, appointments, b
         }
     };
 };
+
+/**
+ * @param {string} prefix
+ * @param {!recoil.structs.table.TableRowInterface} user
+ * @param {?} doc
+ */
+budget.print.ClientPrinter.print = function (prefix, user, doc) {
+    if (goog.userAgent.GECKO) {
+        pdfMake.createPdf(doc).download(prefix + '.pdf');
+    }
+    else {
+        pdfMake.createPdf(doc).print();
+    }
+};
+
 /**
  * @param {!recoil.structs.table.TableRowInterface} user
  * @param {!recoil.structs.table.Table} appointments
- * @param {!recoil.structs.table.Table} budget
+ * @param {!recoil.structs.table.Table} budgetIn
  * @param {?string} mentorName
  */
-budget.print.ClientPrinter.prototype.print = function(user, appointments, budget, mentorName) {
+budget.print.ClientPrinter.prototype.print = function(user, appointments, budgetIn, mentorName) {
     let me = this;
 
+    let print = function (doc) {
+        budget.print.ClientPrinter.print('client', user, doc);
+    };
     // since there no function to tell me how big its going to be just do a binary search to
     // find the scale factor
     let bigestScaleFactor = 1;
     let binaryScaleSearch = function(min, max) {
         if (min >= max) {
             me.scale_ = bigestScaleFactor / 100;
-            let doc = me.createDoc_(user, appointments, budget, mentorName);
+            let doc = me.createDoc_(user, appointments, budgetIn, mentorName);
             console.log('data-scaled', recoil.util.object.clone(doc));
-            pdfMake.createPdf(doc).print();
+
+            print(doc);
+            
             return;
         }
         let mid = Math.floor((min + max) / 2);
         me.scale_ = mid / 100;
-        let doc = me.createDoc_(user, appointments, budget, mentorName);
+        let doc = me.createDoc_(user, appointments, budgetIn, mentorName);
         pdfMake.createPdf(doc)._getPages({}, function(pages) {
             if (pages.length < 2) {
                 bigestScaleFactor = Math.max(bigestScaleFactor, mid);
@@ -517,13 +537,13 @@ budget.print.ClientPrinter.prototype.print = function(user, appointments, budget
         let xhr = e.target;
         me.logo = xhr.getResponseText();
         me.scale_ = 1;
-        let d = me.createDoc_(user, appointments, budget, mentorName);
+        let d = me.createDoc_(user, appointments, budgetIn, mentorName);
         console.log('data', recoil.util.object.clone(d));
         // first check if we can print without scaling
         pdfMake.createPdf(d)._getPages({}, function(pages) {
             if (pages.length < 2) {
-                let doc = me.createDoc_(user, appointments, budget, mentorName);
-                pdfMake.createPdf(doc).print();
+                let doc = me.createDoc_(user, appointments, budgetIn, mentorName);
+                print(doc);
             }
             else {
                 binaryScaleSearch(1, 99);

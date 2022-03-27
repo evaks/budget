@@ -32,6 +32,7 @@ budget.widgets.SignUp = function(scope, opt_userid) {
     let userid = opt_userid && opt_userid.createClient ? undefined : opt_userid;
     let securityContextB = aurora.permissions.getContext(scope);
     const budgetT = aurora.db.schema.tables.base.budget;
+    const groupsT = aurora.db.schema.tables.base.group;
     const appointmentsT = aurora.db.schema.tables.base.appointments;
 
     let frp = scope.getFrp();
@@ -152,8 +153,31 @@ budget.widgets.SignUp = function(scope, opt_userid) {
     };
 
     let tableB = userid === undefined ?
-        addMentor(frp.createB(table).debug('table')) : scope.getDb().get(userT.key, query.eq(userT.cols.id, userid));
+        addMentor(frp.createB(table)) : scope.getDb().get(userT.key, query.eq(userT.cols.id, userid)).debug('table');
 
+    let isClientB = userid === undefined ? frp.createB(true) : frp.liftB(
+        function (tbl, groups) {
+            let clientG = null;
+           
+            groups.forEach(function (r) {
+                if (r.get(groupsT.cols.name) == 'client') {
+                    clientG = r.get(groupsT.cols.id).db;
+                }
+            });
+            let found = false;
+            tbl.forEach(function (r) {
+                let groups = r.get(userT.cols.groups);
+                for (let i = 0; i < groups.length && !found; i++) {
+                    found = clientG == groups[i].db;
+                }
+            });
+            
+            
+            return found;
+        },
+        
+        
+        tableB, scope.getDb().get(groupsT.key));
 
     let keysB = frp.liftB(function(t) {
         let res = [];
@@ -414,24 +438,28 @@ budget.widgets.SignUp = function(scope, opt_userid) {
         return cd('th', {class: 'field-name'}, msg.toString());
     };
 
+    let show = function (el, showB) {
+        html.show(el, showB);
+        return el;
+    };
     fields = fields.concat([
         cd('tr', {class: 'first-item'}, cd('th', {class: 'group-header', colspan: 4}, mess.SUGGESTED.toString())),
         cd('tr', {}, cd('th', {class: 'field-name'}, aurora.messages.EMAIL_ADDRESS.toString()), cd('td', {colspan: 4}, email.cont)),
         cd('tr', {}, cd('th', {class: 'group-header', colspan: 4}, mess.OPTIONAL.toString())),
-        cd('tr', {}, cd('th', {class: 'field-name'}, mess.NEW_CLIENT.toString()), cd('td', {colspan: 3}, newClient.cont)),
+        show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.NEW_CLIENT.toString()), cd('td', {colspan: 3}, newClient.cont)), isClientB),
         cd('tr', {}, cd('th', {class: 'field-name'}, mess.FIRST_NAME.toString()), cd('td', {}, firstName.cont), cd('th', {class: 'field-name'}, mess.LAST_NAME.toString()), cd('td', {}, lastName.cont)),
-        cd('tr', {}, cd('th', {class: 'field-name'}, mess.ADDRESS.toString()), cd('td', {colspan: 3}, address.cont)),
-        cd('tr', {}, cd('th', {class: 'field-name'}, mess.PHONE.toString()), cd('td', {colspan: 3}, phone.cont)),
-        cd('tr', {}, cd('th', {class: 'field-name'}, mess.GENDER.toString()), cd('td', {colspan: 3}, gender.cont)),
-        cd('tr', {}, cd('th', {class: 'field-name'}, mess.INCOME_SOURCE.toString()), cd('td', {colspan: 3}, incomeSource.cont)),
-        cd('tr', {}, cd('th', {class: 'field-name'}, mess.HOUSING.toString()), cd('td', {colspan: 3}, housing.cont)),
+        show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.ADDRESS.toString()), cd('td', {colspan: 3}, address.cont)), isClientB),
+        show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.PHONE.toString()), cd('td', {colspan: 3}, phone.cont)), isClientB),
+        show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.GENDER.toString()), cd('td', {colspan: 3}, gender.cont)), isClientB),
+        show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.INCOME_SOURCE.toString()), cd('td', {colspan: 3}, incomeSource.cont)), isClientB),
+        show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.HOUSING.toString()), cd('td', {colspan: 3}, housing.cont)), isClientB),
 
-        cd('tr', {}, cd('th', {class: 'field-name'}, mess.MARITAL_STATUS.toString()), cd('td', {colspan: 3}, maritalStatus.cont)),
-        cd('tr', {}, cd('th', {class: 'field-name'}, mess.ETHICITY.toString()), cd('td', {colspan: 3}, ethnicity.cont)),
-        cd('tr', {}, cd('th', {class: 'field-name'}, mess.COUNTRY_OF_BIRTH.toString()), cd('td', {colspan: 3}, country.cont)),
-        cd('tr', {}, cd('th', {class: 'field-name'}, mess.DATE_OF_BIRTH.toString()), cd('td', {colspan: 3}, dob.cont)),
-        cd('tr', {}, cd('th', {class: 'group-header', colspan: 4}, mess.CHILDREN.toString())),
-        cd('tr', {}, cd('td', {colspan: 4}, children.div)),
+        show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.MARITAL_STATUS.toString()), cd('td', {colspan: 3}, maritalStatus.cont)), isClientB),
+        show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.ETHICITY.toString()), cd('td', {colspan: 3}, ethnicity.cont)), isClientB),
+        show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.COUNTRY_OF_BIRTH.toString()), cd('td', {colspan: 3}, country.cont)), isClientB),
+        show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.DATE_OF_BIRTH.toString()), cd('td', {colspan: 3}, dob.cont)), isClientB),
+        show(cd('tr', {}, cd('th', {class: 'group-header', colspan: 4}, mess.CHILDREN.toString())), isClientB),
+        show(cd('tr', {}, cd('td', {colspan: 4}, children.div)), isClientB),
 
     ]);
 
@@ -452,7 +480,7 @@ budget.widgets.SignUp = function(scope, opt_userid) {
             cd('tr', {class: 'budget-align-top'}, cd('td', {colspan: 2}, goals.div), cd('td', {colspan: 2}, results.div)),
             cd('tr', {}, cd('td', {colspan: 4}, timeSpent.div))];
 
-        fields = fields.concat(adminDivs);
+        fields = fields.concat(adminDivs.map(el => show(el, isClientB)));
     }
 
 

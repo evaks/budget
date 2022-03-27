@@ -165,7 +165,15 @@ install: budget-app-user auth-bind
 	sudo chown budget-app /var/www/config.json
 	sudo chmod  a-w,o-r,g-r /var/www/config.json
 
+install-service:
+	sudo cp service/budget.service /etc/systemd/system
+	sudo systemctl enable myapp
+	sudo systemctl daemon-reload
+	sudo service myapp start
+
 install-app:
 	mv output/config.json output/config.json.default
 	sudo cp -r output/* /var/www
+	sudo cp -r scripts/startup.sh /var/www/
 	mv output/config.json.default output/config.json
+

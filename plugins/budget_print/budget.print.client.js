@@ -668,26 +668,29 @@ budget.print.BudgetPrinter.prototype.createDoc_ = function (user, budget, site) 
 };
 /**
  * @param {!recoil.structs.table.TableRowInterface} user
- * @param {!recoil.structs.table.TableRowInterface} budget
+ * @param {!recoil.structs.table.TableRowInterface} budgetIn
  * @param {!recoil.structs.table.TableRowInterface} site
  */
-budget.print.BudgetPrinter.prototype.print = function (user, budget, site) {
+budget.print.BudgetPrinter.prototype.print = function (user, budgetIn, site) {
     let me = this;
 
+    let print = function (doc) {
+        budget.print.ClientPrinter.print('budget', user, doc);
+    };
     // since there no function to tell me how big its going to be just do a binary search to
     // find the scale factor
     let bigestScaleFactor = 1;
     let binaryScaleSearch = function (min, max) {
         if (min>=max) {
             me.scale_ = bigestScaleFactor/100;
-            let doc = me.createDoc_(user, budget, site);
+            let doc = me.createDoc_(user, budgetIn, site);
             console.log("data-scaled", recoil.util.object.clone(doc));    
-            pdfMake.createPdf(doc).print();
+            print(doc);
             return;
         }
         let mid = Math.floor((min + max)/2);
         me.scale_ = mid/100;
-        let doc = me.createDoc_(user, budget, site);
+        let doc = me.createDoc_(user, budgetIn, site);
         pdfMake.createPdf(doc)._getPages({}, function (pages) {
             if (pages.length < 2) {
                 bigestScaleFactor = Math.max(bigestScaleFactor, mid);
@@ -703,13 +706,13 @@ budget.print.BudgetPrinter.prototype.print = function (user, budget, site) {
         let xhr = e.target;
         me.logo = xhr.getResponseText();
         me.scale_ = 1;
-        let d = me.createDoc_(user, budget, site);
+        let d = me.createDoc_(user, budgetIn, site);
         console.log("data", recoil.util.object.clone(d));    
         // first check if we can print without scaling
         pdfMake.createPdf(d)._getPages({}, function (pages) {
             if (pages.length < 2) {
-                let doc = me.createDoc_(user, budget, site);
-                pdfMake.createPdf(doc).print();
+                let doc = me.createDoc_(user, budgetIn, site);
+                print(doc);
             }
             else {
                 binaryScaleSearch(1,99);
