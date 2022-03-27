@@ -61,6 +61,8 @@ budget.widgets.Bookings = function(scope) {
 
     }, this.curDateB_));
 
+    let securityContextB = aurora.permissions.getContext(scope);
+
     let cache = {};
     let userListB = frp.switchB(frp.liftB(function(appointments) {
         let ids = [];
@@ -207,7 +209,22 @@ budget.widgets.Bookings = function(scope) {
 
         }, tableB);
     };
-    let tableB = keepKeys(frp.liftBI(function(site, holidays, appointments, avail, startDate, mentorConverter, userMap) {
+    
+    let readOnly1 = [
+        appointmentsT.cols.firstName,
+        appointmentsT.cols.lastName,
+        SEARCH_COL
+    ];
+
+    let readOnly2 = [
+        appointmentsT.cols.address,
+        appointmentsT.cols.email,
+        appointmentsT.cols.phone,
+        appointmentsT.cols.showed,
+        appointmentsT.cols.scheduled
+    ];
+    let editable = aurora.permissions.has('user-management');
+    let tableB = keepKeys(frp.liftBI(function(site, holidays, appointments, avail, startDate, mentorConverter, userMap, sec) {
         // this reuses the some columns so we can get the meta data
         let table = appointments.createEmpty([], [START_COL, SEARCH_COL, clientCK]);
         // make the key an array of [time, mentor] we get the right order
@@ -255,7 +272,7 @@ budget.widgets.Bookings = function(scope) {
                 row.set(appointmentsT.cols.showed, false);
 
                 row.addCellMeta(START_COL, /** @type {!Object} */(dateCol.getMeta({
-                    editable: false, cellDecorator: recoil.ui.widgets.TableMetaData.createSpanDecorator(10, {class: 'budget-seperator-row'})})));
+                    editable: false, cellDecorator: recoil.ui.widgets.TableMetaData.createSpanDecorator(11, {class: 'budget-seperator-row'})})));
                 row.addRowMeta({cellDecorator: null});
 
                 row.set(appointmentsT.cols.start, entry.key[0]);
@@ -282,6 +299,7 @@ budget.widgets.Bookings = function(scope) {
 
             if (entry.avail.length === 0) {
                 let row = new recoil.structs.table.MutableTableRow(pos++);
+                
                 row.set(appointmentsT.cols.id, getId(entry.key[1], now));
                 row.set(appointmentsT.cols.showed, false);
                 row.set(START_COL, recoil.ui.widgets.TimeWidget.convertTimeToLocal(now));
@@ -298,6 +316,14 @@ budget.widgets.Bookings = function(scope) {
                 row.set(appointmentsT.cols.userid, null);
                 row.set(clientCK, null);
                 row.addCellMeta(SEARCH_COL, {text: searchIcon()});
+
+                if (!editable(sec)) {
+                    readOnly1.concat(readOnly2).forEach(function (col) {
+                        
+                        row.addCellMeta(col, {editable: false, enabled: recoil.ui.BoolWithExplanation.FALSE});
+                        
+                    });
+                }
                 table.addRow(row);
             }
             else {
@@ -320,6 +346,23 @@ budget.widgets.Bookings = function(scope) {
                             mentorid: mentorid,
                         }
                     )));
+
+                    if (!editable(sec)) {
+
+                        readOnly1.forEach(function (col) {
+                            row.addCellMeta(col, {editable: false, enabled: recoil.ui.BoolWithExplanation.FALSE});
+                            
+                        });
+
+                        if (!sec || mentorid != sec.userid) {
+                            readOnly2.forEach(function (col) {
+                                row.addCellMeta(col, {editable: false, enabled: recoil.ui.BoolWithExplanation.FALSE});
+                            }); 
+                        }
+
+                    }
+
+
                     if (userid) {
                         row.addCellMeta(clientCK, {text: userMap[userid.db] || 'unknown', formatter: existingUser});
                     }
@@ -533,7 +576,7 @@ budget.widgets.Bookings = function(scope) {
             }
         });
         me.appointmentsB_.set(res.freeze());
-    }, this.siteB_, this.holidaysB_, this.appointmentsB_, this.availableB_, this.curDateB_, mentorConverterB, userMapB, scheduleActionB, unscheduleActionB));
+    }, this.siteB_, this.holidaysB_, this.appointmentsB_, this.availableB_, this.curDateB_, mentorConverterB, userMapB, securityContextB, scheduleActionB, unscheduleActionB));
     this.tableWidget_.attachStruct(tableB);
     this.tableWidget_.getComponent().render(this.containerDiv_);
 
