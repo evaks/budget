@@ -90,7 +90,7 @@ node_modules:
 
 .PHONY: install-modules
 install-modules:
-	npm install node-forge mime modern-syslog websocket async mysql moment nodemailer multiparty ics glob jest
+	npm install node-forge mime modern-syslog websocket async mysql mysql2 moment nodemailer multiparty ics glob jest
 
 firewall:
 	sudo ufw default deny incoming
@@ -165,3 +165,7 @@ install: budget-app-user auth-bind
 	sudo chown budget-app /var/www/config.json
 	sudo chmod  a-w,o-r,g-r /var/www/config.json
 
+install-app:
+	mv output/config.json output/config.json.default
+	sudo cp -r output/* /var/www
+	mv output/config.json.default output/config.json
