@@ -7,7 +7,7 @@ StartLimitIntervalSec=0
 Type=simple
 Restart=always
 RestartSec=10
-User=web
+User=budget-app
 ExecStart=/usr/bin/env node /var/www/server.min.js
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 

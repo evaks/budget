@@ -1,0 +1,13 @@
+[Unit]
+Description=Budget Web Server
+Requires=multi-user.target
+After=multi-user.target
+
+[Service]
+ExecStart=/usr/sbin/NetworkManager --no-daemon
+Restart=always
+User=budget-app
+Group=budget-app
+
+[Install]
+WantedBy=budget-web.target

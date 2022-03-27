@@ -92,6 +92,13 @@ node_modules:
 install-modules:
 	npm install node-forge mime modern-syslog websocket async mysql moment nodemailer multiparty ics glob jest
 
+firewall:
+	sudo ufw default deny incoming
+	sudo ufw default allow outgoing
+	sudo ufw allow ssh
+	sudo ufw allow http
+	sudo ufw allow https
+
 ip-tables:
 	sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8080
 	sudo iptables -t nat -A PREROUTING -p tcp --dport 443 -j REDIRECT --to-port 8443
@@ -128,3 +135,33 @@ cert-restore-2:
 	cp old-certs-2/privkey.pem letsencrypt/config/live/*/
 	cp old-certs-2/cert.pem letsencrypt/config/live/*/
 	cp old-certs-2/chain.pem letsencrypt/config/live/*/
+
+
+.PHONY: budget-app-user
+budget-app-user: auth-bind
+	sudo mkdir /var/www
+	sudo chown root /var/www
+	sudo cp -r output/* /var/www
+	sudo addgroup budget-app --system
+	sudo adduser budget-app --home /var/www --shell  /bin/bash --no-create-home --disabled-login --system
+	sudo chown budget-app /var/www/config.json
+	sudo chmod  a-w,o-r,g-r /var/www/config.json
+	sudo chown budget-app /etc/authbind/byport/80
+	sudo chown budget-app /etc/authbind/byport/443
+	sudo chmod 700 /etc/authbind/byport/80 /etc/authbind/byport/80
+
+auth-bind:
+	sudo apt install authbind
+	sudo touch /etc/authbind/byport/80
+	sudo touch /etc/authbind/byport/443
+
+
+install: budget-app-user auth-bind
+	sudo mkdir /var/www
+	sudo chown root /var/www
+	sudo cp -r output/* /var/www
+	sudo addgroup budget-app --system
+	sudo adduser budget-app --home /var/www --shell  /bin/bash --no-create-home --disabled-login --system
+	sudo chown budget-app /var/www/config.json
+	sudo chmod  a-w,o-r,g-r /var/www/config.json
+
