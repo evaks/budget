@@ -44,6 +44,7 @@ budget.widgets.SiteInfo = function(scope) {
         let columns = new recoil.ui.widgets.TableMetaData();
         columns.add(siteT.cols.name, 'Name', {displayLength: 20});
         columns.add(siteT.cols.phone, mess.PHONE);
+        columns.add(siteT.cols.cell, mess.CELL);
         columns.add(siteT.cols.email, amess.EMAIL_ADDRESS, {displayLength: 20});
         columns.addColumn(new recoil.ui.widgets.table.TextAreaColumn(siteT.cols.address, mess.ADDRESS));
         columns.addColumn(new recoil.ui.widgets.table.TextAreaColumn(siteT.cols.mapAddress, mess.MAP_ADDRESS));

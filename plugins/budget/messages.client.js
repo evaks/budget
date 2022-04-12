@@ -61,6 +61,24 @@ budget.messages.LAST_NAME = recoil.ui.message.getParamMsg('Last Name');
  */
 budget.messages.PHONE = recoil.ui.message.getParamMsg('Phone');
 
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.CELL = recoil.ui.message.getParamMsg('Cell');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.TEXT = recoil.ui.message.getParamMsg('Text');
+
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.EMAIL = recoil.ui.message.getParamMsg('Email');
 
 /**
  * @type {!recoil.ui.message.Message}
@@ -86,6 +104,12 @@ budget.messages.INCOME_SOURCE = recoil.ui.message.getParamMsg('Income Source');
  * @final
  */
 budget.messages.ADDRESS = recoil.ui.message.getParamMsg('Address');
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.OFFICE_HOURS = recoil.ui.message.getParamMsg('Office Hours');
 
 /**
  * @type {!recoil.ui.message.Message}

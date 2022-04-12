@@ -23,7 +23,7 @@ budget.widgets.Contact = function(scope) {
     let siteT = aurora.db.schema.tables.base.site;
     let holidaysT = aurora.db.schema.tables.base.site_holidays;
     let milliPerDay = budget.widgets.BusinessHours.MILLI_PER_DAY;
-
+    const msg = budget.messages;
     let html = new recoil.ui.HtmlHelper(scope);
     let dateB = recoil.frp.util.dateB(frp);
     this.hoursT_ = siteT.regular;
@@ -70,6 +70,7 @@ budget.widgets.Contact = function(scope) {
     let mapDiv = cd('div', {class: 'mapDiv'}, this.map_);
 
     this.phone_ = cd('a', {class: 'phone'});
+    this.cell_ = cd('a', {class: 'phone'});
     this.email_ = cd('a', {class: 'email'});
     this.address_ = cd('td', {class: 'address'});
 
@@ -77,23 +78,27 @@ budget.widgets.Contact = function(scope) {
 
     this.officeHours_ = cd('table', {class: 'office-hours'});
 
-    let phoneLabel = cd('td', {class: 'label'}, 'Phone');
+    let phoneLabel = cd('td', {class: 'label'}, msg.PHONE.toString());
     let phone = cd('tr', {class: 'contact-item'}, phoneLabel, cd('td', {class: 'info-data'}, this.phone_));
 
-    let emailLabel = cd('td', {class: 'label'}, 'Email');
+
+    let cellLabel = cd('td', {class: 'label'}, msg.TEXT.toString());
+    let cell = cd('tr', {class: 'contact-item'}, cellLabel, cd('td', {class: 'info-data'}, this.cell_));
+
+    let emailLabel = cd('td', {class: 'label'}, msg.EMAIL.toString());
     let email = cd('tr', {class: 'contact-item'}, emailLabel, cd('td', {class: 'info-data'}, this.email_));
 
-    let addressLabel = cd('td', {class: 'label'}, 'Address');
+    let addressLabel = cd('td', {class: 'label'}, msg.ADDRESS.toString());
     let address = cd('tr', {class: 'contact-item'}, addressLabel, this.address_);
 
-    let officeHoursLabel = cd('td', {class: 'label'}, 'Office Hours', this.officeHours_);
+    let officeHoursLabel = cd('td', {class: 'label'}, msg.OFFICE_HOURS.toString(), this.officeHours_);
 
     let calLink = cd('td', {}, cd('a', {href: '/open'}, budget.messages.FULL_CALENDAR.toString()));
     let linkLabel = cd('tr', {class: 'contact-item'}, cd('td'), calLink);
 
 
     let officeHours = cd('tr', {class: 'contact-item'}, officeHoursLabel, this.officeHours_);
-    let contactDiv = cd('table', {class: 'budget-contact'}, phone, email, address, officeHours, linkLabel);
+    let contactDiv = cd('table', {class: 'budget-contact'}, phone, cell, email, address, officeHours, linkLabel);
 
     this.container_ = cd('div', {class: 'container'}, headerDiv, mapDiv, contactDiv);
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(this.container_);
@@ -132,6 +137,10 @@ budget.widgets.Contact.prototype.update_ = function(helper) {
 
         this.phone_.innerText = site.get(siteT.cols.phone);
         this.phone_.setAttribute('href', 'tel:' + site.get(siteT.cols.phone));
+
+        this.cell_.innerText = site.get(siteT.cols.cell);
+        this.cell_.setAttribute('href', 'tel:' + site.get(siteT.cols.cell));
+        
         this.email_.innerText = site.get(siteT.cols.email);
         this.email_.setAttribute('href', 'mailto:' + site.get(siteT.cols.email));
 
@@ -191,7 +200,7 @@ budget.widgets.Contact.prototype.update_ = function(helper) {
                         return;
                     }
                     
-                    let relStart = Math.min(start - timeStart, 0);
+                    let relStart = Math.max(start - timeStart, 0);
                     let relStop = Math.min(budget.widgets.BusinessHours.MILLI_PER_DAY, stop - timeStart);
                     
                     keys.push({start: relStart, stop: relStop, holiday: isHoliday});

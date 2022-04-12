@@ -177,3 +177,10 @@ install-app:
 	sudo cp -r scripts/startup.sh /var/www/
 	mv output/config.json.default output/config.json
 
+
+installer:
+	@find ./output/ -name "*~" -exec rm {} \;
+	tar -c -f installer.tbz --bzip2 output scripts service
+	cat scripts/install.sh > install.sh
+	base64 installer.tbz >> install.sh
+	chmod 755 install.sh
