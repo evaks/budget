@@ -357,8 +357,12 @@ budget.widgets.BusinessHours.getDayOffset = function (time, timezone) {
             opts.timeZone = timezone;
         }
         goog.object.extend(opts, format);
-        return parseInt(d.toLocaleString(
+        let res = parseInt(d.toLocaleString(
             'en-NZ', opts));
+        if (opts.hour12 != undefined) {
+            res = res % 24;
+        }
+        return res;
     };
     return ((getItem({hour:'numeric' ,hour12: false}) * 60 + getItem({minute: 'numeric'})) * 60 + getItem({second: 'numeric'})) * 1000 + d.getMilliseconds();
 };
@@ -380,8 +384,12 @@ budget.widgets.BusinessHours.getTZAdjustment = function (time, timezone, doAdjus
     let getItem = function (format) {
         let opts = {timeZone: timezone};
         goog.object.extend(opts, format);
-            return parseInt(d.toLocaleString(
-                'en-NZ', opts));
+        let res = parseInt(d.toLocaleString(
+            'en-NZ', opts));
+        if (opts.hour12 != undefined) {
+            res = res % 24;
+        }
+        return res;
     };
     let wrongSiteDate = new Date(
         getItem({year: 'numeric'}),
