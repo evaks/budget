@@ -1086,7 +1086,15 @@ aurora.db.mysql.Pool.prototype.fromJson = function(str) {
     if (str == undefined) {
         return null;
     }
-    return JSON.parse(str);
+    if (typeof (str)  == 'string') {
+        try {
+            return JSON.parse(str);
+        }
+        catch (e) {
+            return null;
+        }
+    }
+    return str;
 };
 
 /**
