@@ -1,4 +1,6 @@
 output/
+test/
+test-service/
 node_modules/
 generated/
 letsencrypt/

@@ -100,7 +100,7 @@ aurora.db.PermDatabase.addTablePermissions = function(table, tableT) {
             access = tbl.info.access;
         }
         if (access) {
-            table.addMeta({canAdd: access(perms, 'c'), canRemove: access(perms, 'd')});
+            table.addMeta({canAdd: access(perms, 'c'), canRemove: access(perms, 'd'), canUpdate: access(perms, 'u')});
         }
     }
 

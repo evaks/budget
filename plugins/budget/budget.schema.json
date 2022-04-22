@@ -211,7 +211,7 @@
 	{
 	    "name" : "budget",
 	    "indexes": [],
-	    "access": "aurora.db.access.basic([{'site-management':'crud'}, {'mentor':'crud'}, {'client':'crud'}, {'': 'r'}])",
+	    "access": "aurora.db.access.basic([{'site-management':'crud'}, {'mentor':'crud'}, {'client':'r'}, {'': 'r'}])",
 	    "accessFilter": [
 		{"user-management" : "all"},
 		{"mentor": "budget.filter.budgetMentor"},

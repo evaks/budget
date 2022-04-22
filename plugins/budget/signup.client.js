@@ -219,9 +219,6 @@ budget.widgets.SignUp = function(scope, opt_userid) {
 
     };
 
-
-
-
     let html = new recoil.ui.HtmlHelper(scope);
 
     let userSuggest = cd('div', {class: 'goog-inline-block'});

@@ -341,18 +341,19 @@ budget.print.BudgetPrinter.prototype.makeFooter_ = function () {
 
 /**
  * @private
+ * @param {?string} mentor
  * @param {!recoil.structs.table.TableRowInterface} site
  * @param {number} period
  * @return {Object} pdfmake print object structure
  */
 
-budget.print.BudgetPrinter.prototype.makeHeader_ = function (site, period) {
+budget.print.BudgetPrinter.prototype.makeHeader_ = function (mentor, site, period) {
     return {
         fontSize: this.scale(this.fontSize * 2),
         columns: [
             {
                 width: 'auto',
-                text: this.mesg.SERVICE_NAME.toString().toUpperCase() + ' ph: ' + site.get(this.siteT.cols.phone),
+                text: mentor == null ? '' : this.mesg.SERVICE_NAME.toString().toUpperCase() + ' ph: ' + site.get(this.siteT.cols.phone),
                 bold: true
             },
             {
@@ -376,10 +377,10 @@ budget.print.BudgetPrinter.prototype.makeHeader_ = function (site, period) {
 		            ]
 		        }
                     },
-                    {
+                    mentor == null ? {} : {
                         alignment:'right',
                         relativePosition: {x:0,y:this.scale(2)},
-	                svg: this.logo,
+	                    svg: this.logo,
                         fit: [this.scale(90), this.scale(90)]
                     }
                 ]
@@ -589,12 +590,13 @@ budget.print.BudgetPrinter.prototype.scale = function (v) {
 
 /**
  * @private
+ * @param {mentor} mentor was it done by a mentor
  * @param {!recoil.structs.table.TableRowInterface} user
  * @param {!recoil.structs.table.TableRowInterface} budget
  * @param {!recoil.structs.table.TableRowInterface} site
  * @return {Object}
  */
-budget.print.BudgetPrinter.prototype.createDoc_ = function (user, budget, site) {
+budget.print.BudgetPrinter.prototype.createDoc_ = function (mentor, user, budget, site) {
     let entries = budget.get(aurora.db.schema.tables.base.budget.cols.entries).filter(x=>true).sort((x,y)=> x.order - y.order);
     let totals = {
         income: 0,
@@ -618,7 +620,7 @@ budget.print.BudgetPrinter.prototype.createDoc_ = function (user, budget, site) 
         fontSize: this.scale(this.fontSize),
         pageMargins: [ 20, 20, 20, 20 ],
         content: [
-            this.makeHeader_(site, period),
+            this.makeHeader_(mentor, site, period),
             this.makeUserDetails_(user),
             {
                 columns: [
@@ -667,11 +669,12 @@ budget.print.BudgetPrinter.prototype.createDoc_ = function (user, budget, site) 
     };
 };
 /**
+ * @param {?string} mentor
  * @param {!recoil.structs.table.TableRowInterface} user
  * @param {!recoil.structs.table.TableRowInterface} budgetIn
  * @param {!recoil.structs.table.TableRowInterface} site
  */
-budget.print.BudgetPrinter.prototype.print = function (user, budgetIn, site) {
+budget.print.BudgetPrinter.prototype.print = function (mentor, user, budgetIn, site) {
     let me = this;
 
     let print = function (doc) {
@@ -683,14 +686,14 @@ budget.print.BudgetPrinter.prototype.print = function (user, budgetIn, site) {
     let binaryScaleSearch = function (min, max) {
         if (min>=max) {
             me.scale_ = bigestScaleFactor/100;
-            let doc = me.createDoc_(user, budgetIn, site);
+            let doc = me.createDoc_(mentor, user, budgetIn, site);
             console.log("data-scaled", recoil.util.object.clone(doc));    
             print(doc);
             return;
         }
         let mid = Math.floor((min + max)/2);
         me.scale_ = mid/100;
-        let doc = me.createDoc_(user, budgetIn, site);
+        let doc = me.createDoc_(mentor, user, budgetIn, site);
         pdfMake.createPdf(doc)._getPages({}, function (pages) {
             if (pages.length < 2) {
                 bigestScaleFactor = Math.max(bigestScaleFactor, mid);
@@ -706,12 +709,12 @@ budget.print.BudgetPrinter.prototype.print = function (user, budgetIn, site) {
         let xhr = e.target;
         me.logo = xhr.getResponseText();
         me.scale_ = 1;
-        let d = me.createDoc_(user, budgetIn, site);
-        console.log("data", recoil.util.object.clone(d));    
+        let d = me.createDoc_(mentor, user, budgetIn, site);
+        
         // first check if we can print without scaling
         pdfMake.createPdf(d)._getPages({}, function (pages) {
             if (pages.length < 2) {
-                let doc = me.createDoc_(user, budgetIn, site);
+                let doc = me.createDoc_(mentor, user, budgetIn, site);
                 print(doc);
             }
             else {

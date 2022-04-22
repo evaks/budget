@@ -267,7 +267,7 @@ aurora.widgets.TableWidget.createMovableSizable = function(tableB, opt_movable) 
         let tblMeta = tbl.getMeta();
         let canAdd = tblMeta.canAdd !== false;
         let canDel = tblMeta.canRemove !== false;
-        let canMove = tblMeta.editable !== false;
+        let canMove = tblMeta.editable !== false && tblMeta.canUpdate !== false;
 
         let hasHeaderRow = tblMeta.headerRowDecorator !== null;
         if (tbl.size() === 0 && !hasHeaderRow) {
@@ -310,7 +310,7 @@ aurora.widgets.TableWidget.createMovableSizable = function(tableB, opt_movable) 
             mrow.set(ADD_COL, null);
             mrow.set(DEL_COL, null);
             mrow.set(MOVE_COL, null);
-            if (movable && row.getRowMeta().movable !== false) {
+            if (canMove && movable && row.getRowMeta().movable !== false) {
                 let decorator = decorators.findFirst({key: pks, decorator: null});
                 if (!decorator) {
                     decorator = {key: pks, decorator: rowDecoratorFunc(pks)};

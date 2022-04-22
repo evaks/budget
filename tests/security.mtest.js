@@ -436,16 +436,17 @@ it('security-budget-perm', async () => {
     const query = new recoil.db.Query();
 
     let client2Budget = (await adminClient.getData(tbl, query.eq(query.field(tbl.cols.id), query.val(client2BudgetId))))[0];
+    (await client2Client.getData(tbl, query.eq(query.field(tbl.cols.id), query.val(client2BudgetId))))[0];
     
     let client1Budget1Id = await mentor1Client.add(tbl, {
         name: 'budgetc1.1', userid: client1Id, period: 1, createTime: 1,
         entries: [makeEntry(1, 20), makeEntry(2, 30)]
     });
 
-    let client1Budget2Id = await client1Client.add(tbl, {
+    await expect(client1Client.add(tbl, {
         name: 'budgetc2.1', userid: client1Id, period: 1, createTime: 1,
         entries: [makeEntry(1, 20), makeEntry(2, 30)]
-    });
+    })).rejects.toBe('Access Denied');
 
     // can't create budget for other users
     let i = 0;
@@ -459,23 +460,26 @@ it('security-budget-perm', async () => {
         const budgetPath = makePath([tbl, client2BudgetId]);
         const itemPath = makePath([tbl, client2BudgetId, 'entries', entryId]);
         const anon = client === anonClient;
-
-        await expect(client.remove(budgetPath)).rejects.toBe(doesNotExistError(budgetPath, anon));
-        await expect(client.remove(itemPath)).rejects.toBe(doesNotExistError(itemPath, anon));
+ 
+        let isClient = client === client1Client;
+        
+        let err = isClient ? 'Access Denied' : 
+        await expect(client.remove(budgetPath)).rejects.toBe(doesNotExistError(budgetPath, anon || isClient));
+        await expect(client.remove(itemPath)).rejects.toBe(doesNotExistError(itemPath, anon || isClient));
 
         const entriesPath = makePath([tbl, client2BudgetId, 'entries', client.nextPk()]);
-        await expect(client.add(entriesPath, makeEntry(77, 20))).rejects.toBe(invalidParentError(entriesPath, anon));
+        await expect(client.add(entriesPath, makeEntry(77, 20))).rejects.toBe(invalidParentError(entriesPath, anon || isClient));
 
-        await expect(client.set(budgetPath, {'name': 'invalid'})).rejects.toBe(doesNotExistError(budgetPath,'name', anon));
-        await expect(client.set(itemPath, {'description': 'invalid'})).rejects.toBe(doesNotExistError(itemPath, 'description', anon));
+        await expect(client.set(budgetPath, {'name': 'invalid'})).rejects.toBe(doesNotExistError(budgetPath,'name', anon || isClient));
+        await expect(client.set(itemPath, {'description': 'invalid'})).rejects.toBe(doesNotExistError(itemPath, 'description', anon || isClient));
         
     }
 
+    
 
     for (let info of [
         {client: adminClient, id: client2BudgetId},
         {client: mentor1Client, id: client1Budget1Id},
-        {client: client1Client, id: client1Budget2Id},
     ]) {
         await info.client.set(makePath([tbl, info.id]), {name: 'stuff'});
         let budget = (await info.client.getData(tbl, query.eq(query.field(tbl.cols.id), query.val(info.id))))[0];

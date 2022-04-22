@@ -3,6 +3,7 @@ goog.provide('aurora.widgets.UserManagement');
 goog.require('aurora.db.schema.tables.base.user');
 goog.require('aurora.messages');
 goog.require('aurora.ui.ErrorWidget');
+goog.require('aurora.widgets.ActionResultDialog');
 goog.require('aurora.widgets.PagedTable');
 goog.require('aurora.widgets.Selectize');
 goog.require('aurora.widgets.TableDialog');
@@ -12,7 +13,6 @@ goog.require('recoil.ui.widgets.InputWidget');
 goog.require('recoil.ui.widgets.table.ButtonColumn');
 goog.require('recoil.ui.widgets.table.PasswordStrengthColumn');
 goog.require('recoil.ui.widgets.table.TableWidget');
-
 /**
  * @constructor
  * @export
@@ -316,7 +316,10 @@ aurora.widgets.UserManagement.createDialogTable = function(scope, sample, groupC
         mTable.addColumnMeta(COLS.oldPasswordCK, {type: 'string', displayLength: 15, autocomplete: false, editable: true});
         mTable.addColumnMeta(userT.cols.password, {displayLength: 15, autocomplete: false, editable: true});
         mTable.addColumnMeta(COLS.confirmPasswordCK, {displayLength: 15, autocomplete: false});
-        columns.add(userT.cols.username, 'User Name');
+        if (!sample || sample.get(userT.cols.username) !== null) {
+            columns.add(userT.cols.username, 'User Name');
+
+        }
         if (sample) {
             if (sample.get(userT.cols.id).db == secContext.userid) {
                 columns.addColumn(oldPasswordCol);
@@ -343,12 +346,20 @@ aurora.widgets.UserManagement.createDialogTable = function(scope, sample, groupC
 /**
  * @param {!aurora.WidgetScope} scope
  * @param {number} userId
- * @param {!recoil.structs.table.TableRowInterface} resetPasswordRow
+ * @param {!recoil.structs.table.TableRowInterface=} opt_resetPasswordRow
  */
 
-aurora.widgets.UserManagement.changePassword = function(scope, userId, resetPasswordRow) {
+aurora.widgets.UserManagement.changePassword = function(scope, userId, opt_resetPasswordRow) {
     const COLS = aurora.widgets.UserManagement.COLS;
     const userT = aurora.db.schema.tables.base.user;
+    const header = opt_resetPasswordRow ? 'Reset Password' : 'Change Password';
+    const button = opt_resetPasswordRow ? 'Reset' : 'Change';
+    
+    let resetPasswordRow = opt_resetPasswordRow || new recoil.structs.table.MutableTableRow();
+
+    if (!opt_resetPasswordRow) {
+        resetPasswordRow.set(userT.cols.id, new aurora.db.PrimaryKey(userId));
+    }
 	let changePasswordB = scope.getDb().get(aurora.db.schema.actions.base.account.change_password.key);
     let frp = scope.getFrp();
     let extraDataColsB = frp.createB([]);
@@ -393,9 +404,13 @@ aurora.widgets.UserManagement.changePassword = function(scope, userId, resetPass
 			oldPassword: oldPassword,
 			userid: userId,
 		}});
-    }, tableB, changePasswordB), 'Reset', function(row) {
+
+        let error = new aurora.widgets.ActionResultDialog(scope, header , changePasswordB);
+        
+        error.show(true);
+    }, tableB, changePasswordB), button, function(row) {
 		return null;
-	}, 'Reset Password', undefined, {blockErrors: true});
+	}, header, undefined, {blockErrors: true});
     td.show(true);
 
 };

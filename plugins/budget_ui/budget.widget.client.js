@@ -25,11 +25,17 @@ budget.widgets.Budget = function(scope) {
     let frp = scope.getFrp();
     let mess = budget.messages;
     let cd = goog.dom.createDom;
+    let html = new recoil.ui.HtmlHelper(scope);
     this.exportWidget_ = new recoil.ui.widgets.ButtonWidget(scope);
     this.printWidget_ = new recoil.ui.widgets.ButtonWidget(scope);
     let exportDiv = cd('div', {class: 'budget-export'});
     let printDiv = cd('div', {class: 'budget-export'});
     this.budgetB_ = null;
+    
+    this.permsB_ = aurora.permissions.getContext(scope);
+    html.show(exportDiv, frp.liftB(function (perm) {
+        return !!((perm || {}).permissions || {}).mentor;
+    }, this.permsB_));
     this.exportWidget_.getComponent().render(exportDiv);
     this.printWidget_.getComponent().render(printDiv);
 
@@ -193,284 +199,6 @@ budget.widgets.Budget.prototype.createPrintB_ = function(budgetB, userB, siteB) 
         }
     };
 
-    function makePrintTable(mywindow, tbl, user, budget, style) {
-
-        /***
-         * @param {...?} var_args
-         */
-        let addRow = function(var_args) {
-            let row = cd('tr');
-            let next = 0;
-            for (let i = 0; i < arguments.length; i++) {
-                let arg = arguments[i];
-                if (arg === null) {
-                    arg = '';
-                }
-                let val = arg.value !== undefined ? arg.value : arg;
-                let isNumber = false;
-                if (val instanceof recoil.ui.message.Message) {
-                    val = val.toString();
-                }
-
-                if (typeof val === 'number') {
-                    isNumber = true;
-                    if (arg && arg.total) {
-                        if (val < 0) {
-                            val = '(' + val.toFixed(2) + ')';
-                        }
-                        else if (val === 0) {
-                            val = '-';
-                        }
-                        else {
-                            val = val.toFixed(2);
-                        }
-                    }
-                    else {
-                        val = val.toFixed(2);
-                    }
-                }
-
-                if (arg && arg.total) {
-                    val = cd('span', {},cd('div', {class: 'budget-print-dollar'}, '$'), val);
-                }
-                let start = arg.start !== undefined ? arg.start : next;
-                let span = arg.span !== undefined ? arg.span : 1;
-                if (arg.skip) {
-                    next += arg.skip;
-                    continue;
-                }
-                // do we need to skip some rows
-                if (start > next) {
-                    row.appendChild(cd('td', {colspan: start - next}));
-                    next = start;
-                }
-                let el = cd('td', {colspan: span}, val);
-                if (arg.rows) {
-                    el.rowSpan = arg.rows;
-                }
-                if (arg.styles) {
-                    goog.dom.classlist.addAll(el, arg.styles.map(function(v) {return 'budget-print-' + v;}));
-                }
-                if (isNumber) {
-                    goog.dom.classlist.addAll(el, ['budget-print-number']);
-                }
-                row.appendChild(el);
-
-                next += span;
-            }
-
-            tbl.appendChild(row);
-
-        };
-        let bPeriod = 0;
-        let entries = [];
-        budget.forEach(function(row) {
-            entries = goog.array.clone(row.get(budgetT.cols.entries));
-            bPeriod = row.get(budgetT.cols.period);
-        });
-        entries.sort((x, y) => x.order - y.order);
-
-        let userInfo = me.getUserInfo_(user);
-
-        addRow({value: mess.BUDGET_PROTECTED.toString(), span: 6, styles: ['border-thick']},
-               {value: cd('span', {}, cd('b', {}, mess.PLEASE_NOTE.toString()), mess.THIS_BUDGET_IS_BASED.toString()), styles: ['border-thick-right', 'border-thick-left', 'border-thick-top'],
-                span: 3, start: 9});
-        addRow({value: mess.SERVICE_NAME.toString().toUpperCase() + ' ph: 04 5666357', styles: [], span: 4},
-               {value: mess._HOUSEHOLD_BUDGET.toString({period: periodMeta.enumDisplay.resolve(bPeriod).toString()}).toUpperCase(), start: 5, styles: ['center', 'bold', 'underline']},
-               {value: mess.ON_INFORMATION, styles: ['border-thick-right', 'border-thick-left', 'border-thick-bottom'], start: 9, span: 3}
-              );
-
-        addRow(mess.NAME.toField(), {value: userInfo.name, styles: ['grey']});
-        addRow(mess.ADDRESS.toField(), {value: userInfo.address, rows: 2, styles: ['grey']}, {value: mess.ENTER_ONE_OF.toField(), start: 8});
-        addRow('', {skip: 1}, {value: periodMeta.enumDisplay.resolve(periodMeta.enum.weekly), start: 8}, {value: periodMeta.enumDisplay.resolve(bPeriod)});
-        addRow(mess.PHONE.toField(), {value: userInfo.phone, styles: ['grey']}, {value: periodMeta.enumDisplay.resolve(periodMeta.enum.fortnightly), start: 8});
-        addRow({value: periodMeta.enumDisplay.resolve(periodMeta.enum.monthly), start: 8});
-
-        addRow({value: mess.INCOME.toField().toUpperCase(), styles: ['bold', 'border', 'border-top', 'border-left']},
-               {value: mess.$_VALUE, styles: ['bold', 'border', 'border-top', 'num-col']},
-               {value: mess.PAYMENT_PERIOD, styles: ['bold', 'border', 'border-top']},
-               {value: mess.CALCULATED_PER.resolve({period: periodMeta.enumDisplay.resolve(bPeriod)}), styles: ['bold', 'border', 'border-top', 'num-col']},
-               '',
-               {value: mess.DEBTS_PAYABLE.toField().toUpperCase(), styles: ['bold', 'border-left', 'border', 'border-top']},
-               {value: mess.ADDITIONAL_DESCRIPTION.toField().toUpperCase(), styles: ['bold', 'border', 'border-top']},
-               {value: mess.$_VALUE, styles: ['bold', 'border', 'border-top', 'num-col']},
-               {value: mess.PAYMENT_PERIOD, styles: ['bold', 'border', 'border-top']},
-               {value: mess.CALCULATED_PER.resolve({period: periodMeta.enumDisplay.resolve(bPeriod)}), styles: ['bold', 'border', 'border-top']},
-               {value: mess.ARREARS, styles: ['bold', 'border', 'border-top', 'num-col']},
-               {value: mess.TOTAL_OWING, styles: ['bold', 'border', 'border-top', 'num-col']});
-
-        let totals = {};
-        let income = [];
-        let debts = [];
-        let household = [];
-        let totalOwing = 0;
-        let totalArrears = 0;
-
-        entries.forEach(function(entry) {
-            let type = entry[entryT.cols.type.getName()];
-            let desc = entry[entryT.cols.description.getName()];
-            let value = entry[entryT.cols.value.getName()];
-            let valNum = recoil.util.ExpParser.instance.eval(value);
-            let p = entry[entryT.cols.period.getName()];
-            let period = p === null ? '' : periodMeta.enumDisplay.resolve(p).toString();
-            let periodValue = p === null || valNum === null ? null : periodMeta.enumInfo[bPeriod].rate * valNum * 100 / periodMeta.enumInfo[p].rate;
-            totals[type] = (totals[type] || 0) + Math.round(periodValue === null ? 0 : periodValue);
-            if (EntryType.income === type || EntryType.household === type) {
-                let arr = EntryType.income === type ? income : household;
-                arr.push([
-                    {value: desc, styles: ['border', 'border-left', 'col-desc']},
-                    {value: valNum, styles: ['grey', 'border', 'col-val']},
-                    {value: period, styles: ['grey', 'border']}, {value: periodValue / 100, styles: ['border']}]);
-            }
-            else if (EntryType.debt === type) {
-                let arrears = entry[entryT.cols.arrears.getName()];
-                let owing = entry[entryT.cols.owing.getName()];
-                let notes = entry[entryT.cols.notes.getName()];
-                let arrearsVal = recoil.util.ExpParser.instance.eval(arrears);
-                let owingVal = recoil.util.ExpParser.instance.eval(owing);
-
-                totalOwing += owingVal ? owingVal * 100 : 0;
-                totalArrears += arrearsVal ? arrearsVal * 100 : 0;
-                debts.push([
-                    {value: desc, start: 5, styles: ['border-left', 'col-desc', 'border-bottom']}, {value: notes, styles: ['grey', 'border', 'border-left']},
-                    {value: valNum, styles: ['grey', 'border', 'col-val']},
-                    {value: period, styles: ['grey', 'border']},
-                    {value: periodValue, styles: ['border']},
-                    {value: arrearsVal, styles: ['grey', 'border']},
-                    {value: owingVal, styles: ['grey', 'border']}
-                ]);
-            }
-
-        });
-
-        income.push([
-            {value: mess.LESS_DEDUCTIONS, styles: ['border', 'border-left']},
-            {value: '', styles: ['number', 'grey', 'border']},
-            {value: '', styles: ['grey', 'border']}, {value: '', styles: ['number', 'border']}]);
-
-
-
-        income.push([
-            {value: mess.A_TOTAL_INCOME, styles: ['border-right', 'border-left', 'bold', 'border-thick-top', 'border-double-bottom']},
-            {value: '', styles: ['border-right', 'border-thick-top', 'border-double-bottom']},
-            {value: '', styles: ['border-right', 'border-thick-top', 'border-double-bottom']},
-            {value: totals[EntryType.income] / 100, styles: ['border-right', 'border-thick-top', 'border-double-bottom']}]);
-
-        income.push([
-            {value: mess.HOUSEHOLD_EXPENSES.toField().toUpperCase(), styles: ['border', 'border-left']},
-            {value: '', styles: ['border']},
-            {value: '', styles: ['border']}, {value: '', styles: ['number', 'border']}]);
-
-
-        household.push([
-            {value: mess.B_TOTAL_EXPENSES, styles: ['bold', 'border-thick-top', 'border-double-bottom']},
-            {value: '', styles: ['border-thick-top', 'border-double-bottom']},
-            {value: '', styles: ['border-thick-top', 'border-double-bottom']},
-            {value: totals[EntryType.household] / 100, styles: ['border-thick-top', 'border-double-bottom']}]);
-        household.push([]);
-
-        household.push([
-            {value: mess.BUDGET_TOTALS.toField(), styles: ['bold', 'border', 'border-left', 'border-top']},
-            {value: mess.ENTER_TOTAL_A, span: 2, styles: ['bold', 'border', , 'border-top']},
-            {value: totals[EntryType.income] / 100, styles: ['border', , 'border-top']}]);
-
-        household.push([
-            {value: '', styles: ['bold', 'border', 'border-left']},
-            {value: mess.ENTER_TOTAL_B, styles: ['bold', 'border']},
-            {value: totals[EntryType.household] / 100, styles: ['border']}]);
-
-        household.push([
-            {value: '', styles: ['bold', 'border', 'border-left']},
-            {value: mess.ENTER_TOTAL_C, styles: ['bold', 'border']},
-            {value: totals[EntryType.debt] / 100, styles: ['border']}, {value: '', styles: ['border-bottom']}]);
-
-        household.push([
-            {value: '', styles: ['bold', 'border', 'border-left']},
-            {value: mess.ADD_TOTALS_B_C.toRichText(htmlFormatter), styles: [, 'border'], span: 2},
-            {value: (totals[EntryType.household] + totals[EntryType.debt]) / 100, styles: ['border']}]);
-
-        household.push([
-            {value: '', styles: ['bold', 'border', 'border-left']},
-            {value: mess.DEDUCT_B_C_FROM_TOTAL_A.toRichText(htmlFormatter), styles: ['border'], span: 2},
-            {value: (totals[EntryType.income] - totals[EntryType.household] + totals[EntryType.debt]) / 100, styles: ['border']}]);
-
-
-        household.push([]);
-        household.push([
-            {value: mess.THIS_IS_YOU_SUPLUS_DEFICIT.toField(), styles: ['bold'], span: 3},
-            {value: (totals[EntryType.income] - totals[EntryType.household] + totals[EntryType.debt]) / 100, styles: ['border-bottom-dotted'], start: 3}]);
-        household.push([
-            mess.CLIENT_WANTS.toField(),
-            {value: '', styles: ['border-bottom-dotted'], span: 3}]);
-        household.push([
-            mess.PLEASE_NOTE.toField(),
-            {value: '', styles: ['border-bottom-dotted'], span: 3}]);
-        household.push([{value: '', styles: ['border-bottom-dotted'], start: 1, span: 3}]);
-        household.push([{value: '', styles: ['border-bottom-dotted'], start: 1, span: 3}]);
-        household.push([{value: '', styles: ['border-bottom-dotted'], start: 1, span: 3}]);
-        household.push([{value: mess.TIME_FACTOR, styles: ['border-bottom'], span: 4}]);
-
-
-
-        debts.push([
-            {value: mess.C_TOTAL_DEBTS, styles: ['bold'], start: 5},
-            {value: '', styles: ['border-right'], start: 8},
-            {value: totals[EntryType.debt] / 100, total: true, styles: ['border-double-bottom', 'border-right']},
-            {value: totalArrears / 100, total: true, styles: ['border-double-bottom', 'border-right']},
-            {value: totalOwing / 100, total: true, styles: ['border-double-bottom', 'border-right']},
-        ]);
-
-        debts.push([
-            {value: mess.GOALS_TO_BE_OBTAINED.toField(), styles: [], start: 5},
-            {value: '', styles: ['border-bottom-dotted', 'grey'], span: 6}]);
-        debts.push([
-            {value: '', styles: ['border-bottom-dotted', 'grey'], start: 6, span: 6}]);
-        debts.push([
-            {value: '', styles: ['border-bottom-dotted', 'grey'], start: 6, span: 6}]);
-        debts.push([
-            {value: '', styles: ['border-bottom-dotted', 'grey'], start: 6, span: 6}]);
-
-
-        let left = income.concat(household);
-        let right = debts;
-
-        for (let i = 0; i < left.length || i < right.length; i++) {
-            let l = left[i] || [];
-            let r = right[i] || [];
-            addRow.apply(null, l.concat([{value: '', styles: ['mid']}]).concat(r));
-        }
-
-        mywindow.window.onafterprint = (event) => {setInterval(function() {mywindow.close();}, 1000);};
-        mywindow.print();
-
-        /*
-          budget.cell('A1').value(mess.BUDGET_PROTECTED.toString());
-          budget.cell('J1').value(rich([{value: '', bold: true}, ' This budget is based']));
-          budget.cell('A2').value(mess.SERVICE_NAME.toString().toUpperCase() + ' ph: 04 5666357');
-          budget.range('A2:D2').merged(true).style('horizontalAlignment', 'right');*/
-    }
-
-    function printSheet(user, budget, style) {
-        /** @suppress {checkTypes} */
-        var mywindow = window.open(undefined, undefined, undefined, 'height=400,width=600');
-        mywindow.document.write('<html><head><title>Budget</title>');
-        mywindow.document.write('<link rel="stylesheet" type="text/css" href="/images/print.css">');
-//
-        mywindow.document.write('<style>' + style + '</style>');
-        mywindow.document.write('</head><body onload="doPrint()"><table  id="budget_table" style="width: 100%; height: 100%;">');
-        mywindow.document.write('</table></body></html>');
-
-        let checkDocReady = function() {
-            let tbl = mywindow.document.getElementById('budget_table');
-            if (!tbl) {
-                setTimeout(checkDocReady, 1000);
-            }
-            else {
-                makePrintTable(mywindow, tbl, user, budget, style);
-            }
-        };
-        checkDocReady();
-    }
 
     return frp.createCallback(
         function() {
@@ -481,10 +209,15 @@ budget.widgets.Budget.prototype.createPrintB_ = function(budgetB, userB, siteB) 
 
             if (user && budgetRow && site) {
                 let printer = new budget.print.BudgetPrinter();
-                printer.print(user, budgetRow, site);
+                let mentor = null;
+                
+                if (((me.permsB_.get() || {}).permissions || {}).mentor) {
+                    mentor = 'dummy';
+                }
+                printer.print(mentor, user, budgetRow, site);
                 return;
             }
-        }, budgetB, userB, siteB);
+        }, budgetB, userB, siteB, this.permsB_);
 };
 
 /**
@@ -915,6 +648,7 @@ budget.widgets.Budget.prototype.attach = function(idB) {
         action: this.exportToExcelB_(budgetB, userB),
         text: 'Export'});
 
+    
     this.printWidget_.attachStruct({
         action: this.createPrintB_(budgetB, userB, siteB),
         text: 'Print'});

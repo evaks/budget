@@ -167,9 +167,9 @@ install: budget-app-user auth-bind
 
 install-service:
 	sudo cp service/budget.service /etc/systemd/system
-	sudo systemctl enable myapp
+	sudo systemctl enable budget
 	sudo systemctl daemon-reload
-	sudo service myapp start
+	sudo service budget start
 
 install-app:
 	mv output/config.json output/config.json.default
@@ -180,7 +180,7 @@ install-app:
 
 installer:
 	@find ./output/ -name "*~" -exec rm {} \;
-	tar -c -f installer.tbz --bzip2 output scripts service
+	tar -c -f installer.tbz --exclude=\*.sql --bzip2 output scripts service
 	cat scripts/install.sh > install.sh
 	base64 installer.tbz >> install.sh
 	chmod 755 install.sh

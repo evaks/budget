@@ -114,7 +114,7 @@ budget.widgets.Menu.prototype.makeMenuBar = function() {
             let menuItems = [];
             if (!item.children || item.children.length === 0) {
                 let menuButton = new recoil.ui.widgets.MenuActionButtonWidget(scope);
-                let action = frp.createCallback(function() {
+                let action = item.action ?  item.action(scope) : frp.createCallback(function(e) {
                     window.location = item.url;
                 }, frp.createB(null));
                 menuButton.attachStruct({name: item.name, action: action, items: []});
@@ -144,9 +144,11 @@ budget.widgets.Menu.prototype.makeMenuBar = function() {
                     else {
                         let itemWidget = new recoil.ui.widgets.MenuItemActionWidget(scope);
 
-                        itemWidget.attach(menuItemInfo.name.toString(), true, frp.createCallback(function() {
-                            window.location = menuItemInfo.url;
-                        }, frp.createB(null)));
+                        itemWidget.attach(menuItemInfo.name.toString(), true, menuItemInfo.action ?
+                                          menuItemInfo.action(scope) :
+                                          frp.createCallback(function(e) {
+                                              window.location = menuItemInfo.url;
+                                          }, frp.createB(null)));
                         menuItems.push(itemWidget);
                     }
                 });
@@ -225,6 +227,15 @@ budget.widgets.Menu.menu = [
         {'name': 'Signup', 'url': '/account/signup', perm: aurora.permissions.loggedIn(false)},
         {seperator: true, perm: aurora.permissions.loggedIn(false)},
         {'name': 'My Details', 'url': '/client', perm: aurora.permissions.loggedIn(true)},
+        {'name': 'Change Password', action: function (scope) {
+            let frp = scope.getFrp();
+            let permsB = aurora.permissions.getContext(scope);
+            return frp.createCallback(function (e) {
+                aurora.widgets.UserManagement.changePassword(scope,  BigInt(permsB.get().userid));
+                
+                console.log("change password",);
+            }, permsB);
+        }, perm: aurora.permissions.loggedIn(true)},
         {seperator: true, perm: aurora.permissions.has('client')},
         {'name': 'Resources', url: '/resources'},
         {'name': 'Administration', url: '/admin/admin', perm: aurora.permissions.has('site-management')},

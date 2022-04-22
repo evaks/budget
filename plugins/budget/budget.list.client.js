@@ -25,6 +25,8 @@ budget.widgets.BudgetList = function(scope) {
     let cd = goog.dom.createDom;
     let importDiv = cd('div', {class: 'budget-import-menu'});
     let container = cd('div', {}, importDiv);
+    let html = new recoil.ui.HtmlHelper(scope);
+
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(container);
 
     let userId = budget.widgets.BudgetList.getUserId();
@@ -36,6 +38,9 @@ budget.widgets.BudgetList = function(scope) {
     let frp = scope.getFrp();
     let converter = new aurora.ui.coverters.LocaleDateConverter();
 
+    html.show(importDiv, frp.liftB(function (b) {
+        return b.getMeta().editable !== false;
+    }, budgetsB));
     const COPY = new recoil.structs.table.ColumnKey('copy');
     this.import_ = new recoil.ui.widgets.table.TableWidget(scope);
     this.import_.getComponent().render(importDiv);
