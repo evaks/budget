@@ -1331,7 +1331,6 @@ aurora.db.sql.Reader.prototype.deleteObjects = function(context, table, query, s
         }
         else {
             me.readIds_(context, table, filter, null, function(error, ids) {
-                console.log('delete trans ids', ids, error);
                 if (ids.length === 0) {
                     // I don't think we need delete me since there is nothing to delete
                     deleteMe();
@@ -1339,6 +1338,11 @@ aurora.db.sql.Reader.prototype.deleteObjects = function(context, table, query, s
                 }
                 if (!error) {
                     async.each(referers, function(ref, callback) {
+                        if (ref.table && ref.table.info && ref.table.info.view != undefined) {
+                            // views don't need deleting
+                            callback(null);
+                            return;
+                        }
                         if (ref.child) {
                             reader.deleteObjects(context, ref.table, query.isIn(ref.table.info.parentKey, ids), null, function(error) {
                                 callback(error);

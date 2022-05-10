@@ -1616,6 +1616,9 @@ aurora.db.Coms.ValSerializer.prototype.deserialize = function(path, val) {
                         val['db'] == undefined ? null : BigInt(val['db']),
                         val['mem'] == undefined ? null : BigInt(val['mem']));
                 }
+                else if (meta.type === 'ref') {
+                    return null;
+                }
                 else {
                     return new aurora.db.PrimaryKey(null, null);
                 }

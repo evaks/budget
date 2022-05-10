@@ -933,6 +933,7 @@ aurora.db.Comms = function(db, schema, client) {
     this.currentErrors_ = new recoil.db.PathMap(schema);
     this.helper_ = new aurora.db.Helper(this, this.db_, client, schema, this.transId_);
     this.client_ = client;
+    this.transactional_ = true;
 };
 
 /**
@@ -1140,10 +1141,24 @@ aurora.db.Comms.prototype.createChannel_ = function() {
 
                         console.log('got set result', obj);
                         me.currentErrors_ = new recoil.db.PathMap(schema);
-                        var notApplied = aurora.db.Comms.generateErrors(obj.results, setChanges, me.currentErrors_);
+                        let notApplied = aurora.db.Comms.generateErrors(obj.results, setChanges, me.currentErrors_);
+                        if (me.transactional_ && notApplied.unapplied.length > 0)  {
+                            // if it is transactional reverse all the changes they do not stack
+                            // the will simply cause all future changes to not be applied
+                            me.db_.applyChanges(setChanges.map(x => x.inverse(schema)));
+                        }
+                            
                         idMap = me.helper_.updateEffectedTables(setChanges, me.currentErrors_, obj.results);
-                        me.erroredChanges_ = notApplied.unapplied;
+                        if (me.transactional_) {
+                            me.erroredChanges_ = [];
+                        }
+                        else {
+                            me.erroredChanges_ = notApplied.unapplied;
+                        }
+
+
                         me.sentChanges_ = [];
+                        
                         if (notApplied.unapplied.length > 0) {
                             console.error('UPDATE ERRORS', obj.results, setChanges, notApplied, me.currentErrors_);
                         }

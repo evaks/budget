@@ -888,6 +888,7 @@ aurora.db.sql.ChangeWriter.prototype.addSet_ = function(objectPathMap, change, r
     if (meta && meta.type === 'ref') {
         // this doesn't support references to objects inside objects
         let table = this.schema_.getTableByName(meta.ref);
+        
         let pkName = table.info.pk.getName();
         let val = change.value();
         let orig = obj ? obj[entry.key.last.name()] : null;
