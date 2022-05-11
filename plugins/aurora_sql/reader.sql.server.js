@@ -1257,12 +1257,17 @@ aurora.db.sql.Reader.prototype.readIds_ = function(context, table, query, securi
  * @return {?}
  */
 aurora.db.sql.Reader.prototype.toDb_ = function(meta, val) {
+
+    if (val instanceof aurora.db.PrimaryKey) {
+        val = val.db;
+    }
     if (val == null) {
         if (meta && meta.defaultVal !== undefined) {
             return meta.defaultVal;
         }
         return null;
     }
+
 
     return meta.type === 'json' ? this.driver_.toJson(val) : val;
 };
