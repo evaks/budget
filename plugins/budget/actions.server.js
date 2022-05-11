@@ -26,7 +26,6 @@ budget.actions.checkUsername = function(coms, context, reader, inputs, callback)
  */
 budget.actions.suggestUsername = function(coms, context, reader, inputs, callback) {
     let failCb = function(err) {callback(err, []);};
-
     if (inputs instanceof Array) {
         let object = {};
 
@@ -40,27 +39,18 @@ budget.actions.suggestUsername = function(coms, context, reader, inputs, callbac
         // don't allow specification of primary key
 
         let username = object[userT.cols.username.getName()];
+        
         if (username && typeof(username) !== 'string') {
             callback('invalid username', []);
             // error here we use username length in sql
             return;
         }
         let firstName = object[userT.cols.firstName.getName()];
-        let lastName = object[userT.cols.lastName.getName()];
 
         if (!username || username.trim().length === 0) {
 
             if (firstName && firstName.trim().length !== 0) {
                 username = firstName.trim();
-            }
-            if (lastName && lastName.trim().length !== 0) {
-                if (username && username.length > 0) {
-                    username += '.' + lastName;
-                }
-                else {
-                    username = lastName;
-                }
-
             }
         }
         if (!username || username.trim().length === 0) {
@@ -78,7 +68,7 @@ budget.actions.suggestUsername = function(coms, context, reader, inputs, callbac
                 callback(null, username);
                 return;
             }
-            username = username.replace(/[0-9+]$/, '');
+            username = username.replace(/[0-9]+$/, '');
             username = username.replace(/\^|\$|\*|\+|\?|\||\(|\)|\\|\{|\}|\[|\]/g, '_');
             reader.query('SELECT max(cast(substring(username,?len) as UNSIGNED )) username FROM `user` WHERE username rlike ?username', {'len': (username.length + 1) , 'username': username.replace(/\./g, '\\.') + '[0-9]*'}, function(err, result) {
                 if (err) {
@@ -88,7 +78,7 @@ budget.actions.suggestUsername = function(coms, context, reader, inputs, callbac
                     callback(null, username);
                 }
                 else {
-                    let max = result[0]['username'];
+                    let max = parseInt(result[0]['username'],10);
                     max = max == null ? 0 : max;
                     callback(null, username + (max + 1));
                 }

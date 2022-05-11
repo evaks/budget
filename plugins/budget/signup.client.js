@@ -350,25 +350,22 @@ budget.widgets.SignUp = function(scope, opt_userid) {
 
     suggestUsernameButton.attachStruct(recoil.frp.struct.extend(frp, loginActionB, {
         action: frp.liftBI(
-            function(v) {
-                if (v.output && v.output.value) {
-                    let res = tableB.get().createEmpty();
-                    tableB.get().forEachModify(function(row) {
-                        console.log('action value', v, row);
-                        row.set(userT.cols.username, v.output.value);
-                        res.addRow(row);
-                    });
-
-                    let newOutput = goog.object.clone(v);
-                    newOutput.output = null;
-                    suggestActionB.set(newOutput);
-
-                    tableB.set(res.freeze());
-                }
-                return v.action;
+            function(action, table, actionChanges) {
+                actionChanges.forEach(function (v) {
+                    if (v.output && v.output.value) {
+                        let res = tableB.get().createEmpty();
+                        tableB.get().forEachModify(function(row) {
+                            console.log('action value', v, row);
+                            row.set(userT.cols.username, v.output.value);
+                            res.addRow(row);
+                        });
+                        tableB.set(res.freeze());
+                    }
+                });
+                return action.action;
             },
             function(v) {
-                let res = goog.object.clone(suggestActionB.get());
+
                 let inputs = [];
                 tableB.get().forEach(function(row) {
                     tableB.get().forEachColumn(function(col) {
@@ -378,10 +375,12 @@ budget.widgets.SignUp = function(scope, opt_userid) {
                     });
 
                 });
-                res.action = inputs;
 
+                let res = {
+                    action: inputs,
+                };
                 suggestActionB.set(res);
-            }, suggestActionB, tableB),
+            }, suggestActionB, tableB, frp.changesE(suggestActionB)),
         text: 'Suggest'
     }));
 
