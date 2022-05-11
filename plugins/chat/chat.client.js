@@ -16,6 +16,7 @@ goog.require('recoil.ui.widgets.ButtonWidget');
 
 aurora.widgets.Chat = function(scope, opt_manageButtons) {
     const State = aurora.widgets.Chat.State;
+    const settingsT = aurora.db.schema.tables.base.system_settings;
     let cd = goog.dom.createDom;
     let frp = scope.getFrp();
     this.scope_ = scope;
@@ -140,6 +141,41 @@ aurora.widgets.Chat = function(scope, opt_manageButtons) {
         });
 
     this.availB_ = frp.createB({});
+    this.settingsB_ = frp.liftB(function (tbl) {
+        let res = {};
+        let RTCIceServer = {};
+        tbl.forEach(function (row) {
+            let name = row.get(settingsT.cols.name);
+            let value = row.get(settingsT.cols.value);
+
+            if (value == '' || value == null) {
+                return;
+            }
+            
+            if (name == 'stun/server/address') {
+                RTCIceServer.urls = value.split(',');
+            }
+
+            if (name == 'stun/server/password') {
+                RTCIceServer.credential = value;
+            }
+
+            if (name == 'stun/server/user') {
+                RTCIceServer.username = value;
+            }
+
+            if (name == 'stun/server/password-type') {
+                RTCIceServer.credentialType = value;
+            }
+            
+        });
+
+        if (RTCIceServer.urls) {
+            res.iceServers = [RTCIceServer];
+        }
+
+        return res;
+    }, scope.getDb().get(settingsT.key));
     this.stateB_ = frp.createB({state: State.idle, caller: null});
     this.whoB_ = frp.createB('');
     this.channelStateB_ = frp.createB({audio: true, video: true});
@@ -245,7 +281,7 @@ aurora.widgets.Chat = function(scope, opt_manageButtons) {
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(this.container_);
 
     this.helper_ = new recoil.ui.ComponentWidgetHelper(scope, this.component_, this, this.updateState_);
-    this.helper_.attach(this.channelStateB_, this.stateB_, this.availB_);
+    this.helper_.attach(this.channelStateB_, this.stateB_, this.availB_, this.settingsB_);
 
 };
 /**
@@ -477,6 +513,7 @@ aurora.widgets.Chat.prototype.makePeerConnection_ = async function(polite) {
     this.makingOffer_ = false;
     this.ignoreOffer_ = false;
 
+    
     let stream;
     try {
         try {
@@ -493,15 +530,18 @@ aurora.widgets.Chat.prototype.makePeerConnection_ = async function(polite) {
         this.setErrorState_('Unable to connect to Video or Microphone. Please check your browser permissions.');
         throw e;
     }
+    let me = this;
+    let frp = this.scope_.getFrp();
 
-    const configuration = {};
+    const configuration = frp.accessTrans(() => me.settingsB_.get(), me.settingsB_);
+    
     if (this.remote_.srcObject) {
         this.remote_.srcObject = new MediaStream();
     }
     let pc = new RTCPeerConnection(configuration);
     pc.addEventListener('icecandidate', this.onIceCandidate.bind(this));
     pc.addEventListener('iceconnectionstatechange', this.onIceStateChange.bind(this));
-    let me = this;
+
     pc.addEventListener('negotiationneeded', async() => {
         try {
             this.makingOffer_ = true;
@@ -734,7 +774,6 @@ aurora.widgets.Chat.prototype.remoteOffer_ = async function(description) {
  */
 aurora.widgets.Chat.prototype.answerCall_ = async function() {
     try {
-        const configuration = {};
         let frp = this.scope_.getFrp();
         //    let state = null;
         let me = this;
