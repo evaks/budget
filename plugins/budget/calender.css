@@ -261,3 +261,12 @@ div.budget-legend .hours {
     vertical-align: middle;
     margin-top: -2px;
 }
+
+
+div.budget-bookings .budget-date {
+	display: inline-block;
+}
+
+div.budget-bookings .budget-mentor {
+	display: inline-block;
+}

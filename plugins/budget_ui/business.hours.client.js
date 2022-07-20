@@ -900,16 +900,17 @@ budget.widgets.BusinessHours.prototype.setupDrag_ = function() {
     }, highlightedB, this.siteB_));
 
     goog.events.listen(this.calendarDiv_, goog.events.EventType.MOUSEDOWN, frp.accessTransFunc(function(e) {
-        clearSelection();
-        if (!aurora.permissions.has('site-management')(me.contextB_.get())) {
-            return;
-        }
-
-        if (!isLeftPressed(e)) {
-            return;
-        }
-        let pos = me.calcPos_(e);
-        highlightedB.set({start: pos, stop: pos, add: !e.ctrlKey });
+            clearSelection();
+            if (!aurora.permissions.has('site-management')(me.contextB_.get())) {
+                return;
+            }
+            
+            if (!isLeftPressed(e)) {
+                return;
+            }
+            let pos = me.calcPos_(e);
+            highlightedB.set({start: pos, stop: pos, add: !e.ctrlKey });
+        
 
     }, highlightedB, this.contextB_));
 
@@ -2194,7 +2195,7 @@ budget.widgets.BusinessHours.prototype.setupMenu_ = function() {
     // @todo change the render to not use document.body
     this.contextMenu_.render(this.calendarDiv_);
     let menuEvents = [goog.events.EventType.CONTEXTMENU];
-    if (this.isClient_()) {
+    if (this.type_ !== 'admin') {
         menuEvents.push(goog.events.EventType.MOUSEDOWN);
     }
     goog.events.listen(

@@ -49,19 +49,38 @@ budget.widgets.Bookings = function(scope) {
     let clientCol = new aurora.columns.Link(clientCK, msg.USERNAME);
 
     let mentorsB = scope.getDb().get(mentorT.key);
-    this.appointmentsB_ = frp.switchB(frp.liftB(function(date) {
+    let securityContextB = aurora.permissions.getContext(scope);
+    let editable = aurora.permissions.has('user-management');
+
+    let defaultMentorB = frp.liftB(function (context) {
+        if (context && context.userid != null && !editable(context)) {
+            return BigInt(context.userid);
+        }
+
+        return null;
+    }, securityContextB);
+    
+    let mentorB = recoil.frp.util.defaultValue(defaultMentorB);
+        
+    
+    this.appointmentsB_ = frp.switchB(frp.liftB(function(date, mentor) {
         let query = new recoil.db.Query();
         let startTime = recoil.ui.widgets.DateWidget2.convertLocaleDate(date).getTime();
         let endTime = budget.widgets.BusinessHours.addDays(startTime, 7);
 
-        return scope.getDb().get(appointmentsT.key, query.and(
+        let q = query.and(
             query.gt(query.field(appointmentsT.cols.stop), query.val(startTime)),
-            query.lt(query.field(appointmentsT.cols.start), query.val(endTime))
-        ));
+            query.lt(query.field(appointmentsT.cols.start), query.val(endTime)));
 
-    }, this.curDateB_));
+        if (mentor != null) {
+            q = query.and(q, query.eq(appointmentsT.cols.mentorid, query.val(mentor)));
+        }
+        return scope.getDb().get(appointmentsT.key, q);
 
-    let securityContextB = aurora.permissions.getContext(scope);
+
+    }, this.curDateB_, mentorB));
+
+
 
     let cache = {};
     let userListB = frp.switchB(frp.liftB(function(appointments) {
@@ -98,35 +117,63 @@ budget.widgets.Bookings = function(scope) {
 
     }, this.curDateB_));
 
-    this.availableB_ = frp.switchB(frp.liftB(function(date) {
+    this.availableB_ = frp.switchB(frp.liftB(function(date, mentor) {
         let query = new recoil.db.Query();
         let startTime = recoil.ui.widgets.DateWidget2.convertLocaleDate(date).getTime();
         let endTime = budget.widgets.BusinessHours.addDays(startTime, 7);
-        return scope.getDb().get(
-            availT.key,
-            query.and(
+        let q = query.and(
                 query.or(
                     query.gt(query.field(availT.cols.stop), query.val(startTime)),
                     query.null(query.field(availT.cols.stop))),
-                query.lt(query.field(availT.cols.start), query.val(endTime)))
+            query.lt(query.field(availT.cols.start), query.val(endTime)));
+
+        if (mentor != null) {
+            q = query.and(q, query.eq(availT.cols.mentorid, query.val(mentor)));
+        }
+
+        return scope.getDb().get(
+            availT.key,
+            q
         );
 
-    }, this.curDateB_));
+    }, this.curDateB_, mentorB));
 
     let START_COL = new recoil.structs.table.ColumnKey('starttime');
     let SEARCH_COL = new recoil.structs.table.ColumnKey('search');
     this.siteB_ = scope.getDb().get(siteT.key);
     let dateDiv = cd('div', 'budget-date');
+    let mentorDiv = cd('div', 'budget-mentor');
     let bookingsDiv = cd('div', 'budget-bookings');
     let dateCol = new recoil.ui.columns.Date2(appointmentsT.cols.start, '');
-    this.containerDiv_ = cd('div', {class: 'budget-bookings'}, dateDiv, bookingsDiv);
+    this.containerDiv_ = cd('div', {class: 'budget-bookings'}, dateDiv, mentorDiv, bookingsDiv);
 
     this.container_ = budget.widgets.BusinessHours.createWidgetDom('div', {}, this.containerDiv_);
 
     this.dateWidget_ = new recoil.ui.widgets.DateWidget2(scope);
     this.dateWidget_.attachStruct({value: this.curDateB_, min: 19700105, step: 1});
     this.dateWidget_.getComponent().render(dateDiv);
-
+    this.mentorWidget_ = new recoil.ui.widgets.SelectorWidget(scope);
+    let mentorIdMapB = frp.liftB(mentors => budget.widgets.Bookings.generateUniqueNameMap(mentors), mentorsB);
+    let mentorRendererB = frp.liftB(map => function (obj, valid, enabled) {
+        if (obj == null) {
+            return recoil.ui.widgets.SelectorWidget.RENDERER('All', valid, enabled);
+        }
+        return recoil.ui.widgets.SelectorWidget.RENDERER(map[obj] || 'Unknown Mentor ' + obj, valid, enabled);
+    }, mentorIdMapB);
+    
+    this.mentorWidget_.attachStruct({
+        value: mentorB,
+        renderer: mentorRendererB,
+        list:
+        frp.liftB(map => {
+            let res = [null];
+            for (let i in map) {
+                res.push(BigInt(i));
+            }
+            return res;
+        }, mentorIdMapB)});
+    this.mentorWidget_.getComponent().render(mentorDiv);
+    
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(this.container_);
     this.tableWidget_ = new recoil.ui.widgets.table.TableWidget(scope);
     let mentorConverterB = frp.liftB(function(mentors) {
@@ -223,7 +270,6 @@ budget.widgets.Bookings = function(scope) {
         appointmentsT.cols.showed,
         appointmentsT.cols.scheduled
     ];
-    let editable = aurora.permissions.has('user-management');
     let tableB = keepKeys(frp.liftBI(function(site, holidays, appointments, avail, startDate, mentorConverter, userMap, sec) {
         // this reuses the some columns so we can get the meta data
         let table = appointments.createEmpty([], [START_COL, SEARCH_COL, clientCK]);
