@@ -366,6 +366,9 @@ aurora.widgets.UserManagement.changePassword = function(scope, userId, opt_reset
     let tableB = aurora.widgets.UserManagement.createDialogTable(scope, resetPasswordRow, null, extraDataColsB);
     let validatedB = frp.liftBI(function(tbl) {
         let res = tbl.createEmpty();
+        res.addColumnMeta(userT.cols.password, {show: true});
+        res.addColumnMeta(COLS.confirmPasswordCK, {show: true});
+        res.addColumnMeta(COLS.oldPasswordCK, {show: true});
         tbl.forEach(function(row) {
             let mrow = row.unfreeze();
             let p1 = row.get(userT.cols.password);

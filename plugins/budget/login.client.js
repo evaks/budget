@@ -37,7 +37,7 @@ budget.widgets.Login = function(scope) {
     let passwordB = frp.createB('');
     rememberCheck.attachStruct({value: rememberB});
     usernameWidget.attachStruct({value: usernameB, immediate: true});
-    passwordWidget.attachStruct({value: passwordB, immediate: true});
+    passwordWidget.attachStruct({value: passwordB, immediate: true, show: true});
 
     usernameWidget.getComponent().render(uname);
     passwordWidget.getComponent().render(password);

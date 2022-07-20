@@ -54,7 +54,7 @@ awk 'BEGIN {p = 0} { if (p) print $0} /^#begin-encoding/ { p = 1 } ' ${EXE} | ba
 awk 'BEGIN {p = 0} { if (p) print $0} /^#begin-encoding/ { p = 1 } ' ${EXE} | base64 -d  | sudo tar -C ${WWW} -xj --strip-components=1 -f - scripts/renew-certs.sh
 
 if [ ! -e /etc/cron.d/budget ]; then
-	sudo bash -c 'echo 34 1 \* \* \* '${WWW}'/renew-certs.sh > /etc/cron.d/budget'
+	sudo bash -c 'echo 34 1 \* \* \* '${WWW}'/renew-cert.sh > /etc/cron.d/budget'
 fi
 
 NEW=0
