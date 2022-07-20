@@ -11,23 +11,32 @@ let getSourceColumn = function(viewTable, name) {
     return null;
 };
 
+let raw = function (v, client, server) {
+    return {marker: raw, client, server, value: v};
+};
 
-let getStringInfo = function(info) {
+let getStringInfo = function(info, data) {
     let params = info.params;
+    let res = {};
     if (params.length === 0) {
-        return {};
+        res = {};
     }
-    if (params.length === 1) {
-        return {maxLength: params[0]};
+    else if (params.length === 1) {
+        res = {maxLength: params[0]};
     }
-    if (params.length === 2) {
-        return {
+    else if (params.length === 2) {
+        res = {
             minLength: params[0],
             maxLength: params[1]
         };
     }
-
-    throw 'Invalid params for string ' + params.join(',');
+    else {
+        throw 'Invalid params for string ' + params.join(',');
+    }
+    if (data && data.trim) {
+        res.converter = raw('new recoil.converters.TrimStringConverter()', true, false);
+    }
+    return res;
 };
 let typeFactories = {
     'id': {jsType: 'bigint', sqlType: 'bigint'},
@@ -167,7 +176,7 @@ function getColType(data, types) {
         }
     }
 
-    let info = (factory.getInfo || nullFunc)(typeInfo);
+    let info = (factory.getInfo || nullFunc)(typeInfo, data);
     return Object.assign({}, typeInfo, {raw: data.type, access: data.access}, factory, info, {info: info});
 
 }
@@ -688,7 +697,16 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
                 continue;
             }
 
-            fs.appendFileSync(out, ',\n       ' + k + ': ' + JSON.stringify(typeInfo.info[k]));
+            let val = typeInfo.info[k];
+
+            if (val && val.marker === raw) {
+                if (client && val.client || !client && val.server) {
+                    fs.appendFileSync(out, ',\n       ' + k + ': ' + val.value);
+                }
+            }
+            else {
+                fs.appendFileSync(out, ',\n       ' + k + ': ' + JSON.stringify(val));
+            }
         }
         fs.appendFileSync(out, '\n');
 

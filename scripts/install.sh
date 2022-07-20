@@ -2,10 +2,10 @@
 
 
 DIR=/var/www
-WWW=/home/evaks/workspace/budget/test
+WWW=${DIR}
 
 #/etc/systemd/system
-SERVICE=/home/evaks/workspace/budget/test-service
+SERVICE=/etc/systemd/system
 
 
 EXE=`readlink -f $0`
@@ -51,7 +51,7 @@ fi
 
 
 awk 'BEGIN {p = 0} { if (p) print $0} /^#begin-encoding/ { p = 1 } ' ${EXE} | base64 -d  | sudo tar -C ${WWW} -xj --strip-components=1 -f - scripts/startup.sh
-awk 'BEGIN {p = 0} { if (p) print $0} /^#begin-encoding/ { p = 1 } ' ${EXE} | base64 -d  | sudo tar -C ${WWW} -xj --strip-components=1 -f - scripts/renew-certs.sh
+awk 'BEGIN {p = 0} { if (p) print $0} /^#begin-encoding/ { p = 1 } ' ${EXE} | base64 -d  | sudo tar -C ${WWW} -xj --strip-components=1 -f - scripts/renew-cert.sh
 
 if [ ! -e /etc/cron.d/budget ]; then
 	sudo bash -c 'echo 34 1 \* \* \* '${WWW}'/renew-cert.sh > /etc/cron.d/budget'
@@ -98,7 +98,7 @@ if [ ! -e ${WWW}/config.json ]; then
 	
 else
 	sudo rm -rf ${WWW}/resources
-	awk 'BEGIN {p = 0} { if (p) print $0} /^#begin-encoding/ { p = 1 } ' ${EXE} | base64 -d  | sudo tar -C ${WWW} -xj --exclude=config.json --strip-components=1 -f - output
+
 
 fi
 

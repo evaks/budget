@@ -137,8 +137,8 @@
 		{ "name": "userid", "type": "ref(user)", "nullable": true, "access" : "aurora.db.access.basic([{'site-management':'crud'}, {'mentor':'crd'}, {'client':'crd'}, {'': 'r'}])"},
 		{ "name": "start", "type": "datetime"},
 		{ "name": "stop", "type": "datetime", "nullable":true},
-		{ "name": "firstName", "type": "string(100)", "default": ""},
-		{ "name": "lastName", "type": "string(100)", "default": ""},
+			{ "name": "firstName", "type": "string(100)", "default": "", "trim": true},
+			{ "name": "lastName", "type": "string(100)", "default": "", "trim": true},
 		{ "name": "phone", "type": "Phone"},
 		{ "name": "email", "type": "string(128)"},
 		{ "name": "address", "type": "string(255)"}
