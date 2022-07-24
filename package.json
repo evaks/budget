@@ -7,7 +7,6 @@
     "ics": "^2.31.0",
     "mime": "^2.5.2",
     "modern-syslog": "^1.2.0",
-    "moment": "^2.29.1",
     "multiparty": "^4.2.2",
     "mysql": "^2.18.1",
     "mysql2": "^2.3.3",

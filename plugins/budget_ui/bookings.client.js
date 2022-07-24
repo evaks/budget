@@ -291,6 +291,7 @@ budget.widgets.Bookings = function(scope) {
         columns.add(appointmentsT.cols.address, budget.messages.ADDRESS);
         columns.add(appointmentsT.cols.email, 'Client Email');
         columns.add(appointmentsT.cols.phone, mess.PHONE, {displayLength: 7});
+        columns.add(appointmentsT.cols.notes, mess.NOTES, {displayLength: 10});
         columns.addColumn(new recoil.ui.widgets.table.ButtonColumn(SEARCH_COL, 'Search'));
         if (scheduleActionB.get().enabled.val() && unscheduleActionB.get().enabled.val()) {
             columns.add(appointmentsT.cols.scheduled, 'Scheduled');
@@ -318,7 +319,7 @@ budget.widgets.Bookings = function(scope) {
                 row.set(appointmentsT.cols.showed, false);
 
                 row.addCellMeta(START_COL, /** @type {!Object} */(dateCol.getMeta({
-                    editable: false, cellDecorator: recoil.ui.widgets.TableMetaData.createSpanDecorator(11, {class: 'budget-seperator-row'})})));
+                    editable: false, cellDecorator: recoil.ui.widgets.TableMetaData.createSpanDecorator(12, {class: 'budget-seperator-row'})})));
                 row.addRowMeta({cellDecorator: null});
 
                 row.set(appointmentsT.cols.start, entry.key[0]);
@@ -333,6 +334,7 @@ budget.widgets.Bookings = function(scope) {
                 row.set(appointmentsT.cols.address, '');
                 row.set(appointmentsT.cols.email, '');
                 row.set(appointmentsT.cols.phone, '');
+                row.set(appointmentsT.cols.notes, '');
                 row.set(appointmentsT.cols.scheduled, false);
                 row.set(appointmentsT.cols.userid, null);
                 row.set(clientCK, null);
@@ -358,6 +360,7 @@ budget.widgets.Bookings = function(scope) {
                 row.set(appointmentsT.cols.address, '');
                 row.set(appointmentsT.cols.email, '');
                 row.set(appointmentsT.cols.phone, '');
+                row.set(appointmentsT.cols.notes, '');
                 row.set(appointmentsT.cols.scheduled, false);
                 row.set(appointmentsT.cols.userid, null);
                 row.set(clientCK, null);
