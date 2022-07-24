@@ -115,7 +115,12 @@ budget.widgets.Menu.prototype.makeMenuBar = function() {
             if (!item.children || item.children.length === 0) {
                 let menuButton = new recoil.ui.widgets.MenuActionButtonWidget(scope);
                 let action = item.action ?  item.action(scope) : frp.createCallback(function(e) {
-                    window.location = item.url;
+                    if (e.button == 1 || e.ctrlKey) {
+                        window.open(item.url);
+                    }
+                    else {
+                        window.location = item.url;
+                    }
                 }, frp.createB(null));
                 menuButton.attachStruct({name: item.name, action: action, items: []});
                 res.push(menuButton);
@@ -147,7 +152,13 @@ budget.widgets.Menu.prototype.makeMenuBar = function() {
                         itemWidget.attach(menuItemInfo.name.toString(), true, menuItemInfo.action ?
                                           menuItemInfo.action(scope) :
                                           frp.createCallback(function(e) {
-                                              window.location = menuItemInfo.url;
+                                              if (e.button == 1 || e.ctrlKey) {
+                                                  window.open(menuItemInfo.url);
+                                              }
+                                              else {
+                                                  
+                                                  window.location = menuItemInfo.url;
+                                              }
                                           }, frp.createB(null)));
                         menuItems.push(itemWidget);
                     }
