@@ -139,6 +139,7 @@ budget.widgets.Bookings = function(scope) {
     }, this.curDateB_, mentorB));
 
     let START_COL = new recoil.structs.table.ColumnKey('starttime');
+    let LEN_COL = new recoil.structs.table.ColumnKey('len');    
     let SEARCH_COL = new recoil.structs.table.ColumnKey('search');
     this.siteB_ = scope.getDb().get(siteT.key);
     let dateDiv = cd('div', 'budget-date');
@@ -266,13 +267,13 @@ budget.widgets.Bookings = function(scope) {
     let readOnly2 = [
         appointmentsT.cols.address,
         appointmentsT.cols.email,
-        appointmentsT.cols.phone,
+        appointmentsT.cols.phone, 
         appointmentsT.cols.showed,
-        appointmentsT.cols.scheduled
+        appointmentsT.cols.scheduled,  LEN_COL,
     ];
     let tableB = keepKeys(frp.liftBI(function(site, holidays, appointments, avail, startDate, mentorConverter, userMap, sec) {
         // this reuses the some columns so we can get the meta data
-        let table = appointments.createEmpty([], [START_COL, SEARCH_COL, clientCK]);
+        let table = appointments.createEmpty([], [START_COL, SEARCH_COL, LEN_COL, clientCK]);
         // make the key an array of [time, mentor] we get the right order
 
 
@@ -291,6 +292,7 @@ budget.widgets.Bookings = function(scope) {
         columns.add(appointmentsT.cols.address, budget.messages.ADDRESS);
         columns.add(appointmentsT.cols.email, 'Client Email');
         columns.add(appointmentsT.cols.phone, mess.PHONE, {displayLength: 7});
+        columns.addColumn(new recoil.ui.widgets.table.NumberColumn(LEN_COL, 'Length (Min)'));        
         columns.add(appointmentsT.cols.notes, mess.NOTES, {displayLength: 10});
         columns.addColumn(new recoil.ui.widgets.table.ButtonColumn(SEARCH_COL, 'Search'));
         if (scheduleActionB.get().enabled.val() && unscheduleActionB.get().enabled.val()) {
@@ -319,7 +321,7 @@ budget.widgets.Bookings = function(scope) {
                 row.set(appointmentsT.cols.showed, false);
 
                 row.addCellMeta(START_COL, /** @type {!Object} */(dateCol.getMeta({
-                    editable: false, cellDecorator: recoil.ui.widgets.TableMetaData.createSpanDecorator(12, {class: 'budget-seperator-row'})})));
+                    editable: false, cellDecorator: recoil.ui.widgets.TableMetaData.createSpanDecorator(13, {class: 'budget-seperator-row'})})));
                 row.addRowMeta({cellDecorator: null});
 
                 row.set(appointmentsT.cols.start, entry.key[0]);
@@ -327,6 +329,7 @@ budget.widgets.Bookings = function(scope) {
 
                 row.set(START_COL, key);
                 row.set(SEARCH_COL, null);
+                row.set(LEN_COL, null);
                 row.set(appointmentsT.cols.stop, null);
                 row.set(appointmentsT.cols.mentorid, entry.key[1]);
                 row.set(appointmentsT.cols.firstName, '');
@@ -353,6 +356,9 @@ budget.widgets.Bookings = function(scope) {
                 row.set(START_COL, recoil.ui.widgets.TimeWidget.convertTimeToLocal(now));
                 row.set(appointmentsT.cols.start, entry.key[0]);
                 row.set(appointmentsT.cols.stop, entry.stop);
+                row.set(LEN_COL, Math.floor(entry.stop - entry.key[0])/60000);
+
+                row.addCellMeta(LEN_COL, {max: Math.floor(entry.max/60000), enabled: recoil.ui.BoolWithExplanation.FALSE});
                 row.set(appointmentsT.cols.mentorid, entry.key[1]);
                 row.set(SEARCH_COL, null);
                 row.set(appointmentsT.cols.firstName, '');
@@ -381,8 +387,12 @@ budget.widgets.Bookings = function(scope) {
                     let userid = inRow.get(appointmentsT.cols.userid);
                     row.addCellMeta(SEARCH_COL, {text: searchIcon()});
                     row.set(SEARCH_COL, null);
-                    row.set(START_COL, recoil.ui.widgets.TimeWidget.convertTimeToLocal(new Date(row.get(appointmentsT.cols.start))));
+                    let start = row.get(appointmentsT.cols.start);
+                    let stop = row.get(appointmentsT.cols.stop);
+                    row.set(START_COL, recoil.ui.widgets.TimeWidget.convertTimeToLocal(new Date(start)));
                     let mentorid = row.get(appointmentsT.cols.mentorid).db;
+                    row.addCellMeta(LEN_COL, {max: Math.floor(entry.max/60000)});
+                    row.set(LEN_COL, Math.floor((stop-start)/60000));
                     row.set(appointmentsT.cols.mentorid, mentorid);
                     row.set(clientCK, userid ? '/client?id=' + userid.db : '/client/new?data=' + encodeURI(JSON.stringify(
                         {
@@ -423,7 +433,7 @@ budget.widgets.Bookings = function(scope) {
                     if (row.get(appointmentsT.cols.scheduled)) {
                         let cols = [appointmentsT.cols.firstName, appointmentsT.cols.lastName, appointmentsT.cols.phone, SEARCH_COL,
                                     appointmentsT.cols.address, appointmentsT.cols.email,
-                                    clientT.cols.phone];
+                                    clientT.cols.phone, LEN_COL];
 
                         cols.forEach(function(col) {
                             row.addCellMeta(col, {enabled: new recoil.ui.BoolWithExplanation(false, budget.messages.UNSCHEDULE_TO_EDIT)});
@@ -446,6 +456,7 @@ budget.widgets.Bookings = function(scope) {
         let res = origAppointments.createEmpty();
         let aKeys = appointmentsT.cols;
         tbl.forEach(function(row, pks) {
+            //console.log("updating start time", row.get(START_COL));
             if (row.get(SEARCH_COL)) {
                 let searchRow = new recoil.structs.table.MutableTableRow(-1);
                 searchRow.set(clientT.cols.username, '');
@@ -539,7 +550,7 @@ budget.widgets.Bookings = function(scope) {
                         setIfNotBlank(newRow, aKeys.lastName, selRow.get(clientT.cols.lastName));
                         setIfNotBlank(newRow, aKeys.email, selRow.get(clientT.cols.email));
                         setIfNotBlank(newRow, aKeys.phone, selRow.get(clientT.cols.phone));
-                        setIfNotBlank(newRow, aKeys.address, selRow.get(clientT.cols.address));
+                        setIfNotBlank(newRow, aKeys.address, selRow.get(clientT.cols.address));                       
                         newRow.set(aKeys.userid, selRow.get(clientT.cols.id));
                         res.addRow(newRow);
                     };
@@ -599,7 +610,7 @@ budget.widgets.Bookings = function(scope) {
                             email: row.get(aKeys.email),
                             time: row.get(aKeys.start),
                             mentorid: row.get(aKeys.mentorid),
-                            length: row.get(aKeys.stop) - row.get(aKeys.start)
+                            length: row.get(LEN_COL) * 60000
                         }});
                     }
                     else {
@@ -611,6 +622,9 @@ budget.widgets.Bookings = function(scope) {
                     mrow.set(aKeys.scheduled, orig.get(aKeys.scheduled));
                 }
                 mrow.set(aKeys.mentorid, new aurora.db.PrimaryKey(row.get(aKeys.mentorid)));
+                mrow.set(aKeys.stop, row.get(LEN_COL) * 60000 + row.get(aKeys.start));
+
+
                 // do not change scheduled it is not allowed the action will do it
                 mrow.set(aKeys.scheduled, orig ? orig.get(aKeys.scheduled) : null);
                 res.addRow(mrow);
@@ -650,9 +664,10 @@ budget.widgets.Bookings.makeAppointmentMap_ = function(avail, holidays, appointm
     let getAppointmentLength = function(lengths, start) {
         for (let i = 0; i < lengths.length; i++) {
             let item = lengths[i];
-                if (start >= item.start && start < item.stop) {
-                    return item.len;
-                }
+            if (start >= item.start && start < item.stop) {
+                let diff = (start - item.start) % item.len;
+                return Math.min(item.len - diff, item.stop - start);
+            }
         }
         return null;
     };
@@ -690,9 +705,66 @@ budget.widgets.Bookings.makeAppointmentMap_ = function(avail, holidays, appointm
             let start = entry.start;
             let len = getAppointmentLength(usage.lengths, start);
             while (len != null && start + len <= entry.stop) {
-                apptMap.add({key: [start, mentor], stop: start + len, avail: mentorAppointments(mentor, start, start + len)});
-                start += len;
-                len = getAppointmentLength(usage.lengths, start);
+                let avail = mentorAppointments(mentor, start, start + len);
+                let block = mentorAppointments(mentor, start, entry.stop);
+                let maxStop = entry.stop; // the longest this appointment can be
+                let startAppointment = null;
+                let minAppt = null;
+                
+                block.forEach(function (row) {
+                    let rowStart = row.get(appointmentsT.cols.start);
+                    
+                    if (row.get(appointmentsT.cols.start) === start) {
+                        startAppointment = row;
+                        minAppt = row;
+                    }
+                    else if (rowStart > start) {
+                        maxStop = Math.min(maxStop, row.get(appointmentsT.cols.start));
+                        if (!minAppt || rowStart < minAppt.get(appointmentsT.cols.start)) {
+                            if (rowStart < start + len) {
+                                minAppt = row;
+                            }
+                        }
+
+                    }
+                });
+                let addAppointment = function (appt) {
+                    let stop = appt.get(appointmentsT.cols.stop);
+                    let startInt = appt.get(appointmentsT.cols.start);
+                    apptMap.add({
+                        key: [startInt, mentor],
+                        stop: stop,
+                        avail: [appt], max: maxStop  - startInt});
+
+                    // start must be at least 1 minute otherwize we get an infinite loop
+                    start = Math.max(stop, startInt + 60000);                    
+                    len = getAppointmentLength(usage.lengths, start);
+                };
+                
+                if (startAppointment) {
+                    addAppointment(startAppointment);
+                }
+                else if (minAppt) {
+                    // we have an appointment on our block but it starts after
+                    let stop = minAppt.get(appointmentsT.cols.start);
+                    apptMap.add({
+                        key: [start, mentor],
+                        stop: stop,
+                        avail: [], max: stop  - start});
+                    addAppointment(minAppt);
+                }
+                else {                    
+                    // no appointments scheduled empty block
+                    apptMap.add({
+                        key: [start, mentor],
+                        stop: start + len,
+                        avail: [], max: maxStop  - start});
+                    start += len;
+                    len = getAppointmentLength(usage.lengths, start);
+                    
+                }
+                    
+
             }
 
         });
