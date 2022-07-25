@@ -217,9 +217,6 @@ budget.widgets.Menu.prototype.updatePageInfo_ = function() {
  * @final
  */
 budget.widgets.Menu.menu = [
-    {'name': 'Intro', 'url': '/'},
-    {'name': 'Features', url: '/features'},
-    {'name': 'Contact', url: '/contact'},
     {userIcon: true, 'children' : [
         {'name': '', userName: true},
         {'name': 'Users', 'url': '/admin/mentors', perm: aurora.permissions.has('user-management')},

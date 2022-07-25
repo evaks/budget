@@ -259,6 +259,22 @@ img.budget-logo {
     height: 50px;
 }
 
+
+.menu-container.menu-static {
+	margin-right: 50px;
+}
+	
+.menu-container .budget-menu-link {
+    padding: 1px 1px;
+    margin: 0px 0px;
+    outline: none;
+    border: none;
+    background: none;
+    color: white;
+    margin-bottom: 2px;
+    height: 50px;
+	cursor: pointer;
+}
 .menu-container .goog-menu-button-caption {
     white-space: nowrap;
     font-size: 16pt;
