@@ -292,7 +292,7 @@ budget.widgets.Bookings = function(scope) {
         columns.add(appointmentsT.cols.address, budget.messages.ADDRESS);
         columns.add(appointmentsT.cols.email, 'Client Email');
         columns.add(appointmentsT.cols.phone, mess.PHONE, {displayLength: 7});
-        columns.addColumn(new recoil.ui.widgets.table.NumberColumn(LEN_COL, 'Length (Min)'));        
+        columns.addColumn(new recoil.ui.widgets.table.NumberColumn(LEN_COL, 'Length (Min)', {displayLength: 7}));        
         columns.add(appointmentsT.cols.notes, mess.NOTES, {displayLength: 10});
         columns.addColumn(new recoil.ui.widgets.table.ButtonColumn(SEARCH_COL, 'Search'));
         if (scheduleActionB.get().enabled.val() && unscheduleActionB.get().enabled.val()) {

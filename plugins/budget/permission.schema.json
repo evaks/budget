@@ -236,6 +236,9 @@
 		},
 		{
 		    "name": "mentor", "description" : "What a mentor can do."
+		},
+		{
+	            "name": "reception", "description": "What the receptionist can do"
 		}
 	    ]
 	},
@@ -248,6 +251,9 @@
 		},{
 		    "name": "mentor",
 		    "permission":[{"!select": {"cols": [{"to": "permissionid", "from": "id"}], "query": " FROM permission WHERE name = 'mentor'"}}]
+		}, {
+		    "name": "reception",
+		    "permission"::[{"!select": {"cols": [{"to": "permissionid", "from": "id"}], "query": " FROM permission WHERE name = 'reception'"}}]
 		}
 		
 	    ]
