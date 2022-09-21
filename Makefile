@@ -184,3 +184,4 @@ installer:
 	cat scripts/install.sh > install.sh
 	base64 installer.tbz >> install.sh
 	chmod 755 install.sh
+	rm installer.tbz

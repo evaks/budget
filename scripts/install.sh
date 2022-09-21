@@ -97,8 +97,16 @@ if [ ! -e ${WWW}/config.json ]; then
 	sudo service budget start
 	
 else
-	sudo rm -rf ${WWW}/resources
 
+	sudo tar -c -f `date +backup-%Y-%m-%d.%k_%M_%S.tgz` --bzip2 ${WWW}
+	sudo rm -rf ${WWW}/resources
+	awk 'BEGIN {p = 0} { if (p) print $0} /^#begin-encoding/ { p = 1 } ' ${EXE} | base64 -d  | sudo tar -C ${WWW} -xj --wildcards --strip-components=1 -f - output/resources output/\*.js output/\*.js.map
+	sudo find ${WWW} -exec chgrp budget-app {} \;
+	sudo chgrp budget-app ${WWW} *.js
+	sudo chgrp budget-app ${WWW} *.js.map
+	
+	sudo service budget stop
+	sudo service budget start
 
 fi
 

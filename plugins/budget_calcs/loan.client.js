@@ -41,7 +41,7 @@ budget.widgets.calc.Loan = function(scope, userid) {
     
     let repaymentFrequencyB = frp.createB(periodMeta.enum.weekly);
     let compoundFrequencyB = frp.createB(periodMeta.enum.monthly);
-    this.feeFrequencyB_ = frp.createB(null);
+    this.feeFrequencyB_ = frp.createB(periodMeta.enum.monthly);
     let feeAmountB = frp.createB(null);
     let paymentAmountB = frp.createB(null);
     let feeStartDateB = frp.createB(today);
@@ -50,7 +50,6 @@ budget.widgets.calc.Loan = function(scope, userid) {
     
     const cls = budget.widgets.calc.Loan;
 
-    this.loanInfo_ = cd('div', {});
     this.detail_ = cd('table', {});
 
     this.amountWidget_ = new recoil.ui.widgets.NumberWidget(scope);
@@ -74,7 +73,7 @@ budget.widgets.calc.Loan = function(scope, userid) {
 
         for (let i = 0; i < arguments.length; i++) {
             let arg = arguments[i];
-            let td = i == 0 || arg.heading ? cd('th') : cd('td', {class: 'calc-data'});
+            let td = i == 0 || arg.heading ? cd('th') : cd('td', {class: 'calc-data', colspan: i == 1 ? 2 : 1});
             arg = arg.heading || arg;
             
             if (goog.isFunction(arg.getComponent)) {
@@ -119,14 +118,12 @@ budget.widgets.calc.Loan = function(scope, userid) {
         }
         return row;
     };
-    this.feeInfoDiv_ = makeExtra('Start', this.feeStartDateWidget_, 'Amount', this.feeAmountWidget_);
+    this.resultsSep_ = cd('tr', {}, cd('td', {colspan: 3, class: 'calc-result-sep'}));
     let container = cd(
         'table', {class: 'calc-results'},
-        makeRow('Amount', this.amountWidget_),
-        makeRow('Repayment Amount', this.repaymentAmountWidget_),
+        makeRow('Loan Amount', this.amountWidget_),
         makeRow('Draw Down Date', this.drawDownDateWidget_),
-        makeRow('First Payment Date', this.firstPaymentDateWidget_),
-        makeRow('Repayment Frequency', this.repaymentFrequencyWidget_),
+        makeRow('Repayment', makeExtra(this.repaymentAmountWidget_, this.repaymentFrequencyWidget_, 'Start Date', this.firstPaymentDateWidget_)),
         makeRow('Interest Rate', this.interestRateWidget_),
         makeRow('Interest Period', makeExtra(
             this.interestPeriodWidget_,
@@ -134,13 +131,11 @@ budget.widgets.calc.Loan = function(scope, userid) {
         makeRow('Compound Frequency', makeExtra(
             this.compoundFrequencyWidget_,
             cd('div', 'goog-inline-block budget-info', 'How often is the interest added to the balance.'))),
-        makeRow('Fee Frequency', makeExtra(this.feeFrequencyWidget_, this.feeInfoDiv_)),
-        cd('tr', {}, cd('td', {colspan: 2, class: 'calc-result-sep'})),
-        cd('tr', {}, cd('td', {colspan: 2}, this.loanInfo_)),
-        cd('tr', {}, cd('td', {colspan: 2}, this.detail_)),
-        
+        makeRow('Fee', makeExtra(this.feeAmountWidget_, this.feeFrequencyWidget_, 'Start Date', this.feeStartDateWidget_)),
+        this.resultsSep_,
 //        makeRow('', this.checkAmountWidget_),
     );
+    this.tableDiv_ = container;
 
     const convertDate = recoil.ui.widgets.DateWidget2.convertLocaleDate;
     const getNextDay = function (date, repeats) {
@@ -223,7 +218,7 @@ budget.widgets.calc.Loan = function(scope, userid) {
         let canPay = true;
         let valid = amountDolars != null && paymentDollars != null && rate != null;
         
-        while ((prev.balance > 0 || prev.accured > 0) && canPay && valid)  {
+        while ((prev.balance > 0 || Math.round(prev.accured) > 0) && canPay && valid)  {
             let nextDay = getNextDay(curDate, repeats);
             let diffDays = moment(nextDay).diff(moment(curDate), 'd');
             prev = goog.object.clone(prev);
@@ -279,7 +274,7 @@ budget.widgets.calc.Loan = function(scope, userid) {
     this.firstPaymentDateWidget_.attachStruct(ex(firstPaymentDateB));
     this.repaymentFrequencyWidget_.attachStruct(ex(repaymentFrequencyB));
     this.compoundFrequencyWidget_.attachStruct(ex(compoundFrequencyB));
-    this.feeFrequencyWidget_.attachStruct(ex(this.feeFrequencyB_, true));
+    this.feeFrequencyWidget_.attachStruct(ex(this.feeFrequencyB_));
     this.feeStartDateWidget_.attachStruct({
         value: feeStartDateB
     });
@@ -295,14 +290,49 @@ budget.widgets.calc.Loan = function(scope, userid) {
 };
 
 /**
+ * @param {Date} startD
+ * @param {Date} stopD
+ * @return {string}
+ */
+budget.widgets.calc.Loan.formatDiff = function (startD, stopD) {
+    let start = moment(startD);
+    let stop = moment(stopD);
+
+    let diff = {};
+    let keys = ['years', 'months', 'days'];
+    keys.forEach(unit => {
+        let val = stop.diff(start, unit, false);
+        start.add(val, unit);
+        diff[unit] = val;
+    });
+    
+    let res = [];
+    keys.forEach(key => {
+
+
+        let val = diff[key];
+
+        if (val) {
+            let unit = val != 1 ? key : key.substring(0, key.length - 1); // remove the s
+            res.push(val + ' ' + unit);
+        }
+    });
+    if (res.length == 0) {
+        return 'None';
+    }
+    return res.join(' ');
+};
+/**
  * does update
  */
 
 budget.widgets.calc.Loan.prototype.update_ = function() {
     let cd = goog.dom.createDom;
     goog.dom.removeChildren(this.detail_);
-    goog.dom.removeChildren(this.loanInfo_);
-    goog.style.setElementShown(this.feeInfoDiv_, this.feeFrequencyB_.good() && this.feeFrequencyB_.get() != null);
+    while (this.resultsSep_.nextSibling) {
+        goog.dom.removeNode(this.resultsSep_.nextSibling);
+    }
+
     if (this.helper_.isGood()) {
 
         
@@ -317,6 +347,7 @@ budget.widgets.calc.Loan.prototype.update_ = function() {
                cd('th', {}, 'Balance')));
 
         let paid = 0;
+        let last;
         repayments.entries.forEach((entry, idx) => {
             if (!repayments.canPay && idx > 100) {
                 return;
@@ -330,32 +361,40 @@ budget.widgets.calc.Loan.prototype.update_ = function() {
                    cd('td', 'calc-number', (entry.balance/100).toFixed(2)),
 //                   cd('td', 'calc-number', (entry.accured/100).toFixed(2))
                   ));
+            last = entry;
         });
         if (repayments.valid) {
             this.detail_.appendChild(table);
         }
         if (!repayments.valid) {
-            this.loanInfo_.appendChild(
+            this.tableDiv_.appendChild(
                 cd('tr', {}, cd('td', 'recoil-error', 'Please fill in missing fields.')));
         }
         else {
             if (repayments.canPay) {
-                this.loanInfo_.appendChild(
+                this.tableDiv_.appendChild(
                     cd('tr', {}, cd ('th', {}, 'Total Cost'), cd('td', 'calc-number', ((paid - repayments.amount)/100).toFixed(2))));
-                this.loanInfo_.appendChild(
+                this.tableDiv_.appendChild(
                     cd('tr', {}, cd ('th', {}, 'Total Payments'), cd('td', 'calc-number', (paid/100).toFixed(2))));
+
+                
+                let diff = budget.widgets.calc.Loan.formatDiff(repayments.entries[0].date, last.date); 
+                this.tableDiv_.appendChild(
+                    cd('tr', {}, cd ('th', {}, 'Time to pay'), cd('td', {colspan: 2}, diff)));
+
             }
             else {
-                this.loanInfo_.appendChild(
+                this.tableDiv_.appendChild(
                     cd('tr', {}, cd ('th', {}, 'Total Cost'), cd('td', 'recoil-error', 'Loan will never be repaid.')));
-        
-        
-                this.loanInfo_.appendChild(
-                    cd('tr', {}, cd ('th', {}, 'Effective Yearly Interest'),
-                       cd('td', 'calc-number', repayments.interest.toFixed(2) + '%'),
-                       cd('td', 'budget-info', 'If you borrowed at this interest rate for a year, without making repayment what interest rate would it be, this does not include fees or penalities.')));
             }
+        
+            this.tableDiv_.appendChild(
+                cd('tr', {}, cd ('th', {}, 'Effective Yearly Interest'),
+                   cd('td', 'calc-number', repayments.interest.toFixed(2) + '%'),
+                   cd('td', 'budget-info', 'If you borrowed at this interest rate for a year, without making repayment what interest rate would it be, this does not include fees or penalities.')));
+        
         }
+        this.tableDiv_.appendChild(cd('tr', {}, cd('td', {colspan: 3}, this.detail_)));
     }
     else {
         console.error('errors', this.helper_.errors());

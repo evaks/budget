@@ -9,3 +9,5 @@ letsencrypt/
 old-certs-*/
 test.log
 server.log
+install.sh
+installer.tbz
