@@ -137,4 +137,4 @@ video.aurora-chat-local {
     width: var(--width);
     height: calc(var(--width) * 0.75);
     bottom: 25px;
-};
+}

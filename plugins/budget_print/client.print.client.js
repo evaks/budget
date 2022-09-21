@@ -333,6 +333,77 @@ budget.print.ClientPrinter.prototype.makeUserDetails_ = function(user, budgets, 
 };
 
 /**
+ * @param {!Array} rows
+ * @param {!Array<{when:number, len: number}>} timeSpentList
+ */
+budget.print.ClientPrinter.prototype.addTimeSpent_ = function(rows, timeSpentList) {
+    const fieldName = function(name) {
+        return {text: name.toString(), bold: true};
+    };
+    let timeSpent = 0;
+    let timeSpentMap = {};
+    
+    for (let i = 0; i < timeSpentList.length; i++) {
+        timeSpent += (timeSpentList[i].len);
+        let day = timeSpentList[i].when;
+        
+        let mins = (timeSpentMap[day] || 0) + timeSpentList[i].len;
+        timeSpentMap[day] = mins;
+    }
+
+    let normList = [];
+    for (let day in timeSpentMap) {
+        normList.push({day: Number.parseInt(day), mins: timeSpentMap[day]});
+    }
+    normList.sort((x,y) => x.day - y.day);
+    
+    let formatTime = mins =>
+        goog.string.padNumber(Math.floor(mins / 60), 2)
+        + ':' + goog.string.padNumber(Math.floor(mins) % 60, 2);
+    
+    
+    const timeCols = 10;
+    
+    rows.push([fieldName(this.mesg.TIME_SPENT_ON_CASE), formatTime(timeSpent)]);
+
+    let cur = 0;
+
+    if (normList.length > 0) {
+        let widths = [];
+        for (let i = 0; i < timeCols; i++) {
+            widths.push('auto');
+        }
+        
+        let table = {
+            widths: widths,
+            heights: this.scale(this.lineH),
+            body: []
+        };
+       
+    
+
+        for (let i = 0; i < normList.length; i += timeCols) {
+            let headerRow = [];
+            let dataRow = [];
+            let j = i;
+            for (; j < normList.length && j < i + timeCols; j++) {
+                let el = normList[j];
+                headerRow.push(moment(recoil.ui.widgets.DateWidget2.convertLocaleDate(el.day)).format('d/MM/YY'));
+                dataRow.push({alignment: 'right', text: formatTime(el.mins)});
+
+            }
+            for (;j < i + timeCols; j++) {
+                headerRow.push('');
+                dataRow.push('');
+            }
+            table.body.push(headerRow);
+            table.body.push(dataRow);
+        }
+        rows.push([{colSpan: 2, layout: 'noBorders',
+                    table}, '']);
+    }
+};
+/**
  * @private
  * @param {!recoil.structs.table.TableRowInterface} user
  * @param {!recoil.structs.table.Table} appointments
@@ -367,18 +438,17 @@ budget.print.ClientPrinter.prototype.makeGoals_ = function(user, appointments) {
 
 
     let timeSpentList = user.get(this.userT.cols.timeSpent) || [];
-    let timeSpent = 0;
-    for (let i = 0; i < timeSpentList.length; i++) {
-        timeSpent += (timeSpentList[i].len);
-    }
-    let timeSpentStr = goog.string.padNumber(Math.floor(timeSpent / 60), 2)
-        + ':' + goog.string.padNumber(Math.floor(timeSpent) % 60, 2);
-
+    
     let rows = [
-        [fieldName(this.mesg.DATE_ON_WHICH_MENTOR_SAW_CLIENT), {text: seenDates.join(',')}],
-        [fieldName(this.mesg.TIME_SPENT_ON_CASE), timeSpentStr],
+        [fieldName(this.mesg.DATE_ON_WHICH_MENTOR_SAW_CLIENT), {text: seenDates.join(',')}]];
+        
+    this.addTimeSpent_(rows, timeSpentList);
+
+    
+    rows = rows.concat([
+        
         [fieldName(this.mesg.CLIENT_REASON_FOR_COMING), user.get(this.userT.cols.reason) || ''],
-    ];
+    ]);
 
     let goals = user.get(this.userT.cols.goals) || [];
 

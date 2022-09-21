@@ -198,6 +198,11 @@ budget.widgets.Budget.prototype.createPrintB_ = function(budgetB, userB, siteB) 
             return goog.dom.createTextNode(val);
         }
     };
+    
+    let printUserB = frp.switchB(frp.liftB(function(perms) {
+        let query = new recoil.db.Query();
+        return scope.getDb().get(userT.key, query.eq(userT.cols.id, query.val(perms.userid)));
+    }, me.permsB_));
 
 
     return frp.createCallback(
@@ -205,19 +210,19 @@ budget.widgets.Budget.prototype.createPrintB_ = function(budgetB, userB, siteB) 
             let user = userB.get().getFirstRow();
             let budgetRow = budgetB.get().getFirstRow();
             let site = siteB.get().getFirstRow();
-
+            let printUser = printUserB.get().getFirstRow();
 
             if (user && budgetRow && site) {
                 let printer = new budget.print.BudgetPrinter();
                 let mentor = null;
                 
-                if (((me.permsB_.get() || {}).permissions || {}).mentor) {
-                    mentor = 'dummy';
+                if (((me.permsB_.get() || {}).permissions || {}).mentor && printUser) {
+                    mentor = printUser.get(userT.cols.firstName) || 'Unknown';
                 }
                 printer.print(mentor, user, budgetRow, site);
                 return;
             }
-        }, budgetB, userB, siteB, this.permsB_);
+        }, budgetB, userB, siteB, this.permsB_, printUserB);
 };
 
 /**

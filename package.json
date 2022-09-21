@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "async": "^3.2.1",
+    "css-purge": "^3.1.8",
     "glob": "^7.1.7",
     "http": "^0.0.1-security",
     "https": "^1.0.0",

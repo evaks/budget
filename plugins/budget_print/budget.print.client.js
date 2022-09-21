@@ -16,8 +16,10 @@ budget.print.BudgetPrinter = function() {
     this.mesg = budget.messages;
     this.periodMeta = aurora.db.schema.getMeta(this.budgetT.cols.period);
     this.scale_ = 1;
-    this.lineH = 6;
-    this.fontSize = 6;
+    this.lineH = 8;
+    this.vertPad = 0;
+    this.fontSize = this.lineH;
+    this.headerFontSize = 12;
     this.dotted = function(i, node) {
         return {dash: {length: 1, space: 1}};
     };
@@ -67,8 +69,8 @@ budget.print.BudgetPrinter.prototype.makeIncome = function(period, entries, tall
         layout: {
             paddingRight: function(i, node) { return me.scale(3); },
             paddingLeft: function(i, node) { return me.scale(3); },
-	    paddingTop: function(i, node) { return me.scale(2); },
-	    paddingBottom: function(i, node) { return me.scale(2); },
+	        paddingTop: function(i, node) { return me.scale(me.vertPad); },
+	        paddingBottom: function(i, node) { return me.scale(me.vertPad); },
 
 
             vLineColor: function(i, node) {
@@ -167,8 +169,8 @@ budget.print.BudgetPrinter.prototype.makeDebt = function(period, entries, tally,
         layout: {
             paddingRight: function(i, node) { return me.scale(3); },
             paddingLeft: function(i, node) { return me.scale(3); },
-	    paddingTop: function(i, node) { return  me.scale(2); },
-	    paddingBottom: function(i, node) { return me.scale(2); },
+	    paddingTop: function(i, node) { return  me.scale(me.vertPad); },
+	    paddingBottom: function(i, node) { return me.scale(me.vertPad); },
             
             hLineColor: function (i, node) {
                 let el = node.table.body[i];
@@ -349,7 +351,7 @@ budget.print.BudgetPrinter.prototype.makeFooter_ = function () {
 
 budget.print.BudgetPrinter.prototype.makeHeader_ = function (mentor, site, period) {
     return {
-        fontSize: this.scale(this.fontSize * 2),
+        fontSize: this.scale(this.headerFontSize),
         columns: [
             {
                 width: 'auto',
@@ -394,16 +396,17 @@ budget.print.BudgetPrinter.prototype.makeHeader_ = function (mentor, site, perio
 /**
  * @private
  * @param {!recoil.structs.table.TableRowInterface} user
+ * @param {?string} mentor
  * @return {Object} pdfmake print object structure
  */
 
-budget.print.BudgetPrinter.prototype.makeUserDetails_ = function (user) {
+budget.print.BudgetPrinter.prototype.makeUserDetails_ = function (user, mentor) {
     let rows = [[
         {text: this.mesg.NAME.toField(), bold: true},
         {text: ((user.get(this.userT.cols.firstName) || '').trim() + ' '
                 + (user.get(this.userT.cols.lastName) || '')).trim(),
          style: 'grey-cell'
-        }
+        },{text: mentor ? 'Mentor: ' + mentor: ''}
     ]];
     
     let address = (user.get(this.userT.cols.address) || '').split('\n');
@@ -413,7 +416,7 @@ budget.print.BudgetPrinter.prototype.makeUserDetails_ = function (user) {
         let name = i === 0 ? this.mesg.ADDRESS.toField() : '';
         rows.push([
             {text: name, bold: true},
-            {text: addrLine, style: 'grey-cell'}]);
+            {text: addrLine, style: 'grey-cell'}, '']);
     }
                 
     rows.push([        
@@ -422,15 +425,15 @@ budget.print.BudgetPrinter.prototype.makeUserDetails_ = function (user) {
             text: (user.get(this.userT.cols.phone) || '').trim(),
             style: 'grey-cell'
         }
-    ]);
-    rows.push(['','']);        
+        ,'']);
+    rows.push(['','', '']);        
     let me = this;
     return {
         layout: 'noBorders',
-        fontSize: this.scale(this.fontSize * 2),
+        fontSize: this.scale(this.headerFontSize),
         table: {
             style: 'user-table',
-            widths: ['auto', '40%'],
+            widths: ['auto', '40%', 'auto'],
             heights: me.scale(me.lineH),            
             body: rows
         }
@@ -621,7 +624,7 @@ budget.print.BudgetPrinter.prototype.createDoc_ = function (mentor, user, budget
         pageMargins: [ 20, 20, 20, 20 ],
         content: [
             this.makeHeader_(mentor, site, period),
-            this.makeUserDetails_(user),
+            this.makeUserDetails_(user, mentor),
             {
                 columns: [
                     {

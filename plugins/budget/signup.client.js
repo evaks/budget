@@ -292,13 +292,23 @@ budget.widgets.SignUp = function(scope, opt_userid) {
     let newClient = tableWidget(userT.cols.newClient, {});
     let createCombo = function(col, list) {
 
-        let widget = new recoil.ui.widgets.InputWidget(scope);
         let valueB = createValue(col);
-        widget.attachStruct({value: valueB});
-        return createWidget(new recoil.ui.widgets.ComboWidget(scope, widget), {
-            immediate: true, list: list,
-            value: valueB}, '');
+        let valueListB = frp.liftBI(
+            v => v ? [v] : [], v => {
+                if (!v.length || !(v[0].trim())) {
+                    valueB.set(null);
+                }
+                else {
+                    valueB.set(v[0]);
+                }
+            }, valueB);
+                                     
+        return createWidget(new aurora.widgets.Selectize(scope), {
+            maxValues: 1,
+            options: list, create: x => x,
+            value: valueListB}, '');
     };
+
 
     let country = createCombo(userT.cols.countryOfBirth, budget.widgets.SignUp.COUNTRIES);
     let ethnicity = createCombo(userT.cols.ethnicity, ['Maori', 'Pacific Island', 'Asian', 'NZ European']);

@@ -253,7 +253,7 @@
 		    "permission":[{"!select": {"cols": [{"to": "permissionid", "from": "id"}], "query": " FROM permission WHERE name = 'mentor'"}}]
 		}, {
 		    "name": "reception",
-		    "permission"::[{"!select": {"cols": [{"to": "permissionid", "from": "id"}], "query": " FROM permission WHERE name = 'reception'"}}]
+		    "permission":[{"!select": {"cols": [{"to": "permissionid", "from": "id"}], "query": " FROM permission WHERE name = 'reception'"}}]
 		}
 		
 	    ]

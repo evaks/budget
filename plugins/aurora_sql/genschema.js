@@ -469,7 +469,6 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
 
         }
     }, tableDefs);
-
     traverse(def, {
         startTable: function(name, data, stack, fullTableName, parentCol) {
             fs.appendFileSync(out, '/**\n * @type {!aurora.db.schema.InfoType}\n * @const\n */\n');
