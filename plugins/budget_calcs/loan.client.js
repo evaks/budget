@@ -37,7 +37,7 @@ budget.widgets.calc.Loan = function(scope, userid) {
     let amountB = frp.createB(null);
     let drawdownDateB = frp.createB(today);
     let firstPaymentDateB = frp.createB(nextWeek);
-
+    this.showInterestCalcB_ =frp.createB(false);
     
     let repaymentFrequencyB = frp.createB(periodMeta.enum.weekly);
     let compoundFrequencyB = frp.createB(periodMeta.enum.monthly);
@@ -60,10 +60,13 @@ budget.widgets.calc.Loan = function(scope, userid) {
     this.firstPaymentDateWidget_ = new recoil.ui.widgets.DateWidget2(scope);
     this.repaymentFrequencyWidget_ = new recoil.ui.widgets.SelectorWidget(scope),
     this.compoundFrequencyWidget_ = new recoil.ui.widgets.SelectorWidget(scope);
-    
+    this.showInterestCalcWidget_ = new recoil.ui.widgets.CheckboxWidget(scope);
     this.feeFrequencyWidget_ = new recoil.ui.widgets.SelectorWidget(scope);
     this.feeStartDateWidget_ = new recoil.ui.widgets.DateWidget2(scope);
     this.feeAmountWidget_ = new recoil.ui.widgets.NumberWidget(scope);
+    this.showInterestCalcDiv_ = cd('div', 'goog-inline-block');
+    this.showInterestCalcWidget_.getComponent().render(this.showInterestCalcDiv_);
+    this.showInterestCalcWidget_.attachStruct({value: this.showInterestCalcB_});
     /**
      * @param {...} var_els
      * @return {!Element}
@@ -124,12 +127,9 @@ budget.widgets.calc.Loan = function(scope, userid) {
         makeRow('Loan Amount', this.amountWidget_),
         makeRow('Draw Down Date', this.drawDownDateWidget_),
         makeRow('Repayment', makeExtra(this.repaymentAmountWidget_, this.repaymentFrequencyWidget_, 'Start Date', this.firstPaymentDateWidget_)),
-        makeRow('Interest Rate', this.interestRateWidget_),
-        makeRow('Interest Period', makeExtra(
-            this.interestPeriodWidget_,
-            cd('div', 'goog-inline-block budget-info', 'Is the interest per year, day, month week etc.'))),
-        makeRow('Compound Frequency', makeExtra(
-            this.compoundFrequencyWidget_,
+        makeRow('Interest Rate', makeExtra(
+            this.interestRateWidget_, this.interestPeriodWidget_,
+            'Compounding', this.compoundFrequencyWidget_,
             cd('div', 'goog-inline-block budget-info', 'How often is the interest added to the balance.'))),
         makeRow('Fee', makeExtra(this.feeAmountWidget_, this.feeFrequencyWidget_, 'Start Date', this.feeStartDateWidget_)),
         this.resultsSep_,
@@ -138,22 +138,7 @@ budget.widgets.calc.Loan = function(scope, userid) {
     this.tableDiv_ = container;
 
     const convertDate = recoil.ui.widgets.DateWidget2.convertLocaleDate;
-    const getNextDay = function (date, repeats) {
-        let minDate = new Date(date.getTime());
-        minDate.setDate(minDate.getDate() + 1);
-        let minNext = null;
-        
-        for (let i = 0; i < repeats.length; i++) {
-            let repeat = repeats[i];
-            let d = budget.widgets.calc.Loan.next(minDate, repeat.start,  repeat.freq);
-            if (minNext === null || d.getTime() < minNext.getTime()) {
-                minNext = d;
-            }
-            
-        }
-        return minNext;
-            
-    };
+
     
     this.repaymentTableB_ = frp.liftB(function (
         amountDolars, drawdown,
@@ -167,87 +152,25 @@ budget.widgets.calc.Loan = function(scope, userid) {
         let curDate = convertDate(drawdown);
         let feeDate = convertDate(feeStart);
         
-        // this is in priority order
-        let repeats = [
-            {
-                start: curDate,
-                freq: compoundFreq,
-                calc: (date, prev) => {
 
-                    let amount = Math.round(prev.accured);
-                    
-                    return {description: 'Interest', amount: amount, balance: prev.balance + amount, accured: 0};
-                }
-            }];
-
-        if (feeFrequency != null && feeAmountDollars)  {
-            repeats.push({
-                start: feeDate,
-                freq: feeFrequency,
-                calc: (date, prev) => {
-                    let amount = Math.round(feeAmountDollars * 100);
-                    return {description: 'Fee',  amount, balance: prev.balance + amount, accured: prev.accured};
-                    
-                }
-                    
-            });
-        }
-        repeats.push({
-            start: convertDate(firstPayment),
-            freq: paymentFreq,
-            calc: (date, prev) => {
-                let actualPayment = Math.min(prev.balance , payment);
-                let accured = prev.accured;
-                let balance = prev.balance -  actualPayment;
-                if (prev.balance < payment) {
-                    actualPayment = Math.min(payment, prev.balance + accured);
-                    accured -= actualPayment - prev.balance;
-                    balance = 0;
-                }
-                // deal with accured interest we can pay that off too
-                // if we are over
-                return {description: 'Payment',  amount: -actualPayment, balance: balance, accured: accured};
-            }});
-        
-        let accured = 0;
-        let entries = [{description: 'Opening Balance', amount: null, balance: Math.round(amount), accured: 0, date: curDate}];
-
-        // todo may sure all dates are after the curDate
-        let prev = entries[0];
-        let prevDate = new Date(curDate.getTime());
-        let canPay = true;
         let valid = amountDolars != null && paymentDollars != null && rate != null;
-        
-        while ((prev.balance > 0 || Math.round(prev.accured) > 0) && canPay && valid)  {
-            let nextDay = getNextDay(curDate, repeats);
-            let diffDays = moment(nextDay).diff(moment(curDate), 'd');
-            prev = goog.object.clone(prev);
-            prev.accured = prev.accured + prev.balance * (dailyRate/100) * diffDays;
-            
-            for (let i = 0; i < repeats.length; i++) {
-                let repeat = repeats[i];
-                let next = getNextDay(curDate, [repeat]);
-                // this happens on this day
-                if (next.getTime() === nextDay.getTime()) {
-                    prev = repeat.calc(nextDay, prev);
-                    prev.date = nextDay;
-                    
-                    entries.push(prev);
-                    if (entries.length > 1000 && prev.balance > amount) {
-                        canPay = false;
-                        break;
-                    }
-                }
-            }
-            prevDate = prev.date;
-            // progress date by at least 1
-            curDate = prevDate;
-        }
+
+        let detail = valid ? budget.widgets.calc.Loan.calcDetails(
+            amount, curDate,
+            convertDate(firstPayment), paymentFreq, payment,
+            dailyRate, ratePeriod, compoundFreq, feeFrequency, feeDate, feeAmountDollars,
+            false) : {entries: [], canPay: true};
+        let intDetail = valid ? budget.widgets.calc.Loan.calcDetails(
+            amount, curDate,
+            convertDate(firstPayment), paymentFreq, payment,
+            dailyRate, ratePeriod, compoundFreq, feeFrequency, feeDate, feeAmountDollars,
+            true) : {entries: [], canPay: true};
+
         let compoundRate = periodMeta.enumInfo[compoundFreq].rate;
         let compoundInterestRate = dailyRate * compoundRate / 100;
 
         let interest = (Math.pow(compoundInterestRate + 1, 365/compoundRate) - 1) * 100;
-        return {amount, entries, interest, canPay, valid};
+        return {amount, entries: detail.entries, calcEntries: intDetail.entries, interest, canPay: detail.canPay, valid};
         
     }, amountB, drawdownDateB, firstPaymentDateB, repaymentFrequencyB, paymentAmountB, interestRateB, interestPeriodB, compoundFrequencyB, this.feeFrequencyB_, feeStartDateB, feeAmountB);
 
@@ -266,10 +189,10 @@ budget.widgets.calc.Loan = function(scope, userid) {
         return v;
     };
     const maxDollar = Math.floor(Number.MAX_SAFE_INTEGER/100);
-    this.amountWidget_.attachStruct({value: amountB, min: 0, max: maxDollar, step: 0.01});
-    this.interestRateWidget_.attachStruct({value: interestRateB, min: 0, max: 2000, step: 0.01});
+    this.amountWidget_.attachStruct({value: amountB, min: 0, max: maxDollar, step: 0.01, allowNull: true});
+    this.interestRateWidget_.attachStruct({value: interestRateB, min: 0, max: 2000, step: 0.01, allowNull: true});
     this.interestPeriodWidget_.attachStruct(ex(interestPeriodB));
-    this.repaymentAmountWidget_.attachStruct({value: paymentAmountB, min: 0, max: maxDollar, step: 0.01});
+    this.repaymentAmountWidget_.attachStruct({value: paymentAmountB, min: 0, max: maxDollar, step: 0.01, allowNull: true});
     this.drawDownDateWidget_.attachStruct(ex(drawdownDateB));
     this.firstPaymentDateWidget_.attachStruct(ex(firstPaymentDateB));
     this.repaymentFrequencyWidget_.attachStruct(ex(repaymentFrequencyB));
@@ -278,17 +201,163 @@ budget.widgets.calc.Loan = function(scope, userid) {
     this.feeStartDateWidget_.attachStruct({
         value: feeStartDateB
     });
-    this.feeAmountWidget_.attachStruct({value: feeAmountB});
+    this.feeAmountWidget_.attachStruct({value: feeAmountB, min:0, max: maxDollar, allowNull: true});
 
 
     
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(container);
 
     this.helper_ = new recoil.ui.ComponentWidgetHelper(scope, this.component_, this, this.update_);
-    this.helper_.attach(this.repaymentTableB_, this.feeFrequencyB_);
+    this.helper_.attach(this.repaymentTableB_, this.feeFrequencyB_, this.showInterestCalcB_);
 
 };
+/**
+ * @param {number} amount
+ * @param {Date} drawdownDate
+ * @param {Date} firstPaymentDate
+ * @param {number} paymentFreq
+ * @param {number} payment the amount in cents of the repayment
+ * @param {number} dailyRate interest rate per day
+ * @param {number} ratePeriod how long the interest is for
+ * @param {number} compoundFreq how often the interest compounds
+ * @param {number?} feeFrequency
+ * @param {Date} feeDate
+ * @param {number?} feeAmountDollars
+ * @param {boolean} calcInterest
+ * @return {{entries:!Array, canPay:boolean}}
+ */
+budget.widgets.calc.Loan.calcDetails = function (
+    amount, drawdownDate,
+    firstPaymentDate, paymentFreq, payment,
+    dailyRate, ratePeriod, compoundFreq,
+    feeFrequency, feeDate, feeAmountDollars, calcInterest) {
+    let yearOnDate = moment(drawdownDate).add(1, 'y').toDate();
+    let curDate = drawdownDate;
+    
+    const getNextDay = function (date, repeats) {
+        let minDate = new Date(date.getTime());
+        minDate.setDate(minDate.getDate() + 1);
+        let minNext = null;
+        
+        for (let i = 0; i < repeats.length; i++) {
+            let repeat = repeats[i];
+            let d = budget.widgets.calc.Loan.next(minDate, repeat.start,  repeat.freq);
+            if (minNext === null || d.getTime() < minNext.getTime()) {
+                minNext = d;
+            }
+            
+        }
+        return minNext;
+            
+    };
+    
+    let accured = 0;
+    let entries = [{description: 'Opening Balance', amount: null, balance: Math.round(amount), accured: 0, date: curDate}];
 
+    let calcInterestFunc = (name) => {
+        return (date, prev) => {
+            let amount = Math.round(prev.accured);
+            return {description: name, amount: amount, balance: prev.balance + amount, accured: 0};
+        };
+    };
+    
+    // this is in priority order
+    let repeats = [
+        {
+            start: curDate,
+            freq: compoundFreq,
+            calc: calcInterestFunc('Interest')
+        }];
+
+   
+    
+    if (feeFrequency != null && feeAmountDollars)  {
+        repeats.push({
+                start: feeDate,
+            freq: feeFrequency,
+            calc: (date, prev) => {
+                let amount = Math.round(feeAmountDollars * 100);
+                return {description: 'Fee',  amount, balance: prev.balance + amount, accured: prev.accured};
+                
+            }
+            
+        });
+    }
+
+    if (!calcInterest) {
+        repeats.push({
+            start: firstPaymentDate,
+            freq: paymentFreq,
+            calc: (date, prev) => {
+                let actualPayment = Math.min(prev.balance , payment);
+                let accured = prev.accured;
+                let balance = prev.balance -  actualPayment;
+                if (prev.balance < payment) {
+                    actualPayment = Math.min(payment, prev.balance + accured);
+                    accured -= actualPayment - prev.balance;
+                    balance = 0;
+                }
+                // deal with accured interest we can pay that off too
+                // if we are over
+                return {description: 'Payment',  amount: -actualPayment, balance: balance, accured: accured};
+            }});
+    }
+
+    if (calcInterest) {
+        repeats.push({start: yearOnDate, freq: compoundFreq, calc: calcInterestFunc('Year End')});
+    }
+
+
+    let prev = entries[0];
+    let prevDate = new Date(curDate.getTime());
+    let canPay = true;
+
+    
+    let check = () => {
+        if (calcInterest) {
+            return curDate.getTime() <= yearOnDate.getTime();
+        }
+        else {
+            return (prev.balance > 0 || Math.round(prev.accured) > 0) && canPay;
+        }
+    };
+    
+    while (check())  {
+        let nextDay = getNextDay(curDate, repeats);
+        let diffDays = moment(nextDay).diff(moment(curDate), 'd');
+        prev = goog.object.clone(prev);
+        prev.accured = prev.accured + prev.balance * (dailyRate/100) * diffDays;
+
+        if (calcInterest && nextDay.getTime() > yearOnDate.getTime()) {
+            // get out of the loop
+            curDate = nextDay;
+            break;
+        }
+            
+        for (let i = 0; i < repeats.length; i++) {
+            let repeat = repeats[i];
+            let next = getNextDay(curDate, [repeat]);
+            // this happens on this day
+            if (next.getTime() === nextDay.getTime()) {
+                prev = repeat.calc(nextDay, prev);
+                prev.date = nextDay;
+                
+                entries.push(prev);
+                if (entries.length > 1000 && prev.balance > amount && !calcInterest) {
+                    canPay = false;
+                    break;
+                }
+            }
+        }
+        prevDate = prev.date;
+            // progress date by at least 1
+        curDate = prevDate;
+    }
+
+        
+
+    return {entries, canPay};
+};
 /**
  * @param {Date} startD
  * @param {Date} stopD
@@ -348,21 +417,27 @@ budget.widgets.calc.Loan.prototype.update_ = function() {
 
         let paid = 0;
         let last;
-        repayments.entries.forEach((entry, idx) => {
-            if (!repayments.canPay && idx > 100) {
+        let showWorking = this.showInterestCalcB_.get();
+        let entries = showWorking ? repayments.calcEntries : repayments.entries;
+        entries.forEach((entry, idx) => {
+            if (!showWorking && !repayments.canPay && idx > 100) {
                 return;
             }
-            paid += entry.amount < 0 ? -entry.amount : 0;
             table.appendChild(
                 cd('tr', {},
-                   cd('td', {}, moment(entry.date).format('DD-M-YY')),
+                   cd('td', {}, moment(entry.date).format('DD-MM-YY')),
                    cd('td', {}, entry.description),
                    cd('td', 'calc-number', entry.amount == null ? '' : (entry.amount/100).toFixed(2)),
                    cd('td', 'calc-number', (entry.balance/100).toFixed(2)),
 //                   cd('td', 'calc-number', (entry.accured/100).toFixed(2))
                   ));
+        });
+
+        repayments.entries.forEach((entry, idx) => {
+            paid += entry.amount < 0 ? -entry.amount : 0;
             last = entry;
         });
+
         if (repayments.valid) {
             this.detail_.appendChild(table);
         }
@@ -387,11 +462,33 @@ budget.widgets.calc.Loan.prototype.update_ = function() {
                 this.tableDiv_.appendChild(
                     cd('tr', {}, cd ('th', {}, 'Total Cost'), cd('td', 'recoil-error', 'Loan will never be repaid.')));
             }
-        
+
+            let lastE = repayments.calcEntries[repayments.calcEntries.length -1].balance;
+            let firstE = repayments.calcEntries[0].balance;
+            let effInt = ((lastE - firstE)/firstE * 100);
             this.tableDiv_.appendChild(
                 cd('tr', {}, cd ('th', {}, 'Effective Yearly Interest'),
-                   cd('td', 'calc-number', repayments.interest.toFixed(2) + '%'),
-                   cd('td', 'budget-info', 'If you borrowed at this interest rate for a year, without making repayment what interest rate would it be, this does not include fees or penalities.')));
+                   cd('td', 'calc-number', effInt.toFixed(2) + '%'),
+                   cd('td', 'budget-info', 'If you borrowed at this interest rate for a year, without making repayment what interest would you pay for the year? This does not include penalities. ', this.showInterestCalcDiv_,' Show working')));
+
+            if (showWorking) {
+                this.tableDiv_.appendChild(
+                    cd('tr', {}, cd ('th', {}, 'Working'),
+                       cd('td', {colspan: 2}, '100 * (Year End Amount - Loan Amount)/Loan Amount')));
+
+                this.tableDiv_.appendChild(
+                    cd('tr', {}, cd ('th', {}),
+                       cd('td', {colspan: 2},  '= 100 * ('
+                          + (lastE /100).toFixed(2) + ' - ' + (firstE/100).toFixed(2) + ') / ' +
+                          (firstE/100).toFixed(2)
+                         )));
+
+                this.tableDiv_.appendChild(
+                    cd('tr', {}, cd ('th', {}),
+                       cd('td', {}, '= ' + effInt.toFixed(2) +'%')));
+
+                
+            }
         
         }
         this.tableDiv_.appendChild(cd('tr', {}, cd('td', {colspan: 3}, this.detail_)));
