@@ -469,7 +469,7 @@ budget.widgets.calc.Loan.prototype.update_ = function() {
             this.tableDiv_.appendChild(
                 cd('tr', {}, cd ('th', {}, 'Effective Yearly Interest'),
                    cd('td', 'calc-number', effInt.toFixed(2) + '%'),
-                   cd('td', 'budget-info', 'If you borrowed at this interest rate for a year, without making repayment what interest would you pay for the year? This does not include penalities. ', this.showInterestCalcDiv_,' Show working')));
+                   cd('td', 'budget-info', 'If you borrowed at this interest rate for a year, without making repayments what interest would you pay for the year? This does not include penalities. ', this.showInterestCalcDiv_,' Show working')));
 
             if (showWorking) {
                 this.tableDiv_.appendChild(

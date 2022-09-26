@@ -601,7 +601,7 @@ aurora.db.Coms = function(authenticator) {
                                 }
 
                             }
-                            action.func.apply(null, [me, secContext, reader].concat(args).concat([responseHandler]));
+                            action.func.apply(e, [me, secContext, reader].concat(args).concat([responseHandler, e]));
                         }
 
                     }

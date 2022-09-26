@@ -379,8 +379,9 @@ budget.actions.getGroupPermissions_ = function(context, reader, groups, callback
  * @param {?string} oldPassword
  * @param {?string} password
  * @param {function(?,!Array)} callback1 params are error, mentor user
+ * @param {!aurora.websocket.ChannelMessage} message 
  */
-budget.actions.changePassword = function(coms, context, reader, userid, oldPassword, password, callback1) {
+budget.actions.changePassword = function(coms, context, reader, userid, oldPassword, password, callback1, message) {
 	let admin = context.userid != userid; // no admin level password change if changing own password
 	if (!aurora.permissions.has('user-management')(context)) {
 		admin = false;
@@ -400,21 +401,10 @@ budget.actions.changePassword = function(coms, context, reader, userid, oldPassw
     let userT = aurora.db.schema.tables.base.user;
     let query = new recoil.db.Query();
 	let userQuery = query.eq(userT.cols.id, query.val(userid));
-
+    
 	let updatePassword = function(password, reader, transCallback) {
-		reader.updateOneLevel(
-			{}, userT, {'password': password},
-			userQuery, function(err) {
-				if (err) {
-					transCallback('Unable to  update password', []);
-				}
-				else {
-					transCallback(null, []);
-				}
-			});
+        aurora.auth.instance.changePassword(message.token, reader, userid, password, transCallback);
 	};
-
-
 
     let update = function(value) {
         reader.transaction(function(reader, transCallback) {
