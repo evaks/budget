@@ -56,8 +56,8 @@ budget.widgets.import.FileWidget = function(scope) {
                        cd('div', 'budget-import-info',
                           'Currently we support the following file formats:',
                           cd('ul', {},
-                             cd('li', {}, 'CSV - ASB, ANZ visa.'),
-                             cd('li', {}, 'QIF - ANZ, ASB, maybe others.'),
+                             cd('li', {}, 'CSV - ASB, ANZ visa, BNZ.'),
+                             cd('li', {}, 'QIF - ANZ, ASB, BNZ, maybe others.'),
                             ), 'If you would like us to support another format contact us and we will see what we can do.'),
                        importDiv, filesContainer, dateContainer);
     let filesWidget = new recoil.ui.widgets.table.TableWidget(scope);
@@ -551,6 +551,15 @@ budget.widgets.import.FileWidget.QIF = function(name, content, data) {
 
 };
 
+/**
+ * @param {!Array<string>} lines
+ * @param {string} name
+ * @return {{start:?number,stop:?number}}
+ */
+budget.widgets.import.FileWidget.QIF.getRange = function(lines, name) {
+    return budget.widgets.import.FileWidget.BNZ_GET_RANGE('.qif')(lines, name);
+};
+
 
 /**
  * @param {string} v
@@ -603,8 +612,9 @@ budget.widgets.import.FileWidget.QIF.parse = function(content, name) {
 
     var curRecord = /** @type {?} */ ({memo: ''});
     var result = [];
-    let start = null;
-    let stop = null;
+    let range = budget.widgets.import.FileWidget.QIF.getRange([], name);
+    let start = range.start;
+    let stop = range.stop;
     for (var i = 1; i < cLines.length; i++) {
         let line = cLines[i].trim();
         if (line.trim().length === 0) {
@@ -652,6 +662,31 @@ budget.widgets.import.FileWidget.ANZ_GET_RANGE = function(ext) {
             if (match) {
                 let start = new Date(match[1], parseInt(match[2], 10) - 1, match[3]).getTime();
                 let stop = new Date(match[4], parseInt(match[5], 10) - 1, match[6]).getTime();
+                return {start, stop};
+            }
+        }
+        return {start: null, stop: null};
+
+    };
+};
+
+
+/**
+ * @param {string} ext
+ * @return {function(string, string):{start:?number,stop:?number}}
+ */
+budget.widgets.import.FileWidget.BNZ_GET_RANGE = function(ext) {
+    let months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    let dateReg = "-([0-9]{2})(" + months.join('|') + ")([0-9]{4})";
+    const rangeReg = new RegExp(dateReg + "-to" + dateReg + "$", "i");
+    
+    return function(content, name) {
+        if (name.endsWith(ext)) {
+            let base = name.substring(0, name.length - ext.length);
+            let match = base.match(rangeReg);
+            if (match) {
+                let start = new Date(match[3], months.indexOf(match[2].toUpperCase()), match[1]).getTime();
+                let stop = new Date(match[6], months.indexOf(match[5].toUpperCase()), match[4]).getTime();
                 return {start, stop};
             }
         }
@@ -737,6 +772,30 @@ budget.widgets.import.FileWidget.ANZ_CSV = budget.widgets.import.FileWidget.make
  * @param {?} data
  * @return {boolean}
  */
+budget.widgets.import.FileWidget.BNZ_CSV = budget.widgets.import.FileWidget.makeMatcher(
+    ['Date','Amount','Payee','Particulars','Code','Reference','Tran Type','This Party Account',
+     'Other Party Account','Serial','Transaction Code','Batch Number','Originating Bank/Branch',
+     'Processed Date'], 'Date', 'Payee', 'Reference', 'Amount', {
+         needsHeader: true,
+         matchFunc: function (lines, header) {
+             if (lines.length < 1) {
+                 return false;
+             }
+             return recoil.util.object.isEqual(header, lines[0]);
+         },
+         parseAmount(v, line) {
+             let mul = line[1] == 'D' ? -1 : 1;
+             return Math.round(mul * parseFloat(v) * 100) / 100;
+         },
+         getRange: budget.widgets.import.FileWidget.BNZ_GET_RANGE('.csv')
+         
+     });
+/**
+ * @param {string} name
+ * @param {string} content
+ * @param {?} data
+ * @return {boolean}
+ */
 budget.widgets.import.FileWidget.ANZ_CSV_VISA = budget.widgets.import.FileWidget.makeMatcher(
     ['Card', 'Type', 'Amount', 'Details', 'TransactionDate', 'ProcessedDate', 'ForeignCurrencyAmount', 'ConversionCharge'],
     'TransactionDate', 'Details', null, 'Amount', {
@@ -769,6 +828,7 @@ budget.widgets.import.FileWidget.FILE_TYPES = (function() {
     return [
         {name: 'ASB (CSV)', matcher: budget.widgets.import.FileWidget.ASB_CSV },
         {name: 'ANZ (CSV)', matcher: budget.widgets.import.FileWidget.ANZ_CSV},
+        {name: 'BNZ (CSV)', matcher: budget.widgets.import.FileWidget.BNZ_CSV},
         {name: 'ANZ Visa (CSV)', matcher: budget.widgets.import.FileWidget.ANZ_CSV_VISA},
         {name: 'OFX', matcher: budget.widgets.import.FileWidget.OFX},
         {name: 'QIF', matcher: budget.widgets.import.FileWidget.QIF}
