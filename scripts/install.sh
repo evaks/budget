@@ -106,6 +106,7 @@ else
 	sudo chgrp budget-app ${WWW} *.js.map
 	
 	sudo service budget stop
+	sudo node ${WWW}/server.min.js --upgrade
 	sudo service budget start
 
 fi

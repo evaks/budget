@@ -21,9 +21,15 @@ budget.Server = function() {
     let log = aurora.log.createModule('MAIN');
     let initDb = false;
     let initTest = false;
+    let upgradeOnly = false;
     for (let i = 2; i < process.argv.length; i++) {
         if (process.argv[i] === '--init-db') {
             initDb = true;
+        }
+
+        if (process.argv[i] === '--upgrade') {
+            initDb = true;
+            upgradeOnly = true;
         }
         if (process.argv[i] === '--test') {
             initDb = true;
@@ -59,13 +65,18 @@ budget.Server = function() {
                                 log.error('ERROR creating database', err);
                             }
                             aurora.startup.taskEnded('budget.Server.initDb');
-
+                            if (upgradeOnly) {
+                                process.exit(err ? 1 : 0);
+                            }
                         });
 
                     });
                 }
                 else {
                     log.error('You must specify create-settings to create a database');
+                    if (upgradeOnly) {
+                        process.exit(1);
+                    }
                 }
 
             };
