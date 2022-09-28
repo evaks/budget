@@ -30,9 +30,7 @@ budget.widgets.AppointmentList = function(scope) {
     let todayStart = new Date().setHours(0, 0, 0, 0);
     let appointmentsB = scope.getDb().get(
         appointmentsT.key,
-        query.and(
-            query.lte(query.val(todayStart), query.field(appointmentsT.cols.start)),
-            query.eq(query.val(userId), appointmentsT.cols.userid)));
+            query.eq(query.val(userId), appointmentsT.cols.userid));
 
     let addAppointmentDecorator = function() {
         return new recoil.ui.RenderedDecorator(
@@ -40,14 +38,21 @@ budget.widgets.AppointmentList = function(scope) {
             goog.dom.createDom('tr', {}, cd('td', {class: 'budget-add-appointment-label'}, budget.messages.ADD_APPOINTMENT.toString())), null);
     };
     let tblB = frp.liftB(function(tbl) {
-        let res = tbl.unfreeze();
+        let res = tbl.createEmpty();
         let fakeRow = new recoil.structs.table.MutableTableRow();
         tbl.getOtherColumns().forEach(function(c) {
             fakeRow.set(c, null);
         });
         fakeRow.addRowMeta({rowDecorator: addAppointmentDecorator});
-        res.addRow(fakeRow);
 
+        let max = 0;
+        tbl.forEachModify((row) => {
+            max = Math.max(max, row.get(appointmentsT.cols.start));
+            row.setPos(-row.get(appointmentsT.cols.start));
+            res.addRow(row);
+        });
+        fakeRow.setPos(-(max + 1));
+        res.addRow(fakeRow);
         res.addMeta({editable: false, headerRowDecorator: null});
         let columns = new recoil.ui.widgets.TableMetaData();
         columns.add(appointmentsT.cols.start, 'Start');
