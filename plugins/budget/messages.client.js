@@ -80,6 +80,13 @@ budget.messages.TEXT = recoil.ui.message.getParamMsg('Text');
  */
 budget.messages.EMAIL = recoil.ui.message.getParamMsg('Email');
 
+
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.REFERRER = recoil.ui.message.getParamMsg('Referrer');
+
 /**
  * @type {!recoil.ui.message.Message}
  * @final

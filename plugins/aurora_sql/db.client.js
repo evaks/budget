@@ -278,7 +278,11 @@ aurora.db.Helper.prototype.updateTable = function(path, opt_currentErrors) {
         var kInfo = keyInfo.info;
         var isArray = kInfo.keys && kInfo.keys.length > 0 && !(kInfo.params && kInfo.params.length == kInfo.keys.length);
         let kName = kInfo.pk.getName();
-        var tableVal = (isArray ? value : [value]).filter(v => lookupInfo.matches.contains(v[kName]));
+        var tableVal = (isArray ? value : [value]).filter(v => {
+            let k = v[kName];
+            
+            return lookupInfo.matches.contains(k) || lookupInfo.added.contains(k);
+        });
         var table = me.createTable(path, tableVal, currentErrors);
 
         

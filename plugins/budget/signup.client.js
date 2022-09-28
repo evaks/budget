@@ -34,12 +34,15 @@ budget.widgets.SignUp = function(scope, opt_userid) {
     const budgetT = aurora.db.schema.tables.base.budget;
     const groupsT = aurora.db.schema.tables.base.group;
     const appointmentsT = aurora.db.schema.tables.base.appointments;
+    let linkScheduleActionB = scope.getDb().get(aurora.db.schema.actions.base.schedule.link.key);
+                        
 
     let frp = scope.getFrp();
     let mess = budget.messages;
     let cd = goog.dom.createDom;
     let info = {};
-
+    let selectUserDiv = cd('div', {});
+    let selectUserTableDiv = cd('div', {class: 'budget-user-match-table'});
     if (createClient) {
         try {
             let p = budget.widgets.BudgetList.getSearchParams()['data'];
@@ -53,6 +56,7 @@ budget.widgets.SignUp = function(scope, opt_userid) {
     let suggestUsernameButton = new recoil.ui.widgets.ButtonWidget(scope);
     this.printWidget_ = new recoil.ui.widgets.ButtonWidget(scope);
     let mentorsB = budget.widgets.UserManagement.getMentors(scope);
+    let html = new recoil.ui.HtmlHelper(scope);
 
     let createWidget = function(widget, options, val) {
         let div = cd('div');
@@ -73,6 +77,7 @@ budget.widgets.SignUp = function(scope, opt_userid) {
     };
 
     let userT = aurora.db.schema.tables.base.user;
+    let clientCountT = aurora.db.schema.tables.base.client_count;
     let childrenT = userT.children;
     let data = {id: 0};
     for (let k in userT.meta) {
@@ -152,8 +157,104 @@ budget.widgets.SignUp = function(scope, opt_userid) {
         }, tableB, securityContextB);
     };
 
+    let showCreateB = frp.createB(true);
+    let canCreateB = frp.createB(false);
+    if (createClient && info && info.schedule != null) {
+        let filter = budget.widgets.SignUp.matchClientFilter(clientCountT, info);
+        let userFilter = budget.widgets.SignUp.matchClientFilter(userT, info);
+        
+        if (filter) {
+            let hiddenUserDiv = cd(
+                'div', {class: 'budget-info'},
+                'There are matching users that you don\'t have permission to view. Ask and administrator to link.');
+            
+            
+            selectUserDiv.appendChild(cd('h4', {class: 'group-header'}, 'Matching Users Exist'));
+            selectUserDiv.appendChild(hiddenUserDiv);
+            selectUserDiv.appendChild(selectUserTableDiv);
+            let userTableB = frp.liftB(function (tbl) {
+                var columns = new recoil.ui.widgets.TableMetaData();
+                let res = tbl.unfreeze();
+                res.addMeta({editable: false});
+                columns.add(userT.cols.username, 'User Name');
+                columns.add(userT.cols.firstName, mess.FIRST_NAME.toString());
+                columns.add(userT.cols.lastName, mess.LAST_NAME.toString());
+                columns.add(userT.cols.phone, mess.PHONE.toString());
+
+                return columns.applyMeta(res);
+            }, scope.getDb().get(userT.key,filter));
+
+            let countB = frp.liftB((userCount) => {
+                let res = 0;
+                userCount.forEach(r => {res = r.get(clientCountT.cols.count);});
+                return res;
+            },scope.getDb().get(clientCountT.key,filter));
+            canCreateB = frp.liftB((users, count) => {
+
+                return users.size() > 0 || count > 0;
+            }, userTableB, countB, userTableB);
+
+            let matchUsers = new recoil.ui.widgets.table.TableWidget(scope);
+            let makeNewUser = new recoil.ui.widgets.ButtonWidget(scope);
+            let useExistingUser = new recoil.ui.widgets.ButtonWidget(scope);
+            let buttonDiv = cd('div', {class: 'budget-user-match-buttons'});
+            let selectButtonDiv = cd('div', {});
+
+            makeNewUser.getComponent().render(buttonDiv);
+            html.show(selectButtonDiv, frp.liftB(users => users.size() > 0, userTableB));
+            html.show(selectUserTableDiv, frp.liftB(users => users.size() > 0, userTableB));
+            buttonDiv.appendChild(selectButtonDiv);
+            useExistingUser.getComponent().render(selectButtonDiv);
+
+            html.show(hiddenUserDiv, frp.liftB((users, count) => count > users.size(), userTableB, countB));
+            
+            makeNewUser.attachStruct({
+                text: 'New User',
+                action: frp.createCallback(() => {
+                    showCreateB.set(false);
+                }, showCreateB)
+            });
+            let selectedB = matchUsers.createSelected();
+            let enabledB = frp.liftB((s, u) => s.length > 0 || u.size() == 1 ? recoil.ui.BoolWithExplanation.TRUE : recoil.ui.BoolWithExplanation.FALSE , selectedB, userTableB);
+            useExistingUser.attachStruct({
+                enabled: enabledB,
+                text: 'Selected User',
+                action: frp.createCallback(() => {
+                    let selected = selectedB.get();
+                    let uid = null;
+                    if (selected.length > 0) {
+                        uid = selected[0][0].db;
+                    }
+                    else if (userTableB.get().size() == 1) {
+                        userTableB.get().forEach((row) => {
+                            uid = row.get(userT.cols.id).db;
+                        });
+                    }
+                    if (uid != null) {
+                        scope.performAction(linkScheduleActionB, {
+                            apptid: info.schedule,
+                            userid: uid,
+                        }).then(() => {
+                            window.location.replace('/client?id=' + uid);
+                        });
+                        
+                    }
+                }, selectedB, linkScheduleActionB, userTableB)
+            });
+
+            matchUsers.attachStruct(userTableB);
+            matchUsers.getComponent().render(selectUserTableDiv);
+            selectUserDiv.appendChild(buttonDiv);
+
+        }
+
+        
+    }
+    const logic = recoil.frp.logic;
+    let showUserSelectB = recoil.frp.logic.and(showCreateB, canCreateB);
+    
     let tableB = userid === undefined ?
-        addMentor(frp.createB(table)) : scope.getDb().get(userT.key, query.eq(userT.cols.id, userid)).debug('table');
+        addMentor(frp.createB(table)) : scope.getDb().get(userT.key, query.eq(userT.cols.id, userid));
 
     let isClientB = userid === undefined ? frp.createB(true) : frp.liftB(
         function (tbl, groups) {
@@ -219,7 +320,6 @@ budget.widgets.SignUp = function(scope, opt_userid) {
 
     };
 
-    let html = new recoil.ui.HtmlHelper(scope);
 
     let userSuggest = cd('div', {class: 'goog-inline-block'});
     let tick = cd('div', {class: 'signup-password-ok'});
@@ -233,6 +333,7 @@ budget.widgets.SignUp = function(scope, opt_userid) {
     let waiver = tableWidget(userT.cols.waiverSigned, {});
     let agreement = tableWidget(userT.cols.agreementSigned, {});
     let referral = tableWidget(userT.cols.referral, {displayLength: 25});
+    let referralFrom = tableWidget(userT.cols.referralFrom, {});
     let reason = tableWidget(userT.cols.reason, {displayLength: 25});
     let debtCause = tableWidget(userT.cols.debtCause, {displayLength: 25});
     let referralDate = tableWidget(userT.cols.referralDate, {});
@@ -312,6 +413,7 @@ budget.widgets.SignUp = function(scope, opt_userid) {
 
     let country = createCombo(userT.cols.countryOfBirth, budget.widgets.SignUp.COUNTRIES);
     let ethnicity = createCombo(userT.cols.ethnicity, ['Maori', 'Pacific Island', 'Asian', 'NZ European']);
+    html.show(selectUserDiv, showUserSelectB);
     html.show(tick, recoil.frp.logic.equal(password.value, confirmPassword.value));
     html.show(cross, recoil.frp.logic.notEqual(password.value, confirmPassword.value));
     let busyB = frp.createB(false);
@@ -335,6 +437,7 @@ budget.widgets.SignUp = function(scope, opt_userid) {
         return BWE.TRUE;
     }, busyB, username.value, password.value, confirmPassword.value);
     let message = cd('div', {class: 'budget-login-message'});
+
 
     let loginActionB = scope.getDb().get(aurora.db.schema.actions.base.account.register.key);
     let suggestActionB = scope.getDb().get(aurora.db.schema.actions.base.account.suggestUsername.key);
@@ -456,9 +559,11 @@ budget.widgets.SignUp = function(scope, opt_userid) {
         cd('tr', {}, cd('th', {class: 'field-name'}, mess.FIRST_NAME.toString()), cd('td', {}, firstName.cont), cd('th', {class: 'field-name'}, mess.LAST_NAME.toString()), cd('td', {}, lastName.cont)),
         show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.ADDRESS.toString()), cd('td', {colspan: 3}, address.cont)), isClientB),
         show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.PHONE.toString()), cd('td', {colspan: 3}, phone.cont)), isClientB),
+        
         show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.GENDER.toString()), cd('td', {colspan: 3}, gender.cont)), isClientB),
         show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.INCOME_SOURCE.toString()), cd('td', {colspan: 3}, incomeSource.cont)), isClientB),
         show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.HOUSING.toString()), cd('td', {colspan: 3}, housing.cont)), isClientB),
+        show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.REFERRER.toString()), cd('td', {colspan: 3}, referralFrom.cont)), isClientB),
 
         show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.MARITAL_STATUS.toString()), cd('td', {colspan: 3}, maritalStatus.cont)), isClientB),
         show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.ETHICITY.toString()), cd('td', {colspan: 3}, ethnicity.cont)), isClientB),
@@ -493,12 +598,16 @@ budget.widgets.SignUp = function(scope, opt_userid) {
     fields.push(cd('tr', {}, cd('td', {colspan: 3}, message), cd('td', {class: 'login-button'}, login)));
     let printDiv = cd('div', {});
 
+    let fieldDiv = cd('div', {},
+                      cd.apply(null, fields));
     let container = cd(
-        'div', {}, printDiv,
-        cd('div', {},
-           cd.apply(null, fields))
-    );
+        'div', {}, selectUserDiv, printDiv,
+        fieldDiv );
 
+
+    html.show(fieldDiv, logic.not(showUserSelectB));
+    html.show(selectUserDiv, showUserSelectB);
+    
     html.show(printDiv, isMentorB);
     html.showElements(adminDivs, isMentorB);
     if (userid !== undefined) {
@@ -738,6 +847,44 @@ budget.widgets.SignUp.prototype.getComponent = function() {
  */
 
 budget.widgets.SignUp.prototype.flatten = recoil.frp.struct.NO_FLATTEN;
+
+/**
+ * @param {!aurora.db.schema.TableType} tblT
+ * @param {Object} info
+ * @return {recoil.db.Query}
+ */
+budget.widgets.SignUp.matchClientFilter = function (tblT, info) {
+    if (!info) {
+        return null;
+    }
+    
+    let query = new recoil.db.Query();
+    let filter = null;
+    
+    if (info.firstName && info.lastName) {
+        filter = query.and(
+            query.eq(tblT.cols.firstName,  query.val(info.firstName)),
+            query.eq(tblT.cols.lastName,  query.val(info.lastName)));
+    }
+    else if (info.firstName) {
+        filter = query.eq(tblT.cols.firstName,  query.val(info.firstName));
+    }
+    else if (info.lastName) {
+        filter = query.eq(tblT.cols.lastName, query.val(info.lastName));
+    }
+    
+    if (info.phone) {
+        let phone = query.eq(tblT.cols.phone,  query.val(info.phone));
+        if (filter) {
+            filter = query.or(phone, filter);
+        }
+        else {
+            filter = phone;
+        }
+    }
+    return filter;
+
+};
 
 /**
  * @private

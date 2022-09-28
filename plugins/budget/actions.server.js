@@ -17,6 +17,7 @@ budget.actions.checkUsername = function(coms, context, reader, inputs, callback)
 
 };
 
+
 /**
  * @param {!aurora.db.Coms} coms
  * @param {!aurora.db.access.SecurityContext} context
@@ -613,6 +614,39 @@ budget.actions.createSchedulePaths = function(id) {
 
 };
 
+
+/**
+ * @param {!aurora.db.Coms} coms
+ * @param {!aurora.db.access.SecurityContext} context
+ * @param {!aurora.db.Reader} reader
+ * @param {number} appointmentId
+ * @param {number} userId
+ */
+budget.actions.linkAppointment = async function(coms, context, reader, appointmentId, userId) {
+    let userT = aurora.db.schema.tables.base.user;
+    let apptT = aurora.db.schema.tables.base.appointments;
+    let query = new recoil.db.Query();
+    
+    let secFilter = userT.info.accessFilter(context);
+
+    // if we can't read the users then we don't have permission to link
+    let users = await reader.readObjectsAsync(
+        context, userT,
+        query.eq(query.val(userId), userT.cols.id), secFilter);
+
+    if (users.length < 1) {
+        throw 'Access Denied';
+    }
+
+    await reader.updateOneLevelAsync(
+        context, apptT, {userid: userId},
+        query.eq(query.val(appointmentId), apptT.cols.id));
+
+    let changes = budget.actions.createSchedulePaths(appointmentId).map(
+        path => new recoil.db.ChangeSet.Set(path.appendName('userid'), null, userId));
+    coms.notifyListeners(changes, {}, function() {});
+
+};
 /**
  * @param {!aurora.db.Coms} coms
  * @param {!aurora.db.access.SecurityContext} context

@@ -2,11 +2,48 @@ const path = require('path');
 const fs = require('fs');
 
 
-let getSourceColumn = function(viewTable, name) {
-    for (let i = 0; i < viewTable.columns.length; i++) {
-        if (viewTable.columns[i].name === name) {
-            return viewTable.columns[i];
+let getSourceColumn = function(tableDefs, view, name) {
+    let tables = [];
+    if (view.table) {
+        tables.push(view.table);
+    }
+
+    if (view.queryCols) {
+        for (let i = 0; i < view.queryCols.length; i++) {
+            if (view.queryCols[i].name === name && view.queryCols[i].type)  {
+                let res = {...view.queryCols[i]};
+                res.query = true;
+                return res;
+            }
         }
+    }
+
+    tables = tables.concat(view.tables);
+    for (let t = 0; t < tables.length; t++) {
+        let table = tables[t];
+        let viewTable = tableDefs[table].info;
+        for (let i = 0; i < viewTable.columns.length; i++) {
+            if (viewTable.columns[i].name === name) {
+                return viewTable.columns[i];
+            }
+        }
+    }
+
+    if (view.query) {
+        for (let i = 0; i < view.columns.length; i++) {
+            if (view.columns[i].name === name) {
+                return view.columns[i];
+            }
+        }
+
+        for (let i = 0; i < view.queryCols.length; i++) {
+            if (view.queryCols[i].name === name) {
+                let res = {...view.queryCols[i]};
+                res.query = true;
+                return res;
+            }
+        }
+        
     }
     return null;
 };
@@ -285,24 +322,37 @@ let traverseTable = function(inDef, cb, tableDefs) {
 
         (cb.startTable || nullFunc)(def.name, def, stack, fullTableName, item.col);
 
-        (def.columns || []).forEach(function(col) {
-            if (def.view) {
-                let viewTable = tableDefs[def.table].info;
-                let e = getSourceColumn(viewTable, col.name);
-                (cb.startCol || nullFunc)(col.name, e, fullTableName, def.tableName, item.col);
-            }
-            else {
-                (cb.startCol || nullFunc)(col.name, col, fullTableName, def.tableName, item.col);
-            }
-            if (col.table) {
-                let tdef = {...col.table};
-                tdef.tableName = col.table.name;
-                tdef.name = col.name;
-                todo.push({def: tdef, stack: stack, col: col});
-            }
+        let doit = function (isQuery) {
+            return function(col) {
+                if (def.view) {
+                    
+                    let e = getSourceColumn(tableDefs, def, col.name);
+                    if (isQuery) {
+                        e = {...e};
+                        e.query = true;
+                    }
+                    (cb.startCol || nullFunc)(col.name, e, fullTableName, def.tableName, item.col);
+                    
+                }
+                else {
+                    (cb.startCol || nullFunc)(col.name, col, fullTableName, def.tableName, item.col);
+                }
+                if (col.table) {
+                    let tdef = {...col.table};
+                    tdef.tableName = col.table.name;
+                    tdef.name = col.name;
+                    todo.push({def: tdef, stack: stack, col: col});
+                }
+                
+                (cb.endCol || nullFunc)(col.name, col, fullTableName);
+            };
+        };
+        
 
-            (cb.endCol || nullFunc)(col.name, col, fullTableName);
-        });
+        (def.columns || []).forEach(doit(false));
+        if (def.view) {
+            (def.queryCols || []).forEach(doit(true));
+        }
 
 
         (cb.endTable || nullFunc)(def.name, def, stack, fullTableName);
@@ -373,7 +423,17 @@ let traverse = function(def, cb, tableDefs) {
     }
 };
 
-
+let fakePk = function (data) {
+    if (data && data.view && data.query) {
+        for (let i = 0; i < data.columns.length; i++) {
+            if (data.columns[i].type == 'id') {
+                return false;
+            }
+        }
+        return true;
+    }
+    return false;
+}
 
 
 
@@ -445,6 +505,10 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
             }).join('.');
 
             fs.appendFileSync(out, prefix + '.' + tName + '.cols = {\n');
+            if (fakePk(data)) {
+                fs.appendFileSync(out, '   ' + jsEscape('id') + ': aurora.db.createId(' + toStr('id') + '),\n');
+                colMap[prefix + '.' + tName + '.cols.id'] = prefix + '.' + tName;
+            }
         },
         startCol: function(name, data, fullTableName) {
             colMap[prefix + '.' + fullTableName + '.cols.' + jsEscape(name)] = prefix + '.' + fullTableName;
@@ -490,6 +554,12 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
             fs.appendFileSync(out, '    path: ' + stringify(tablePath) + ',\n');
             fs.appendFileSync(out, '    refs: [],\n');
 
+            if (fakePk(data)) {
+                fs.appendFileSync(out, '    fakePk: true,\n');
+            }
+            if (data.query && data.view) {
+                fs.appendFileSync(out, '    query: ' + stringify(data.query) + ',\n');
+            }
             tablePathMap[data.tableName] = tablePath;
             if (!client) {
                 tableMap[data.tableName] = prefix + '.' + tName;
@@ -500,8 +570,12 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
                     fs.appendFileSync(out, '    parentKey: new recoil.structs.table.ColumnKey(' + toStr(getColType(parentCol, types).childKey) + '),\n');
                 }
                 if (data.view) {
-                    console.log('view table ', ns, tableDefs[data.table].path);
-                    fs.appendFileSync(out, '    view: ' + stringify('/' + ns + '/' + tableDefs[data.table].path) + ',\n');
+                    if (data.table) {
+                        fs.appendFileSync(out, '    view: ' + stringify('/' + ns + '/' + tableDefs[data.table].path) + ',\n');
+                    }
+                    else {
+                        fs.appendFileSync(out, '    view: ' + stringify('/' + ns + '/' + data.name) + ',\n');
+                    }
                 }
             }
 
@@ -535,16 +609,22 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
             let pk = null;
             let auto = true;
             if (data.view) {
-                let viewTable = tableDefs[data.table].info;
-                for (let col = 0; col < data.columns.length; col++) {
-                    let e = getSourceColumn(viewTable, data.columns[col].name);
-                    if (!e) {
-                        throw prefix + '.' + tName + ' view references unknown column ' + data.columns[col].name;
-                    }
-                    if (e.type === 'id') {
-                        pk = jsEscape(e.name);
+
+                if (data.table) {
+                    for (let col = 0; col < data.columns.length; col++) {
+                        let e = getSourceColumn(tableDefs, data, data.columns[col].name);
+                        if (!e) {
+                            throw prefix + '.' + tName + ' view references unknown column ' + data.columns[col].name;
+                        }
+                        if (e.type === 'id') {
+                            pk = jsEscape(e.name);
+                        }
                     }
                 }
+                if (pk == null && data.query) {
+                    pk = 'id';
+                }
+                
             }
             else {
                 for (let column in data.columns) {
@@ -611,6 +691,9 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
 
         let isRef = typeInfo.type === 'ref';
 
+        if (data.query) {
+            fs.appendFileSync(out, ',\n       query: true');
+        }
         if (isRef) {
             refMap[prefix + '.' + typeInfo.table] = refMap[prefix + '.' + typeInfo.table] || [];
             refMap[prefix + '.' + typeInfo.table].push('{col:' + toStr(name) + ', table:' + prefix + '.' + fullTableName + ', nullable:' + (data.nullable === true) + '}');
@@ -670,7 +753,7 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
                     fs.appendFileSync(out, '\n            \'' + e.id + '\':recoil.ui.message.getParamMsg(' + stringify(e.display || e.name) + ')');
                 });
                 fs.appendFileSync(out, '}, {key: \'val\', msg: recoil.ui.messages.UNKNOWN_VAL})');
-                fs.appendFileSync(out, ',\n       renderer: recoil.ui.renderers.MapRenderer ({' + data.enum.map(x => stringify(x.name) + ':' + x.id) + '}');
+                fs.appendFileSync(out, ',\n       renderer: recoil.ui.renderers.MapRenderer ({' + data.enum.map(x => stringify(x.display || x.name) + ':' + x.id) + '}');
                 if (data.nullable === true) {
                     if (data.null) {
                         fs.appendFileSync(out, ', recoil.ui.message.toMessage(' + stringify(data.null) + ')');
@@ -726,6 +809,15 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
         startTable: function(name, data, stack, tName) {
             fs.appendFileSync(out, '/**\n * @const\n */\n');
             fs.appendFileSync(out, prefix + '.' + tName + '.meta = {\n');
+
+            if (fakePk(data)) {                
+                fs.appendFileSync(out, '    \'id\': {\n');
+                fs.appendFileSync(out, '        key: ' + prefix + '.' + tName + '.cols.id,\n');
+                fs.appendFileSync(out, '        type: \'id\',\n');
+                fs.appendFileSync(out, '        primary: true,\n');
+                fs.appendFileSync(out, '        fake: true\n');
+                fs.appendFileSync(out, '    },\n');
+            }
         },
         startCol: writeMeta,
 
@@ -755,6 +847,9 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
             fs.appendFileSync(out, '\n');
             if (!client && !clientTest) {
                 fs.appendFileSync(out, '    func:' + a.func + ',\n');
+                if (a.async) {
+                    fs.appendFileSync(out, '    async: true,\n');
+                }
             }
             if (a.arrayParams) {
                 fs.appendFileSync(out, '    arrayParams: true,\n');
@@ -1392,7 +1487,8 @@ module.exports = {
                     cur.path = '/actions/' + curDef.namespace + action.path;
                     cur.inputs = action.inputs || [];
                     cur.outputs = action.outputs || [];
-                    cur.func = action['function'];
+                    cur.func = action['async-function'] || action['function'];
+                    cur.async = !!action['async-function'];
                     cur.arrayParams = action['arrayParams'];
                     cur.access = action.access;
 

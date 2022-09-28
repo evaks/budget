@@ -3511,7 +3511,7 @@ table.aviatTable thead tr th{
 	padding-left: 10px;
 }
 
-th.group-header {
+th.group-header, h4.group-header {
     color: #636363;
     font-size: 16.0pt;
     font-weight: normal;
@@ -6063,6 +6063,13 @@ div.widget-selectize-container div.selectize-input.dropdown-active {
     border : black 1px;
 }
 
+div.budget-user-match-buttons, div.budget-user-match-table {
+	padding-top: 10px;
+}
+
+div.budget-user-match-buttons > div {
+	display: inline-block;
+}
 div.budget-info, td.budget-info {
 	color: var(--def-dark-font-color);
     background: url(images/info.png) no-repeat 5px 4px;

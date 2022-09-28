@@ -39,3 +39,37 @@ aurora.WidgetScope.prototype.getRefList = function(tbl, nameCol) {
     }, this.getDb().get(tbl.key));
 };
 
+/**
+ * @param {!recoil.frp.Behaviour} actionB
+ * @param {!Object} params
+ * @return {Promise}
+ */
+aurora.WidgetScope.prototype.performAction = async function (actionB, params) {
+    let frp = this.getFrp();
+
+    return new Promise(function (accept, reject) {
+        let performed = false;
+        let  listenerB = frp.liftB((changes) => {
+            if (!performed) {
+                performed = true;
+                actionB.set({action: params});
+                return;
+            }
+
+            for (let i = 0; i < changes.length; i++) {
+                let change = changes[i];
+                if (change.output) {
+                    frp.detach(listenerB);
+                    if (change.output.error == undefined) {
+                        accept(change.output);
+                    }
+                    else {
+                        reject(change.output.error);
+                    }
+                    break;
+                }
+            }
+        }, frp.changesE(actionB), actionB);
+        frp.attach(listenerB);
+    });
+};

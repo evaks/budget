@@ -3,32 +3,39 @@
     "depends": ["aurora_sql"],
     "require": ["budget.filter",{"client": false, "name": "budget.actions"}],
     "types": {
-	"Phone": {"type":"string(16)"},
-	"Gender": {"type": "enum", "enum": [
-	    {"id":0, "name": "Male"},
-	    {"id":1, "name": "Female"},
-	    {"id":2, "name": "Other"}
-	]},
-	"MaritalStatus": {"type": "enum", "enum": [
-	    {"id":0, "name": "Married"},
-	    {"id":1, "name": "Defacto"},
-	    {"id":2, "name": "Single"}
-	]},
-	"Sighted": {"type": "enum", "enum": [
-	    {"id":0, "name": "No"},
-	    {"id":1, "name": "Yes"},
-	    {"id":2, "name": "Some"}
-	]},
-	"IncomeSource": {"type": "enum", "enum": [
-	    {"id":0, "name": "Benefit"},
-	    {"id":1, "name": "Wage"},
-	    {"id":2, "name": "Other"}
-	]},
-	"Housing": {"type":"enum", "enum": [
-	    {"id": 0, "name": "Rent"},
-	    {"id": 1, "name": "Mortgage"},
-	    {"id": 2, "name": "Board"}
-	]}
+		"Phone": {"type":"string(16)"},
+		"Gender": {"type": "enum", "enum": [
+			{"id":0, "name": "Male"},
+			{"id":1, "name": "Female"},
+			{"id":2, "name": "Other"}
+		]},
+		"MaritalStatus": {"type": "enum", "enum": [
+			{"id":0, "name": "Married"},
+			{"id":1, "name": "Defacto"},
+			{"id":2, "name": "Single"}
+		]},
+		"Sighted": {"type": "enum", "enum": [
+			{"id":0, "name": "No"},
+			{"id":1, "name": "Yes"},
+			{"id":2, "name": "Some"}
+		]},
+		"IncomeSource": {"type": "enum", "enum": [
+			{"id":0, "name": "Benefit"},
+			{"id":1, "name": "Wage"},
+			{"id":2, "name": "Other"}
+		]},
+		"Housing": {"type":"enum", "enum": [
+			{"id": 0, "name": "Rent"},
+			{"id": 1, "name": "Mortgage"},
+			{"id": 2, "name": "Board"}
+		]},
+		"Referral": {
+			"type":"enum", "enum": [
+				{"id": 0, "name": "WorkIncome", "display": "Work & Income (Te Hiranga Tangata)"},
+				{"id": 10, "name": "Other"}
+			]
+		}
+	
     },
 	
     "actions": [
@@ -96,34 +103,51 @@
 		]
 	    }],
     "views": [
-	{
-	    "name" : "mentor",
-	    "access": "aurora.db.access.basic([{'': 'r'}])",
-	    "accessFilter": [{"" : "budget.filter.isMentor"}],
-	    "filter": [{"" : "all"}],
-	    "table": "user",
-	    "columns": [{"name":"id"},{"name":"firstName"}, {"name":"username"}]
-	},
-	{
-	    "name" : "client",
-	    "access": "aurora.db.access.basic([{'': 'r'}])",
-	    "accessFilter": [
-		{"user-management" : "budget.filter.client"},
-		{"mentor": "budget.filter.userMentor"},
-		{"": "none"}
-	    ],
-	    "filter": [{"" : "all"}],
-	    "table": "user",
-	    "columns": [
-		{"name":"id"},
-		{"name":"username"},
-		{"name":"firstName"},
-		{"name":"lastName"},
-		{"name":"email"},
-		{"name":"phone"},
-		{"name":"address"}
-	    ]
-	}
+		{
+			"name" : "mentor",
+			"access": "aurora.db.access.basic([{'': 'r'}])",
+			"accessFilter": [{"" : "budget.filter.isMentor"}],
+			"filter": [{"" : "all"}],
+			"table": "user",
+			"columns": [{"name":"id"},{"name":"firstName"}, {"name":"username"}]
+		},
+		{
+			"name" : "client",
+			"access": "aurora.db.access.basic([{'': 'r'}])",
+			"accessFilter": [
+				{"user-management" : "budget.filter.client"},
+				{"mentor": "budget.filter.userMentor"},
+				{"": "none"}
+			],
+			"filter": [{"" : "all"}],
+			"table": "user",
+			"columns": [
+				{"name":"id"},
+				{"name":"username"},
+				{"name":"firstName"},
+				{"name":"lastName"},
+				{"name":"email"},
+				{"name":"phone"},
+				{"name":"address"}
+			]
+		},
+		{
+			"name" : "client_count",
+			"access": "aurora.db.access.basic([{'admin':'r', 'mentor': 'r', '':''}])",
+			"accessFilter": [{"mentor": "all"}, {"admin": "all"} , {"": "none"}],
+			"tables": ["user"],
+			"query": "select count(*) count from user",
+			"columns": [
+				{"name": "count", "type": "int"}
+			],
+			"queryCols": [
+				{"name":"firstName"},
+				{"name":"lastName"},
+				{"name":"email"},
+				{"name":"phone"}
+			]
+		}
+		
     ],
     "tables": [
 	{
@@ -137,12 +161,14 @@
 		{ "name": "mentorid", "type": "ref(user)", "nullable": true},	
 			{ "name": "firstName", "type": "string(100)", "nullable": true, "trim": true},
 			{ "name": "lastName", "type": "string(100)", "nullable": true, "trim": true},
-		{ "name": "address", "type": "text(255)", "nullable": true},
-		{ "name": "phone", "type": "Phone", "nullable": true, "stuff": "xyz"},
-		{ "name": "gender", "type": "Gender", "nullable": true},
-		{ "name": "maritalStatus", "type": "MaritalStatus", "nullable": true},
-		{ "name": "incomeSource", "type": "IncomeSource", "nullable": true},
-		{ "name": "housing", "type": "Housing", "nullable": true},
+			{ "name": "address", "type": "text(255)", "nullable": true},
+			{ "name": "phone", "type": "Phone", "nullable": true, "stuff": "xyz"},
+			{ "name": "gender", "type": "Gender", "nullable": true},
+			{ "name": "maritalStatus", "type": "MaritalStatus", "nullable": true},
+			{ "name": "incomeSource", "type": "IncomeSource", "nullable": true},
+			{ "name": "housing", "type": "Housing", "nullable": true},
+			{ "name": "referralFrom", "type": "Referral", "nullable": true},
+			
 		{ "name": "newClient", "type": "boolean", "nullable": true},
 		{ "name": "dateOfBirth", "type":"date", "nullable": true},
 		{ "name": "countryOfBirth", "type":"string(100)", "nullable": true},

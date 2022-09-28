@@ -287,24 +287,32 @@
     ],
 
     "actions": [
-	{
-	    "path": "/schedule/add",
-	    "function": "budget.actions.addAppointment",
-	    "access": "aurora.db.access.basic([{'site-management': 'r'}, {'mentor': 'r'}, {'client': 'r'}])",
-	    "inputs": [
-		{"name":"mentorid", "type":"bigint"}, {"name":"userid", "type": "bigint"},
-		{"name":"start", "type":"int"}, {"name":"stop", "type": "int"}]
-	},
-	{
-	    "path": "/schedule/schedule",
-	    "function": "budget.actions.scheduleAppointment",
-	    "access": "aurora.db.access.basic([{'site-management': 'r'}, {'mentor': 'r'}])",
-	    "inputs": [
-		{"name":"apptid", "type":"?bigint"},
-			{"name":"mentorid", "type":"bigint"}, {"name":"userid", "type": "?bigint"},
-			{"name":"email", "type": "string"}, {"name":"firstName", "type": "string"},
-			{"name":"lastName", "type": "string"}, 
-		{"name":"time", "type": "number"}, {"name":"length", "type": "number"} ]
+		{
+			"path": "/schedule/add",
+			"function": "budget.actions.addAppointment",
+			"access": "aurora.db.access.basic([{'site-management': 'r'}, {'mentor': 'r'}, {'client': 'r'}])",
+			"inputs": [
+				{"name":"mentorid", "type":"bigint"}, {"name":"userid", "type": "bigint"},
+				{"name":"start", "type":"int"}, {"name":"stop", "type": "int"}]
+		},
+		{
+			"path": "/schedule/schedule",
+			"function": "budget.actions.scheduleAppointment",
+			"access": "aurora.db.access.basic([{'site-management': 'r'}, {'mentor': 'r'}])",
+			"inputs": [
+				{"name":"apptid", "type":"?bigint"},
+				{"name":"mentorid", "type":"bigint"}, {"name":"userid", "type": "?bigint"},
+				{"name":"email", "type": "string"}, {"name":"firstName", "type": "string"},
+				{"name":"lastName", "type": "string"}, 
+				{"name":"time", "type": "number"}, {"name":"length", "type": "number"} ]
+		},
+		{
+			"path": "/schedule/link",
+			"async-function": "budget.actions.linkAppointment",
+			"access": "aurora.db.access.basic([{'site-management': 'r'}, {'mentor': 'r'}])",
+			"inputs": [
+				{"name":"apptid", "type":"bigint"},
+				{"name":"userid", "type": "bigint"}]
 	},
 	{
 	    "path": "/schedule/remove",
