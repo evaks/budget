@@ -60,7 +60,7 @@ budget.widgets.Bookings = function(scope) {
         return null;
     }, securityContextB);
     
-    let mentorB = recoil.frp.util.defaultValue(defaultMentorB);
+    let mentorB = recoil.frp.util.localDefaultValue(defaultMentorB, '1', 'bookings.mentor', new recoil.db.Cache.BigIntSerializer());
         
     
     this.appointmentsB_ = frp.switchB(frp.liftB(function(date, mentor) {
@@ -268,8 +268,9 @@ budget.widgets.Bookings = function(scope) {
         appointmentsT.cols.address,
         appointmentsT.cols.email,
         appointmentsT.cols.phone, 
+        appointmentsT.cols.notes, 
         appointmentsT.cols.showed,
-        appointmentsT.cols.scheduled,  LEN_COL,
+        appointmentsT.cols.scheduled,  LEN_COL
     ];
     let tableB = keepKeys(frp.liftBI(function(site, holidays, appointments, avail, startDate, mentorConverter, userMap, sec) {
         // this reuses the some columns so we can get the meta data
@@ -359,6 +360,7 @@ budget.widgets.Bookings = function(scope) {
                 row.set(LEN_COL, Math.floor(entry.stop - entry.key[0])/60000);
 
                 row.addCellMeta(LEN_COL, {max: Math.floor(entry.max/60000), enabled: recoil.ui.BoolWithExplanation.FALSE});
+                row.addCellMeta(appointmentsT.cols.notes, {enabled: recoil.ui.BoolWithExplanation.FALSE});
                 row.set(appointmentsT.cols.mentorid, entry.key[1]);
                 row.set(SEARCH_COL, null);
                 row.set(appointmentsT.cols.firstName, '');
@@ -431,8 +433,10 @@ budget.widgets.Bookings = function(scope) {
                     row.set(appointmentsT.cols.scheduled, row.get(appointmentsT.cols.scheduled) !== null);
                     row.addCellMeta(appointmentsT.cols.scheduled, {editable: true});
                     if (row.get(appointmentsT.cols.scheduled)) {
-                        let cols = [appointmentsT.cols.firstName, appointmentsT.cols.lastName, appointmentsT.cols.phone, SEARCH_COL,
-                                    appointmentsT.cols.address, appointmentsT.cols.email,
+                        let cols = [
+                            appointmentsT.cols.firstName, appointmentsT.cols.lastName,
+                            appointmentsT.cols.phone, SEARCH_COL, appointmentsT.cols.notes,
+                            appointmentsT.cols.address, appointmentsT.cols.email,
                                     clientT.cols.phone, LEN_COL];
 
                         cols.forEach(function(col) {

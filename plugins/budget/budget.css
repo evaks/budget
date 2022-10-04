@@ -1038,8 +1038,13 @@ div.budget-div:hover div {
     font-style: italic;
 }
 
-.budget-appointment table {
-    width: 100%;
+.budget-add-appointment-label {
+    color: #ffffff;
+    font-style: italic;
+}
+
+.budget-appointment-past td {
+    color: #646464;
 }
 
 

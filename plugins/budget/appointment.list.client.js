@@ -32,6 +32,11 @@ budget.widgets.AppointmentList = function(scope) {
         appointmentsT.key,
             query.eq(query.val(userId), appointmentsT.cols.userid));
 
+    const pastRowDecorator = function() {
+        return new recoil.ui.RenderedDecorator(
+            pastRowDecorator,
+            goog.dom.createDom('tr', {class: 'budget-appointment-past'}));
+    };
     let addAppointmentDecorator = function() {
         return new recoil.ui.RenderedDecorator(
             addAppointmentDecorator,
@@ -47,8 +52,12 @@ budget.widgets.AppointmentList = function(scope) {
 
         let max = 0;
         tbl.forEachModify((row) => {
+            let stop = row.get(appointmentsT.cols.stop);
             max = Math.max(max, row.get(appointmentsT.cols.start));
             row.setPos(-row.get(appointmentsT.cols.start));
+            if (stop < todayStart) {
+                row.addRowMeta({rowDecorator: pastRowDecorator});
+            }
             res.addRow(row);
         });
         fakeRow.setPos(-(max + 1));
