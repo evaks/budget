@@ -6,6 +6,7 @@
     "http": "^0.0.1-security",
     "https": "^1.0.0",
     "ics": "^2.31.0",
+    "jsdom": "^16.5.0",
     "mime": "^2.5.2",
     "modern-syslog": "^1.2.0",
     "multiparty": "^4.2.2",
