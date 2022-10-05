@@ -459,6 +459,7 @@ budget.widgets.import.FileWidget.validate = function(parsed) {
  * @param {string} amountCol
  * @param {{
  *           needsHeader:(boolean|undefined),
+ *           skipHeaderCheck:(boolean|undefined),
  *           skipFunc:((function(number, !Array<string>,!Array<string>):boolean)|undefined),
  *           matchFunc:((function(!Array<!Array<string>>,!Array<string>):boolean)|undefined),
  *           parseAmount:((function(string,!Array<string>):number)|undefined),
@@ -468,6 +469,7 @@ budget.widgets.import.FileWidget.validate = function(parsed) {
 budget.widgets.import.FileWidget.makeMatcher = function(
     headers, dateCol, partCol, refCol, amountCol, opts) {
     let needsHeaders = opts.needsHeader === undefined ? true : opts.needsHeader;
+    let skipHeaderCheck = !!opts.skipHeaderCheck;
     let skip = function(lines) {
         let pos = 0;
         if (opts.skipFunc) {
@@ -495,7 +497,7 @@ budget.widgets.import.FileWidget.makeMatcher = function(
             return moment(v, 'D/M/YYYY').toDate().getTime();
         };
 
-        if (recoil.util.object.isEqual(lines[pos], headers)) {
+        if (recoil.util.object.isEqual(lines[pos], headers) || skipHeaderCheck) {
             pos++;
         } else if (needsHeaders) {
             return null;
@@ -625,6 +627,9 @@ budget.widgets.import.FileWidget.QIF.parse = function(content, name) {
             if (date !== undefined) {
                 start = start === null ? curRecord.date : Math.min(start, date);
                 stop = stop === null ? curRecord.date : Math.min(stop, date);
+                if (curRecord.description === undefined && curRecord.memo !== '') {
+                    curRecord.description = curRecord.memo;
+                }
                 result.push(curRecord);
             }
             curRecord = {memo: ''};
@@ -765,6 +770,41 @@ budget.widgets.import.FileWidget.ANZ_CSV = budget.widgets.import.FileWidget.make
 
     });
 
+/**
+ * @param {string} name
+ * @param {string} content
+ * @param {?} data
+ * @return {boolean}
+ */
+
+budget.widgets.import.FileWidget.RABO_CSV = budget.widgets.import.FileWidget.makeMatcher(
+    ['Date','Description','Account','Debit','Credit'],
+    'Date', 'Description', 'Account', 'Debit', {
+        needsHeader: true,
+        skipHeaderCheck: true,
+        matchFunc: function(lines, header) {
+            if (lines.length < 1) {
+                return false;
+            }
+            let line = lines[0];
+
+            return recoil.util.object.isEqual(header, line) || recoil.util.object.isEqual(
+                line, ['Date','Description','Account','Debit','Credit','Balance']);
+        },
+        parseAmount(v, line) {
+            let debit = line[3].replace(/^\$/, "");
+            let credit = line[4].replace(/^\$/, "");
+            let res = 0; 
+            if (debit != '') {
+                return Math.round(-parseFloat(debit) * 100) / 100;
+            }
+            return Math.round(parseFloat(credit) * 100) / 100;
+        },
+        getRange: null
+
+    });
+    
+
 
 /**
  * @param {string} name
@@ -829,6 +869,7 @@ budget.widgets.import.FileWidget.FILE_TYPES = (function() {
         {name: 'ASB (CSV)', matcher: budget.widgets.import.FileWidget.ASB_CSV },
         {name: 'ANZ (CSV)', matcher: budget.widgets.import.FileWidget.ANZ_CSV},
         {name: 'BNZ (CSV)', matcher: budget.widgets.import.FileWidget.BNZ_CSV},
+        {name: 'RABO (CSV)', matcher: budget.widgets.import.FileWidget.RABO_CSV},
         {name: 'ANZ Visa (CSV)', matcher: budget.widgets.import.FileWidget.ANZ_CSV_VISA},
         {name: 'OFX', matcher: budget.widgets.import.FileWidget.OFX},
         {name: 'QIF', matcher: budget.widgets.import.FileWidget.QIF}

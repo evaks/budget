@@ -60,7 +60,7 @@ budget.widgets.Bookings = function(scope) {
         return null;
     }, securityContextB);
     
-    let mentorB = recoil.frp.util.localDefaultValue(defaultMentorB, '1', 'bookings.mentor', new recoil.db.Cache.BigIntSerializer());
+    let mentorB = recoil.frp.util.localDefaultValue(defaultMentorB, '1', 'bookings.mentor', localStorage, new recoil.db.Cache.BigIntSerializer());
         
     
     this.appointmentsB_ = frp.switchB(frp.liftB(function(date, mentor) {

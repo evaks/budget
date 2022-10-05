@@ -67,7 +67,7 @@ budget.widgets.import.Wizard = function(scope) {
             const budgetT = aurora.db.schema.tables.base.budget;
             const templateT = aurora.db.schema.tables.base.budget_template;
             let storedMappingsB = scope.getDb().get(
-                storedT.key, query.eq(storedT.cols.userid, query.val(userId)));
+                storedT.key, query.eq(storedT.cols.userid, query.val(userId))).debug("stored");
             let templateB = scope.getDb().get(templateT.key);
             let doneCallbackB;
             let allBudgetsB = scope.getDb().get(budgetT.key, query.eq(query.val(userId), budgetT.cols.userid));

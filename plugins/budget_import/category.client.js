@@ -748,7 +748,7 @@ budget.widgets.BudgetImportCategory.prototype.createCallbackB = function(storedM
 budget.widgets.BudgetImportCategory.findAndRemoveDateMatch_ = function(first, dates, entries) {
     for (let j = 0; j < dates.length; j++) {
         let date = dates[j];
-        let idx = goog.array.findIndex(entries, function(item) {return item.date === date && item.amount === first.amount;});
+        let idx = goog.array.findIndex(entries, function(item) {return item.date === date;});
         if (idx !== -1) {
             return entries.splice(idx, 1)[0];
         }
@@ -825,23 +825,19 @@ budget.widgets.BudgetImportCategory.calculatePeriod = function(infos, start, end
         {period: periods.fortnightly, step: (d, i) => [fromMoment(moment(toDate(d)).add(14 * i, 'd'))]},
         {period: periods.monthly, step: (d, i) => {
             let res = [];
-            let possibleStarts = [];
+
             let start = moment(toDate(d));
             let weekDay = start.get('d');
-            possibleStarts.push(start);
-            // if its a monday then it could of really occured on a weekend
-            if (weekDay == 1) {
-                possibleStarts.push(start.clone().add(-1, 'd'));
-                possibleStarts.push(start.clone().add(-2, 'd'));
-            } else if (weekDay == 5) {
-                possibleStarts.push(start.clone().add(1, 'd'));
-                possibleStarts.push(start.clone().add(2, 'd'));
-            }
+            let isLastDay = start.get('date') == start.daysInMonth();
 
-            possibleStarts.forEach(function(date) {
+            {
                 let nextDate = start.clone().add(i, 'M');
                 res.push(fromMoment(nextDate));
                 let weekDay = nextDate.get('d');
+                // if it is on the last day of the month that is valid
+                if (isLastDay && nextDate.get('date') != nextDate.daysInMonth()) {
+                    res.push(fromMoment(nextDate.clone().set('date', nextDate.daysInMonth())));
+                }
                 if (weekDay === 0) {
                     res.push(fromMoment(nextDate.clone().add(1, 'd')));
                     res.push(fromMoment(nextDate.clone().add(-2, 'd')));
@@ -850,9 +846,10 @@ budget.widgets.BudgetImportCategory.calculatePeriod = function(infos, start, end
                     res.push(fromMoment(nextDate.clone().add(2, 'd')));
                     res.push(fromMoment(nextDate.clone().add(-1, 'd')));
                 }
-            });
+
             // remove duplicates
-            res = res.sort().filter(function(v, idx, arr) {return idx === 0 || arr[idx - 1] !== arr[idx];});
+                res = res.sort().filter(function(v, idx, arr) {return idx === 0 || arr[idx - 1] !== arr[idx];});
+            }
             return res;
         }}];
     
@@ -870,7 +867,9 @@ budget.widgets.BudgetImportCategory.calculatePeriod = function(infos, start, end
             }
             else {
                 remaining = found.remaining;
-                amount += Math.round(found.matches[0].amount * 100);
+                let sum = found.matches.reduce((a,v) => a + v.amount * 100, 0);
+                
+                amount += Math.round(sum / found.matches.length);
             }
         }
         if (amount !== 0) {
@@ -923,7 +922,7 @@ budget.widgets.BudgetImportCategory.updateStoredMappings = function (storedMap, 
             for(let type in storedMap[part][ref]) {
                 type = type === 'null' ? null : type;
                 let entry = storedMap[part][ref][type];
-                let row = entry.row ? entry.row : {};
+                let row = entry.row ? goog.object.clone(entry.row) : {};
                 if (row[storedT.entries.cols.id.getName()] === undefined) {
                     row[storedT.entries.cols.id.getName()]= storedT.entries.cols.id.getDefault();
                 }
