@@ -826,7 +826,7 @@ budget.messages.APPOINTMENT_NOT_LONG_ENOUGH = recoil.ui.message.getParamMsg('App
  * @type {!recoil.ui.message.Message}
  * @final
  */
-budget.messages.FILL_OUT_ALL_CATEGORIES = recoil.ui.message.getParamMsg('Fill in all categories');
+budget.messages.FILL_OUT_ALL_CATEGORIES = recoil.ui.message.getParamMsg('Fill in all categories on pages ', ['pages'], '. ', ['remaining'], ' entries remaining.');
 
 
 /**

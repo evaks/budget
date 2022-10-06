@@ -89,28 +89,77 @@ budget.widgets.BudgetImportCategory.CategoryInfoMap;
 budget.widgets.BudgetImportCategory.prototype.createValidateB = function() {
     let frp = this.scope_.getFrp();
     let CATEGORY = budget.widgets.BudgetImportCategory.COLS.CATEGORY;
+    const PAGE_SIZE = budget.widgets.BudgetImportCategory.PAGE_SIZE;
     return frp.liftB(function(mappings, startDate, endDate) {
         if (startDate > endDate) {
             return new recoil.ui.BoolWithExplanation(false, budget.messages.START_DATE_MUST_BE_BEFORE_END_DATE);
         }
-        let complete = true;
+        let remaining = 0;
         // every visible category must be filled out
+        let pages = [];
+        
+        let pos = 0;
         mappings.forEach(function(row) {
             let factory = row.getCellMeta(CATEGORY).cellWidgetFactory;
             let val = row.get(CATEGORY) || '';
+
             if (val.trim().length == 0 && factory !== null) {
-                complete = false;
+                remaining++;
+                let page = Math.floor( pos/PAGE_SIZE + 1);
+                if (pages.length == 0 || pages[pages.length -1 ] != page) {
+                    pages.push(page);
+                    remaining++;
+                }
+
             }
+            pos++;
 
         });
-        if (!complete) {
-            return new recoil.ui.BoolWithExplanation(false, budget.messages.FILL_OUT_ALL_CATEGORIES);
+        if (remaining != 0) {
+            return new recoil.ui.BoolWithExplanation(
+                false,
+                budget.messages.FILL_OUT_ALL_CATEGORIES.resolve({pages: budget.widgets.BudgetImportCategory.formatPages(pages), remaining}));
         }
         return recoil.ui.BoolWithExplanation.TRUE;
     }, this.mappingsB_, this.dateRangeBs_[0], this.dateRangeBs_[1]);
 
 };
 
+/**
+ * @param {!Array<number>} pages
+ * @return {string}
+ */
+budget.widgets.BudgetImportCategory.formatPages = function (pages) {
+    if (pages.length == 0) {
+        return '';
+    }
+    let res = [];
+    let start = pages[0];
+    let cur = start;
+    for (let i = 1; i < pages.length; i++) {
+        let page = pages[i];
+        if (page > cur + 1) {
+            if (cur == start) {
+                res.push(start);
+            }
+            else {
+                res.push(start + ' - ' + cur);
+            }
+            start = page;
+        }
+        cur = page;
+    }
+
+    if (cur == start) {
+        res.push(start);
+    }
+    else {
+        res.push(start + ' - ' + cur);
+    }
+
+    return res.join(', ');
+        
+};
 /**
  * @param {!Array<!budget.ImportRow>} rows
  * @param {!recoil.structs.table.Table} storedMappingsIn
@@ -136,6 +185,7 @@ budget.widgets.BudgetImportCategory.prototype.createDefaultMappings = function(r
     tbl.setColumnMeta(COLS.LINK, {type: 'boolean', cellDecorator: budget.widgets.BudgetImportCategory.linkCellDecorator_});
     let linkMap = {};
     let linkIdMap = {};
+    let amountMap = {};
     rows.sort(function(x, y) { return x.date - y.date;});
     rows.forEach(function(item, i) {
         let row = new recoil.structs.table.MutableTableRow(i);
@@ -166,6 +216,7 @@ budget.widgets.BudgetImportCategory.prototype.createDefaultMappings = function(r
         row.set(COLS.AMOUNT, item.amount);
         row.set(COLS.SPLIT, false);
         recoil.util.map.safeRecGet(linkMap, [item.description, item.memo], []).push(i);
+        recoil.util.map.safeRecGet(amountMap, [item.description, item.amount], []).push(i);
         tbl.addRow(row);
 
         // add extra split rows
@@ -178,26 +229,50 @@ budget.widgets.BudgetImportCategory.prototype.createDefaultMappings = function(r
     });
 
     for (let desc in linkMap) {
-        for (let memo in linkMap[desc]) {
-            let arr = linkMap[desc][memo];
-            if (arr.length > 0) {
-                for (let i = 0; i < arr.length; i++) {
-                    for (let j = 0; j < arr.length; j++) {
-                        if (j !== i) {
-                            recoil.util.map.safeRecGet(linkIdMap, [arr[i]], []).push(arr[j]);
-                        }
-                    }
-                }
+        // if all the memos are just 1 long they the memo may change if
+        // so then link it based on the amount
+        let allSingle = budget.widgets.BudgetImportCategory.addLinkIds_(linkMap[desc], linkIdMap);
+
+        if (amountMap[desc]) {
+            if (allSingle) {
+                budget.widgets.BudgetImportCategory.addLinkIds_(amountMap[desc], linkIdMap);
+            }
+            else {
+                delete amountMap[desc];
             }
         }
     }
 
-    tbl.setMeta({'typeFactories': aurora.Client.typeFactories, linkMap: linkMap, linkIdMap: linkIdMap});
+    tbl.setMeta({'typeFactories': aurora.Client.typeFactories, linkMap: linkMap, linkAmountMap: amountMap, linkIdMap: linkIdMap});
 
     return frp.createB(tbl.freeze());
 
 };
 
+/**
+ * @param {Object<?,!Array<number>>} map
+ * @param {!Object<number,!Array<number>>} linkIdMap
+ * @return {boolean} true if all the items a just single values
+ */
+budget.widgets.BudgetImportCategory.addLinkIds_ = function (map, linkIdMap) {
+    let allSingle = true; 
+    
+    for (let key in map) {
+        let arr = map[key];
+        allSingle = allSingle && arr.length == 1;
+        if (arr.length > 1) {
+            
+            for (let i = 0; i < arr.length; i++) {
+                for (let j = 0; j < arr.length; j++) {
+                    if (j !== i) {
+                        recoil.util.map.safeRecGet(linkIdMap, [arr[i]], []).push(arr[j]);
+                    }
+                }
+            }
+        }
+    }
+    return allSingle;
+};
 
 /**
  * @param {!recoil.frp.Behaviour<!recoil.structs.table.Table>} mappingsSourceB
@@ -250,6 +325,7 @@ budget.widgets.BudgetImportCategory.prototype.attach = function(mappingsSourceB,
 
     let mappingsB = frp.liftBI(function(tbl, budget) {
         let linkMap = tbl.getMeta().linkMap;
+        let linkAmountMap = tbl.getMeta().linkAmountMap;
         let columns = new recoil.ui.widgets.TableMetaData();
 
         columns.add(COLS.DATE, 'Date');
@@ -319,28 +395,43 @@ budget.widgets.BudgetImportCategory.prototype.attach = function(mappingsSourceB,
                 subRows = [];
             }
         }
-        let newCategories = {};
+        let catLookupMap = {};
+        let catLookup = {};
+        for (let t in TYPES) {
+            catLookupMap[TYPES[t]] = {};
+        }
         
-        tbl.forEachModify(function(row, pks) {
+        income.forEach(v => catLookupMap[TYPES.income][v] = true);
+        payments.forEach(v => catLookupMap[TYPES.payment][v] = true);
+        payments.forEach(v => catLookupMap[TYPES.debt][v] = true);
+        
+        tbl.forEach(function(row, pks) {
             let cat = row.get(COLS.CATEGORY);
             if (cat && cat.trim().length > 0) {
-                recoil.util.map.safeGet(newCategories, row.get(COLS.TYPE), {})[cat] = true;
+                recoil.util.map.safeGet(catLookupMap, row.get(COLS.TYPE), {})[cat] = true;
             }
         });
+
+        for (let k in catLookupMap) {
+            catLookup[k] = removeDups(Object.keys(catLookupMap[k]));
+        }
+        
+        
+        
+
+
         
         tbl.forEachModify(function(row, pks) {
             row.setPos(pos++);
             let type = row.get(COLS.TYPE);
             let id = row.get(COLS.ID);
+            let amount = row.get(COLS.AMOUNT);
             let particulars = row.get(COLS.PARTICULARS);
             let ref = row.get(COLS.REF);
 
             row.set(COLS.ORIG_TYPE, row.get(COLS.TYPE));
             row.set(COLS.ORIG_CATEGORY, row.get(COLS.CATEGORY));
-            let categories = type === TYPES.income ? income : payments;
-            categories = Object.keys(recoil.util.map.safeGet(newCategories, type, {})).concat(categories);
-            categories = removeDups(categories);
-            
+            let categories = catLookup[type];
             if (type == TYPES.debt) {
                 categories = [particulars].concat(categories);
             }
@@ -367,6 +458,10 @@ budget.widgets.BudgetImportCategory.prototype.attach = function(mappingsSourceB,
             else {
                 let links = recoil.util.map.safeRecGet(linkMap, [particulars, ref]);
                 if (!links || links.length < 2) {
+                    links = recoil.util.map.safeRecGet(linkAmountMap, [particulars, amount]);
+                }
+                if (!links || links.length < 2) {
+                    
                     row.addCellMeta(COLS.LINK, {cellWidgetFactory: null});
                 }
 
@@ -524,7 +619,7 @@ budget.widgets.BudgetImportCategory.prototype.attach = function(mappingsSourceB,
 //    this.tableWidget_.attachStruct(mappingsB);
 
     let pageB = frp.createB(1);
-    let PAGE_SIZE = 15;
+    let PAGE_SIZE = budget.widgets.BudgetImportCategory.PAGE_SIZE;
     let idToPageMapB = frp.liftB(function(tbl) {
         let pageToId = [];
         let idToPage = {};
@@ -774,11 +869,137 @@ budget.widgets.BudgetImportCategory.findEntry_ = function(entry, firstIdx,  rema
         // the date it would have to exist but doesn't can't be valid
         return null;
     }
+
+
+    let res = budget.widgets.BudgetImportCategory.findEntryHelper_(first, entry, firstIdx, remaining, dateFilter);
+    if (res) {
+        return res;
+    }
+
+    // it is possible that the first date fell on a public holiday so if its a friday try
+    // with the date being monday
+
+    let others = budget.widgets.BudgetImportCategory.holidayOptionsStart_(first.date).map(d => {
+        let res = goog.object.clone(first);
+        res.date = d;
+        return res;
+    });
+
+    for (let i = 0; i < others.length; i++) {
+        res = budget.widgets.BudgetImportCategory.findEntryHelper_(first, entry, firstIdx, remaining, dateFilter);
+        if (res) {
+            return res;
+        }
+    }
+    return null;
+};
+
+/**
+ * @param {!Array<number>} dates
+ * @return {!Array<number>}
+ */
+budget.widgets.BudgetImportCategory.addHolidays_ = function (dates) {
+    let res = [];
+    let seen = {};
+    let addDate = (date) => {
+        if (!seen[date]) {
+            res.push(date);
+            seen[date] = true;
+        }
+    };
+        
+    for (let i = 0; i < dates.length; i++) {
+        let date = dates[i];
+        addDate(date);
+        budget.widgets.BudgetImportCategory.holidayOptionsMatch_(date).forEach(addDate);
+    }
+    res.sort((x,y) => x-y);
+    return res;
+    
+};
+
+/**
+ * @param {number} date
+ * @return {!Array<number>}
+ */
+
+budget.widgets.BudgetImportCategory.holidayOptionsMatch_ = function (date) {
+    return budget.widgets.BudgetImportCategory.holidayOptionsStart_(date, budget.widgets.BudgetImportCategory.HOLIDAY_INV_MAP);
+};
+/**
+ * @const
+ */
+budget.widgets.BudgetImportCategory.HOLIDAY_MAP = {
+    '5': [3,4], // friday -> monday, tuesday
+    '4': [1,4], // thursday -> fri, monday
+    '3': [1,2], // wed -> thur, fri
+    '2': [1,2], // tue -> wed, thur
+    '1': [1,2], // mon -> tue, wed
+
+};
+
+/**
+ * @const
+ */
+budget.widgets.BudgetImportCategory.HOLIDAY_INV_MAP = (function () {
+    let map = budget.widgets.BudgetImportCategory.HOLIDAY_MAP;
+    let out = {};
+    for (let k in map) {
+        let day = parseInt(k, 10);
+        let items = map[k];
+        
+        for (let i = 0; i < items.length; i++) {
+            let adj = items[i];
+            let key = (day + adj) % 7;
+            out[key] = out[key] || [];
+            out[key].push(-adj);
+        }
+    }
+    return out;
+})();
+/**
+ * @param {number} date
+ * @param {Object<?,!Array<number>>=} opt_map
+ * @return {!Array<number>}
+ */
+
+budget.widgets.BudgetImportCategory.holidayOptionsStart_ = function (date, opt_map) {
+    let toDate = recoil.ui.widgets.DateWidget2.convertLocaleDate;
+    const fromDate = recoil.ui.widgets.DateWidget2.convertDateToLocal;
+    const map = opt_map || budget.widgets.BudgetImportCategory.HOLIDAY_MAP;
+    let res = [];
+    let dt = toDate(date);
+
+    let adjusts = map[dt.getDay()];
+    if (adjusts) {
+        for (let i = 0; i <adjusts.length; i++) {
+            let out = new Date(dt.getTime());
+            out.setDate(dt.getDate() + adjusts[i]);
+            res.push(fromDate(out));
+        }
+    }
+    return res;
+};
+
+/**
+ * @param {!budget.widgets.BudgetImportCategory.CategoryInfo} first
+ * @param {{period:number, step:function(number,number):!Array<number>}} entry
+ * @param {number} firstIdx index into remaining to start at
+ * @param {!Array<!budget.widgets.BudgetImportCategory.CategoryInfo>} remaining
+ * @param {function(number):boolean} dateFilter
+ * @return {?{remaining:!Array<!budget.widgets.BudgetImportCategory.CategoryInfo>,matches:!Array<!budget.widgets.BudgetImportCategory.CategoryInfo>}}
+ */
+
+budget.widgets.BudgetImportCategory.findEntryHelper_ = function(first, entry, firstIdx,  remaining, dateFilter) {
     let matches = [first];
     let curRemaining = remaining.filter((_, idx) => idx !== firstIdx);
-
+    const addHolidays = budget.widgets.BudgetImportCategory.addHolidays_;
+    
     let steps = 1;
-    let next = entry.step(first.date, steps);
+    let next = addHolidays(entry.step(first.date, steps));
+    // public holidays may cause early payment by 2 working days so add them to the match
+    console.log('next', next);
+    
     let nextFiltered = next.filter(dateFilter);
     while (nextFiltered.length == next.length) {
         let found = budget.widgets.BudgetImportCategory.findAndRemoveDateMatch_(first, nextFiltered, curRemaining);
@@ -788,7 +1009,7 @@ budget.widgets.BudgetImportCategory.findEntry_ = function(entry, firstIdx,  rema
             return null;
         }
         steps++;
-        next = entry.step(first.date, steps);
+        next = addHolidays(entry.step(first.date, steps));
         nextFiltered = next.filter(dateFilter);
     }
     let found = budget.widgets.BudgetImportCategory.findAndRemoveDateMatch_(first, nextFiltered, curRemaining);
@@ -878,23 +1099,54 @@ budget.widgets.BudgetImportCategory.calculatePeriod = function(infos, start, end
         
     }
     let budgetRate = periodInfo[budgetPeriod].rate;
+
     
     let amount = 0;
     remaining.forEach(function (entry) {
         amount += Math.round(entry.amount * 100);
     });
 
+    // per budget period
     amount = Math.round(amount * budgetRate/ days);
-    if (results.length === 1 && amount === 0) {
-        return results[0];
+
+    if (amount === 0 && results.length > 0) {
+        // we have no remaining entries if the results are all the same period we can use
+        // that
+        let res = {
+            amount: results[0].amount,
+            period: results[0].period
+        };
+        
+        for (let i = 1; i < results.length && res; i++) {
+            let el = results[i];
+            if (res.period != el.period) {
+                res = null;
+            }
+            else {
+                res.amount += el.amount;
+            }
+        }
+        if (res) {
+            return res;
+        }
     }
 
+    if (results.length == 0 && remaining.length == 1) {
+        // we only found 1 assume its yearly
+        return {
+            amount:  Math.round(100 * remaining[0].amount),
+            period: aurora.db.schema.getEnum(aurora.db.schema.tables.base.budget.cols.period).yearly
+        };
+    }
+        
     results.forEach(function (e) {
-        amount += Math.round(e.amount * budgetPeriod/periodInfo[budgetPeriod].rate); 
+        let dailyAmount = e.amount / periodInfo[e.period].rate;
+        
+        amount += dailyAmount * budgetRate; 
     });
 
     return  {
-        amount: amount,
+        amount: Math.round(amount),
         period: budgetPeriod
     };
     
@@ -1115,7 +1367,10 @@ budget.widgets.BudgetImportCategory.updateFreeEntries_ = function(freeEntries, c
     }
 };
 
-
+/**
+ * @const
+ */
+budget.widgets.BudgetImportCategory.PAGE_SIZE = 15;
 /**
  * @return {!goog.ui.Component}
  */
