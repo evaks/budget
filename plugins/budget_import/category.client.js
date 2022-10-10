@@ -22,7 +22,7 @@ budget.widgets.BudgetImportCategory = function(scope) {
     let container = cd('div', {}, cd('h2', {}, 'Select Categories'), dateContainer, catContainer);
 
     this.pager_ = new recoil.ui.widgets.table.PagedTableWidget(scope, true, false);
-//    this.tableWidget_ = new recoil.ui.widgets.table.TableWidget(scope);
+
     this.dateWidgets_ = [new recoil.ui.widgets.DateWidget2(scope), new recoil.ui.widgets.DateWidget2(scope)];
     this.dateWidgets_[1].getComponent().render(dateContainer);
     dateContainer.appendChild(goog.dom.createTextNode('To'));
@@ -65,9 +65,32 @@ budget.widgets.BudgetImportCategory.Calculated;
 
 /**
  * an import catorory once every category is joined
- * @typedef {Object<string,!Object<string,!budget.widgets.BudgetImportCategory.Calculated>>} category -> importType -> entry
+ * @typedef {Object<string,!Object<string,!budget.widgets.BudgetImportCategory.Calculated>>} 
  */
 budget.widgets.BudgetImportCategory.CalculatedMap;
+
+
+/**
+ * lets the user override an automatic category
+ * @typedef {{amount:number,period:number}} note the amount is in cents
+ */
+budget.widgets.BudgetImportCategory.Override;
+
+/**
+ * lets the user override an automatic category, type->cat->data
+ * @typedef {Object<string,!Object<string,!budget.widgets.BudgetImportCategory.Override>>} 
+ */
+budget.widgets.BudgetImportCategory.OverrideMap;
+
+/**
+ * @typedef {{type: number, date: number, amount: number}}
+ */
+budget.widgets.BudgetImportCategory.MappingsSrc;
+
+/**
+ * @typedef {Object<string,{amount: numer, period:number, src:!Array<budget.widgets.BudgetImportCategory.MappingsSrc>}>}
+ */
+budget.widgets.BudgetImportCategory.Mappings;
 
 /**
  * type is Budget Entry type
@@ -274,6 +297,16 @@ budget.widgets.BudgetImportCategory.addLinkIds_ = function (map, linkIdMap) {
     return allSingle;
 };
 
+/**
+ * @return {!recoil.frp.Behaviour<!budget.widgets.BudgetImportCategory.Mappings>}
+ */
+budget.widgets.BudgetImportCategory.prototype.getCategories = function () {
+    let frp = this.scope_.getFrp();
+
+    return frp.liftB(
+        (mappings, bPeriod, start, end) => budget.widgets.BudgetImportCategory.calculateCategories(mappings, bPeriod, start, end),
+        this.mappingsB_, this.budgetPeriodB_, this.dateRangeBs_[0], this.dateRangeBs_[1]);
+};
 /**
  * @param {!recoil.frp.Behaviour<!recoil.structs.table.Table>} mappingsSourceB
  * @param {!recoil.frp.Behaviour<!recoil.structs.table.Table>} budgetB
@@ -614,6 +647,14 @@ budget.widgets.BudgetImportCategory.prototype.attach = function(mappingsSourceB,
     }, mappingsSourceB, budgetB);
 
     this.budgetB_ = budgetB;
+
+    this.budgetPeriodB_ = frp.liftB((bud) => {
+        let bPeriod;
+        bud.forEach(function (row) {
+            bPeriod = row.get(budgetT.cols.period);
+        });
+        return bPeriod;
+    }, budgetB);
     this.mappingsB_ = mappingsB;
     this.dateRangeBs_ = dateRangeBs;
 //    this.tableWidget_.attachStruct(mappingsB);
@@ -691,10 +732,9 @@ budget.widgets.BudgetImportCategory.prototype.createCallbackB = function(storedM
     let frp = this.scope_.getFrp();
     let mappingsB = this.mappingsB_;
     let budgetB = this.budgetB_;
-    let dateRangeBs = this.dateRangeBs_;
-    return frp.createCallback(function() {
+
+    return frp.createCallback(function(entries) {
         let mappings = mappingsB.get();
-        let categories = {};
         let storedMap = budget.widgets.BudgetImportCategory.createStoredMappings(storedMappingsB.get());
 
         // split the categories up so we deal with it individually
@@ -706,14 +746,6 @@ budget.widgets.BudgetImportCategory.prototype.createCallbackB = function(storedM
             let type = TYPES.income == row.get(COLS.TYPE) ? EntryType.income : EntryType.household;
             let id = row.get(COLS.ID);
             let splitRow = id.indexOf('.') !== -1;
-            if (hasCategory) {
-                recoil.util.map.safeRecGet(categories, [category, row.get(COLS.TYPE)], []).push(
-                    {
-                        type: type,
-                        date: row.get(COLS.DATE),
-                        amount: row.get(COLS.AMOUNT)
-                    });
-            }
 
             let baseMap;
             let newBaseMap = {};
@@ -742,82 +774,8 @@ budget.widgets.BudgetImportCategory.prototype.createCallbackB = function(storedM
             storedMap[mainRow.get(COLS.PARTICULARS)][mainRow.get(COLS.REF)] = newBaseMap;
 
         });
-        let start = dateRangeBs[0].get();
-        let end = dateRangeBs[1].get();
-        let calculatedCategory = {};
 
-        let resBudget = budgetB.get().createEmpty();
-        // first find all the categories in the budget that already exist
-        let entries;
-        let bPeriod;
 
-        budgetB.get().forEach(function(row) {
-            entries = recoil.util.object.clone(row.get(budgetT.cols.entries));
-            bPeriod = row.get(budgetT.cols.period);
-        });
-        entries.sort((x, y) => x.order - y.order);
-        let periodInfo = aurora.db.schema.getMeta(budgetT.cols.period).enumInfo;
-        for (let cat in categories) {
-            calculatedCategory[cat] = {};
-            for (let type in categories[cat]) {
-                calculatedCategory[cat][type] = budget.widgets.BudgetImportCategory.calculatePeriod(categories[cat][type], start, end, bPeriod, periodInfo);
-            }
-        }
-        console.log('periodInfo', calculatedCategory);
-        let entryMap = {};
-        let freeEntries = {};
-
-        // first
-        let getPossibleTypes = budget.widgets.BudgetImportCategory.getPossibleTypes_;
-        let max = 0;
-        entries.forEach(function(entry, idx) {
-            max = Math.max(entry.order, max);
-            let isIncome = true;
-            let desc = entry.description.trim();
-            let infos = calculatedCategory[desc];
-            let possibleTypes = getPossibleTypes(entry.type);
-            let info = null;
-            let type = null;
-            for (let i = 0; !info && infos && i < possibleTypes.length; i++) {
-                type = possibleTypes[i];
-                info = infos[type];
-            }
-            if (info) {
-                budget.widgets.BudgetImportCategory.updateEntry_(calculatedCategory, entry, info, desc, /** @type {number} */(type));
-            } else if (desc === '') {
-                recoil.util.map.safeRecGet(freeEntries, [entry.type], []).push(entry);
-            }
-            else {
-                entry.value = '';
-                entry.period = null;
-            }
-        });
-        budget.widgets.BudgetImportCategory.updateFreeEntries_(freeEntries, calculatedCategory);
-
-        // update left over entries
-        for (let desc in calculatedCategory) {
-            for (let type in calculatedCategory[desc]) {
-                let info = calculatedCategory[desc][type];
-                let entryType = EntryType.household;
-                if (type == TYPES.income) {
-                    entryType = EntryType.income;
-                }
-                else if (type == TYPES.debt) {
-                    entryType = EntryType.debt;
-                }
-                let entry = {
-                    type: entryType,
-                    order: ++max,
-                    id: entryT.cols.id.getDefault(),
-                    notes: '',
-                    arrears: '',
-                    owing: ''
-                };
-                budget.widgets.BudgetImportCategory.updateEntry_(null, entry, info, desc, type);
-                entries.push(entry);
-            }
-
-        }
         let newBudgets = addBudgetsB.get().unfreeze();
         let id = null;
         budgetB.get().forEachModify(function(row) {
@@ -828,7 +786,60 @@ budget.widgets.BudgetImportCategory.prototype.createCallbackB = function(storedM
         createId.set([id]);
         addBudgetsB.set(newBudgets.freeze());
         budget.widgets.BudgetImportCategory.updateStoredMappings(storedMap, storedMappingsB);
-    }, mappingsB, budgetB, dateRangeBs[0], dateRangeBs[1], storedMappingsB, addBudgetsB, createId);
+    }, mappingsB, budgetB, storedMappingsB, addBudgetsB, createId);
+
+};
+
+
+
+/**
+ * @param {!recoil.structs.table.Table} mappings
+ * @param {number} bPeriod budgetPeriod
+ * @param {number} start
+ * @param {number} end
+ * @return {!Object<string,Object<number,!Array<{period:number, amount:number, src:!Array}>>>} cat -> type -> info
+ */
+budget.widgets.BudgetImportCategory.calculateCategories = function(mappings, bPeriod, start, end) {
+    let budgetT = aurora.db.schema.tables.base.budget;
+    let entryT = aurora.db.schema.tables.base.budget.entries;
+    let EntryType = aurora.db.schema.getEnum(entryT.cols.type);
+    let COLS = budget.widgets.BudgetImportCategory.COLS;
+    let TYPES = aurora.db.schema.getEnum(COLS.TYPE);
+    const periodInfo = aurora.db.schema.getMeta(budgetT.cols.period).enumInfo;
+    
+    
+    let categories = {};
+    let calculatedCategory = {};
+    
+    // split the categories up so we deal with it individually
+    let mainRow = null;
+    mappings.forEach(function(row) {
+        let hasCategory = row.getCellMeta(COLS.CATEGORY).cellWidgetFactory !== null;
+        let category = row.get(COLS.CATEGORY).trim();
+        let isSplit = TYPES.split == row.get(COLS.TYPE);
+        let type = TYPES.income == row.get(COLS.TYPE) ? EntryType.income : EntryType.household;
+        let id = row.get(COLS.ID);
+        let splitRow = id.indexOf('.') !== -1;
+        if (hasCategory) {
+            recoil.util.map.safeRecGet(categories, [category, row.get(COLS.TYPE)], []).push(
+                {
+                    type: type,
+                    date: row.get(COLS.DATE),
+                    amount: row.get(COLS.AMOUNT),
+                    particulars: row.get(COLS.PARTICULARS),
+                    reference: row.get(COLS.REF)
+                });
+        }
+    });
+
+    
+    for (let cat in categories) {
+        calculatedCategory[cat] = {};
+        for (let type in categories[cat]) {
+            calculatedCategory[cat][type] = budget.widgets.BudgetImportCategory.calculatePeriod(categories[cat][type], start, end, bPeriod, periodInfo);
+        }
+    }
+    return calculatedCategory;
 
 };
 
@@ -998,7 +1009,6 @@ budget.widgets.BudgetImportCategory.findEntryHelper_ = function(first, entry, fi
     let steps = 1;
     let next = addHolidays(entry.step(first.date, steps));
     // public holidays may cause early payment by 2 working days so add them to the match
-    console.log('next', next);
     
     let nextFiltered = next.filter(dateFilter);
     while (nextFiltered.length == next.length) {
@@ -1114,7 +1124,8 @@ budget.widgets.BudgetImportCategory.calculatePeriod = function(infos, start, end
         // that
         let res = {
             amount: results[0].amount,
-            period: results[0].period
+            period: results[0].period,
+            src: infos
         };
         
         for (let i = 1; i < results.length && res; i++) {
@@ -1135,7 +1146,9 @@ budget.widgets.BudgetImportCategory.calculatePeriod = function(infos, start, end
         // we only found 1 assume its yearly
         return {
             amount:  Math.round(100 * remaining[0].amount),
-            period: aurora.db.schema.getEnum(aurora.db.schema.tables.base.budget.cols.period).yearly
+            period: aurora.db.schema.getEnum(aurora.db.schema.tables.base.budget.cols.period).yearly,
+            src: infos
+            
         };
     }
         
@@ -1147,7 +1160,8 @@ budget.widgets.BudgetImportCategory.calculatePeriod = function(infos, start, end
 
     return  {
         amount: Math.round(amount),
-        period: budgetPeriod
+        period: budgetPeriod,
+        src: infos
     };
     
 };
@@ -1299,26 +1313,6 @@ budget.widgets.BudgetImportCategory.COLS = {
     LINK: new recoil.structs.table.ColumnKey('link')
 };
 
-/**
- * @private
- * @param {budget.widgets.BudgetImportCategory.CalculatedMap} calculatedCategory
- * @param {Object} entry an entry in the budget
- * @param {!budget.widgets.BudgetImportCategory.Calculated} info
- * @param {string} desc 
- * @param {number|string} type the import type
- */
-budget.widgets.BudgetImportCategory.updateEntry_ = function (calculatedCategory, entry, info, desc, type) {
-    let entryT = aurora.db.schema.tables.base.budget.entries;
-    let EntryType = aurora.db.schema.getEnum(entryT.cols.type);
-
-    let mul = entry.type == EntryType.income ? 1 : -1;
-    entry.description = desc;
-    entry.value = '' + (mul * info.amount / 100);
-    entry.period = info.period;
-    if (calculatedCategory) {
-        recoil.util.map.safeRecRemove(calculatedCategory, [desc, type], () => true);
-    }
-};
 
 /**
  * @param {*} type
@@ -1340,32 +1334,6 @@ budget.widgets.BudgetImportCategory.getPossibleTypes_ = function (type) {
     return possibleTypes;
 };
 
-/**
- * @private
- * @param {!Object<string,Object<string,?>>} freeEntries
- * @param {!budget.widgets.BudgetImportCategory.CalculatedMap} calculatedCategory
- */
-budget.widgets.BudgetImportCategory.updateFreeEntries_ = function(freeEntries, calculatedCategory) {
-    let getPossibleTypes = budget.widgets.BudgetImportCategory.getPossibleTypes_;
-    let indexes = {};
-    for (let desc in calculatedCategory) {
-        for (let catType in calculatedCategory[desc]) {
-            let info = calculatedCategory[desc][catType];
-            for (let entryType in freeEntries) {
-                let entries = freeEntries[entryType];
-                let possibleTypes = getPossibleTypes(entryType);
-                if (possibleTypes.indexOf(parseInt(catType,10)) != -1) {
-                    let idx = indexes[entryType] || 0;
-                    if (idx < entries.length) {
-                        budget.widgets.BudgetImportCategory.updateEntry_(calculatedCategory, entries[idx], info, desc, catType);
-                        indexes[entryType] = ++idx;
-                        break;
-                    }
-                }
-            }
-        }
-    }
-};
 
 /**
  * @const

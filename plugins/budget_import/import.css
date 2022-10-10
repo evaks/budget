@@ -226,3 +226,64 @@ div.budget-import-info {
     font-weight: bold;
     color: var(--def-font-color);
 }
+
+table.budget-category-summary {
+	width: 100%;
+}
+tr.budget-category-summary {
+	color: black;
+}
+tr.budget-category-summary th, tr.budget-category-summary td {
+	text-align: left;
+}
+
+tr.budget-category-summary td {
+	padding-right: 10px;
+}
+
+tr.budget-category-summary td:last-child {
+	padding-right: 2px;
+}
+tr.budget-category-summary th:last-child, tr.budget-category-summary td:last-child {
+	text-align: right;
+}
+
+tr.budget-category-summary-total {
+	background: linear-gradient(0deg, #0080008f,green);
+	color: white;
+}
+
+tr.budget-category-summary-total th {
+	position: relative;
+	padding-right: 20px;
+}
+
+tr.budget-category-summary-total th span {
+	position: absolute;
+	right: 2px;
+	cursor: pointer;
+}
+
+tr.budget-category-summary-total th span:hover {
+	color: rgb(217, 255, 213);
+	user-select: none;
+}
+
+table.budget-category-summary tr.budget-category-summary {
+	width: 100%
+}
+table.budget-category-summary-collapse tr.budget-category-summary {
+	display: none;
+	
+}
+table.budget-category-summary-collapse tr.budget-category-summary-total th span.budget-category-close {
+	visibility: hidden;
+}
+
+table.budget-category-summary-expand tr.budget-category-summary-total th span.budget-category-open {
+	visibility: hidden;
+}
+
+table.budget-review > tr {
+	vertical-align: top
+}
