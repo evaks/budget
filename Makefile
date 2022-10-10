@@ -177,6 +177,14 @@ install-app:
 	sudo cp -r scripts/startup.sh /var/www/
 	mv output/config.json.default output/config.json
 
+upgrade:
+	sudo cp output/client.* /var/www
+	sudo cp output/server.* /var/www
+	sudo cp -r output/resources /var/www
+	sudo service budget stop
+	sudo node ${WWW}/server.min.js --upgrade
+	sudo service budget start
+
 
 installer:
 	@find ./output/ -name "*~" -exec rm {} \;
