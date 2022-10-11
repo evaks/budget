@@ -460,7 +460,7 @@ budget.widgets.import.CategorySumary.prototype.updateData_ = function(helper, da
         
         this.table_.appendChild(
 	        cd('tr', {class: 'budget-category-summary-total'},
-		       cd('th', {colspan: 4},
+		       cd('th', {colspan: 5},
 		          'Total: $' + (total).toFixed(2) +
                   ', Average: $' + (total/(items.length)).toFixed(2) +
                   ', Per Week: $' + (7 * total/days).toFixed(2),
@@ -473,6 +473,7 @@ budget.widgets.import.CategorySumary.prototype.updateData_ = function(helper, da
 		        cd('td', {},  recoil.ui.widgets.DateWidget2.convertLocaleDate(data.date).toDateString()),
 		        cd('td', {}, data.particulars),
 		        cd('td', {}, data.reference),
+                cd('td', {}, 'Page ' + (data.page)),
 		        cd('td', {}, (data.amount).toFixed(2)));
 	        this.table_.appendChild(row);
 	    });

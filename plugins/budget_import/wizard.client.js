@@ -34,7 +34,7 @@ budget.widgets.import.Wizard = function(scope) {
         return budgetTbl.freeze();
     };
     let toDate = recoil.ui.widgets.DateWidget2.convertLocaleDate;
-
+    let curMappingsB = frp.createB(null);
     let categoryInfoB = frp.createB(null);
     let screensFactories = [
         (function() {
@@ -62,6 +62,7 @@ budget.widgets.import.Wizard = function(scope) {
                     rows = info.rows;
                     dateRangeBs[0].set(info.start);
                     dateRangeBs[1].set(info.stop);
+                    frp.accessTrans(() => curMappingsB.set(null), curMappingsB);
                 },
                 dependants: dateRangeBs
 
@@ -77,10 +78,20 @@ budget.widgets.import.Wizard = function(scope) {
             let allBudgetsB = scope.getDb().get(budgetT.key, query.eq(query.val(userId), budgetT.cols.userid));
             let mappingsB = null;
 
+
+            let mappingsSourceB = frp.liftBI((store, mappings) =>  {
+
+                if (store) {
+                    return store;
+                }
+                return budget.widgets.BudgetImportCategory.createDefaultMappings(rows, storedMappingsB.get());
+            }, (v) => curMappingsB.set(v), curMappingsB, storedMappingsB);
+                                             
+
+
             
             return {
                 create: function(container, old, finishedB) {
-
 
                     let budgetStoreB = frp.createB(null);
                     
@@ -95,7 +106,6 @@ budget.widgets.import.Wizard = function(scope) {
                     
                     let widget = new budget.widgets.BudgetImportCategory(scope);
                     
-                    let mappingsSourceB = widget.createDefaultMappings(rows, storedMappingsB.get());
                     widget.getComponent().render(container);
                     widget.attach(mappingsSourceB, budgetB, storedMappingsB, dateRangeBs);
                     mappingsB = widget.getCategories();
@@ -103,11 +113,13 @@ budget.widgets.import.Wizard = function(scope) {
                     doneCallbackB = widget.createCallbackB(storedMappingsB, allBudgetsB, finishedB);
                     // make validate depend on done callback because it is needed to be done
                     return frp.liftB(x => x, widget.createValidateB(), doneCallbackB);
-                },
+                },reset() {
+
+                },  
                 next: function() {
                     return {mappings: mappingsB, doneCallbackB};
                 },
-                dependants: [storedMappingsB, templateB, categoryInfoB]
+                dependants: [storedMappingsB, templateB, categoryInfoB, curMappingsB]
 
             };
 
