@@ -185,6 +185,11 @@ upgrade:
 	sudo node ${WWW}/server.min.js --upgrade
 	sudo service budget start
 
+upgrade-client:
+	sudo cp output/client.* /var/www
+	sudo cp -r output/resources /var/www
+
+
 
 installer:
 	@find ./output/ -name "*~" -exec rm {} \;

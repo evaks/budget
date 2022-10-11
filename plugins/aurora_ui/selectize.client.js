@@ -546,7 +546,6 @@ aurora.widgets.Selectize.prototype.updateSize_ = function(opt_e, opt_options) {
  */
 aurora.widgets.Selectize.prototype.onClick = function(e) {
     let self = this;
-    console.log('on click', self.isFocused, self.isInputHidden);
     // necessary for mobile webkit devices (manual focus triggering
     // is ignored unless invoked within a click event)
     if (self.mode_() === 'single' && !self.isInputHidden) {
@@ -840,15 +839,19 @@ aurora.widgets.Selectize.prototype.onBlur = function(e, dest) {
     self.isFocused = false;
 
     if (self.ignoreFocus) {
+        console.log("ignoring focus", dest);
         return;
     } else if (!self.ignoreBlur && document.activeElement === self.dropdownContent_) {
         // necessary to prevent IE closing the dropdown when the scrollbar is clicked
+        console.log("drop down", dest);
         self.ignoreBlur = true;
         self.onFocus(e);
         return;
     }
+    console.log("dest", dest);
 
     let deactivate = function() {
+        
         self.close();
         self.setTextboxValue('');
         self.helper_.accessTrans(function() {
@@ -858,7 +861,9 @@ aurora.widgets.Selectize.prototype.onBlur = function(e, dest) {
         });
 
         // IE11 bug: element still marked as active
-        (dest || document.body).focus();
+        if (dest) {
+            (dest || document.body).focus();
+        }
         self.ignoreFocus = false;
     };
 
@@ -868,8 +873,10 @@ aurora.widgets.Selectize.prototype.onBlur = function(e, dest) {
         if (settings.create && settings.createOnBlur) {
             self.createItem(null);
         }
-        deactivate();
     });
+    setTimeout(() => {
+        deactivate();
+    }, 1);
 
 };
 
