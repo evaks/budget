@@ -388,7 +388,7 @@ budget.print.ClientPrinter.prototype.addTimeSpent_ = function(rows, timeSpentLis
             let j = i;
             for (; j < normList.length && j < i + timeCols; j++) {
                 let el = normList[j];
-                headerRow.push(moment(recoil.ui.widgets.DateWidget2.convertLocaleDate(el.day)).format('d/MM/YY'));
+                headerRow.push(moment(recoil.ui.widgets.DateWidget2.convertLocaleDate(el.day)).format('D/MM/YY'));
                 dataRow.push({alignment: 'right', text: formatTime(el.mins)});
 
             }
