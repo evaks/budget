@@ -131,7 +131,6 @@ budget.widgets.BudgetImportCategory.prototype.createValidateB = function() {
                 let page = Math.floor( pos/PAGE_SIZE + 1);
                 if (pages.length == 0 || pages[pages.length -1 ] != page) {
                     pages.push(page);
-                    remaining++;
                 }
 
             }
@@ -190,14 +189,13 @@ budget.widgets.BudgetImportCategory.formatPages = function (pages) {
  *
  */
 
-budget.widgets.BudgetImportCategory.prototype.createDefaultMappings = function(rows, storedMappingsIn) {
+budget.widgets.BudgetImportCategory.createDefaultMappings = function(rows, storedMappingsIn) {
     let entryT = aurora.db.schema.tables.base.budget.entries;
     let EntryType = aurora.db.schema.getEnum(entryT.cols.type);
     let COLS = budget.widgets.BudgetImportCategory.COLS;
     var tbl = new recoil.structs.table.MutableTable([COLS.ID], [COLS.DATE, COLS.PARTICULARS, COLS.REF, COLS.CATEGORY, COLS.AMOUNT, COLS.SPLIT, COLS.TYPE, COLS.ORIG_TYPE, COLS.ORIG_CATEGORY, COLS.LINK]);
     let storedT = aurora.db.schema.tables.base.budget_mappings;
     let TYPES = aurora.db.schema.getEnum(storedT.entries.cols.importType);
-    let frp = this.scope_.getFrp();
 
     let storedMappings = budget.widgets.BudgetImportCategory.createStoredMappings(storedMappingsIn);
     tbl.setColumnMeta(COLS.DATE, {type: 'date', editable: false});
@@ -268,7 +266,7 @@ budget.widgets.BudgetImportCategory.prototype.createDefaultMappings = function(r
 
     tbl.setMeta({'typeFactories': aurora.Client.typeFactories, linkMap: linkMap, linkAmountMap: amountMap, linkIdMap: linkIdMap});
 
-    return frp.createB(tbl.freeze());
+    return tbl.freeze();
 
 };
 
@@ -810,9 +808,11 @@ budget.widgets.BudgetImportCategory.calculateCategories = function(mappings, bPe
     
     let categories = {};
     let calculatedCategory = {};
+    const PAGE_SIZE = budget.widgets.BudgetImportCategory.PAGE_SIZE;
     
     // split the categories up so we deal with it individually
     let mainRow = null;
+    let pos = 0;
     mappings.forEach(function(row) {
         let hasCategory = row.getCellMeta(COLS.CATEGORY).cellWidgetFactory !== null;
         let category = row.get(COLS.CATEGORY).trim();
@@ -827,9 +827,11 @@ budget.widgets.BudgetImportCategory.calculateCategories = function(mappings, bPe
                     date: row.get(COLS.DATE),
                     amount: row.get(COLS.AMOUNT),
                     particulars: row.get(COLS.PARTICULARS),
-                    reference: row.get(COLS.REF)
+                    reference: row.get(COLS.REF),
+                    page: Math.floor(pos / PAGE_SIZE) + 1
                 });
         }
+        pos++;
     });
 
     
