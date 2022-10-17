@@ -426,7 +426,7 @@ budget.print.ClientPrinter.prototype.makeGoals_ = function(user, appointments) {
     let seen = {};
     times.sort((x, y) => x - y).forEach(function(when) {
         let dt = moment(when).format('D/MM/YY');
-        if (!seen) {
+        if (!seen[dt]) {
             seenDates.push(dt);
         }
         seen[dt] = true;
@@ -438,10 +438,14 @@ budget.print.ClientPrinter.prototype.makeGoals_ = function(user, appointments) {
 
 
     let timeSpentList = user.get(this.userT.cols.timeSpent) || [];
-    
+
+    const dateMax = 5;
     let rows = [
-        [fieldName(this.mesg.DATE_ON_WHICH_MENTOR_SAW_CLIENT), {text: seenDates.join(',')}]];
-        
+        [fieldName(this.mesg.DATE_ON_WHICH_MENTOR_SAW_CLIENT), {text: seenDates.slice(0, dateMax).join(',')}]];
+
+    for (let i = dateMax; i < seenDates.length; i+= dateMax) {
+        rows.push(['',seenDates.slice(i, i + dateMax).join(',')]);
+    }
     this.addTimeSpent_(rows, timeSpentList);
 
     
@@ -450,14 +454,21 @@ budget.print.ClientPrinter.prototype.makeGoals_ = function(user, appointments) {
         [fieldName(this.mesg.CLIENT_REASON_FOR_COMING), user.get(this.userT.cols.reason) || ''],
     ]);
 
+    timeSpentList.forEach(info => {
+        if (info.description && info.description.trim().length > 0) {
+            let dt = moment(recoil.ui.widgets.DateWidget2.convertLocaleDate(info.when)).format('DD/MM/YY ');
+            rows.push([{colSpan: 2, text: dt + info.description}, '']);
+        }
+    });
     let goals = user.get(this.userT.cols.goals) || [];
 
     this.addTitledRows(rows, this.mesg.GOALS_WORK_TO_BE_DONE, goals, 'goal');
     rows.push([fieldName(this.mesg.MAIN_CAUSE_OF_DEBT), user.get(this.userT.cols.debtCause) || '']);
     return {
         layout: 'noBorders',
+        fontSize: this.scale(this.fontSize * 2),
         table: {
-            widths: ['auto', '*'],
+            widths: ['*', 'auto'],
             heights: this.scale(this.lineH),
             body: rows
         }
