@@ -57,6 +57,7 @@ budget.widgets.import.FileWidget = function(scope) {
                           'Currently we support the following file formats:',
                           cd('ul', {},
                              cd('li', {}, 'CSV - ASB, ANZ visa, BNZ.'),
+                             cd('li', {}, 'CVS - ', cd('a', {href:'/budget-import.xlsx'}, 'Budget Excel format then export to CVS.')),
                              cd('li', {}, 'QIF - ANZ, ASB, BNZ, maybe others.'),
                             ), 'If you would like us to support another format contact us and we will see what we can do.'),
                        importDiv, filesContainer, dateContainer);
@@ -830,6 +831,25 @@ budget.widgets.import.FileWidget.BNZ_CSV = budget.widgets.import.FileWidget.make
          getRange: budget.widgets.import.FileWidget.BNZ_GET_RANGE('.csv')
          
      });
+
+
+
+/**
+ * @param {string} name
+ * @param {string} content
+ * @param {?} data
+ * @return {boolean}
+ */
+budget.widgets.import.FileWidget.BUDGET_CSV = budget.widgets.import.FileWidget.makeMatcher(
+    ['Date', 'Particulars',	'Amount(negative for income)'],
+    'Date', 'Particulars', null, 'Amount(negative for income)', {
+        needsHeader: true,
+        parseAmount(v, line) {
+            return Math.round(-parseFloat(v) * 100) / 100;
+        },
+
+    }
+);
 /**
  * @param {string} name
  * @param {string} content
@@ -870,6 +890,7 @@ budget.widgets.import.FileWidget.FILE_TYPES = (function() {
         {name: 'ANZ (CSV)', matcher: budget.widgets.import.FileWidget.ANZ_CSV},
         {name: 'BNZ (CSV)', matcher: budget.widgets.import.FileWidget.BNZ_CSV},
         {name: 'RABO (CSV)', matcher: budget.widgets.import.FileWidget.RABO_CSV},
+        {name: 'Budget (CSV)', matcher: budget.widgets.import.FileWidget.BUDGET_CSV},
         {name: 'ANZ Visa (CSV)', matcher: budget.widgets.import.FileWidget.ANZ_CSV_VISA},
         {name: 'OFX', matcher: budget.widgets.import.FileWidget.OFX},
         {name: 'QIF', matcher: budget.widgets.import.FileWidget.QIF}
