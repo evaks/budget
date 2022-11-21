@@ -60,7 +60,7 @@ budget.appointments.iterateOverPeriod = function(mentorid, startRep, stopRep, re
         return;
     }
 
-    let stopTime = stopRep == null ? periodStop : stopRep;
+    let stopTime = stopRep == null ? periodStop : Math.min(periodStop,stopRep);
     let regularIdx = REGULAR.indexOf(repType);
     if (regularIdx !== -1) {
         let interval = repeatMeta.enumInfo[repType].rate * budget.appointments.MILLI_PER_DAY;

@@ -1655,8 +1655,8 @@ budget.widgets.BusinessHours.prototype.doAddAvailableFunc_ = function(menuInfo) 
         let validTableB = frp.liftBI(function(tbl) {
             let res = tbl.createEmpty();
             let columns = new recoil.ui.widgets.TableMetaData();
-            columns.addColumn(new recoil.ui.columns.Time(availT.cols.start, budget.messages.START_DATE.toString()));
-            columns.addColumn(new recoil.ui.columns.Time(availT.cols.len, budget.messages.STOP_DATE.toString()));
+            columns.addColumn(new recoil.ui.columns.Time(availT.cols.start, budget.messages.START_TIME.toString()));
+            columns.addColumn(new recoil.ui.columns.Time(availT.cols.len, budget.messages.STOP_TIME.toString()));
             columns.addColumn(new recoil.ui.widgets.table.NumberColumn(availT.cols.appointmentLen, budget.messages.APPOINTMENT_LENGTH.toString()));
             columns.add(availT.cols.repeat, budget.messages.REPEAT.toString());
             res.addColumnMeta(availT.cols.appointmentLen, {min: 10, max: 120});
@@ -1671,7 +1671,9 @@ budget.widgets.BusinessHours.prototype.doAddAvailableFunc_ = function(menuInfo) 
                 if (stop < start + appointmentLen * 60000) {
                     stopErrors.push(budget.messages.YOU_MUST_BE_AVAILABLE_FOR_ONE_APPOINTMENT_LENGTH);
                 }
-                if (row.get(tblKeys.stop) != null && row.get(tblKeys.stop) < selectDate) {
+
+                let stopDate = me.dateWidget_.convertLocaleDate(row.get(tblKeys.stop));
+                if (stopDate != null && stopDate.getTime() < selectDate) {
                     endErrors.push(budget.messages.FINISH_DATE_CANNOT_BE_BEFORE_START_DATE);
                 }
                 row.addCellMeta(tblKeys.len, {errors: stopErrors});
@@ -1688,7 +1690,7 @@ budget.widgets.BusinessHours.prototype.doAddAvailableFunc_ = function(menuInfo) 
             return columns.applyMeta(res);
         }, function(tbl) {
             let res = modTableB.get().createEmpty();
-            tbl.forEach(function(row) {
+            tbl.forEachModify(function(row) {
                 res.addRow(row);
             });
             modTableB.set(res.freeze());
@@ -1704,11 +1706,11 @@ budget.widgets.BusinessHours.prototype.doAddAvailableFunc_ = function(menuInfo) 
             let res = me.availableB_.get().unfreeze();
             modTableB.get().forEachModify(function(row) {
                 let len = row.get(tblKeys.len) - row.get(tblKeys.start);
-                let stop = row.get(tblKeys.stop);
+                let stop = me.dateWidget_.convertLocaleDate(row.get(tblKeys.stop));
 
                 dayAdd(row, tblKeys.start);
                 row.set(tblKeys.len, len);
-                row.set(tblKeys.stop, stop == null ? null : stop + MILLI_PER_DAY);
+                row.set(tblKeys.stop, stop == null ? null : stop.getTime() + MILLI_PER_DAY);
                 res.addRow(row);
             });
 
