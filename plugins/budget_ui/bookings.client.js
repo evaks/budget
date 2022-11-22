@@ -702,6 +702,19 @@ budget.widgets.Bookings.makeAppointmentMap_ = function(avail, holidays, appointm
     });
     let mentorAppointments = budget.widgets.Bookings.makeMentorAppointmentMap_(appointments);
 
+    let findNextAppointmentStart = function (block, appt) {
+        let res = null;
+        let start = appt.get(appointmentsT.cols.start);
+        block.forEach(function (row) {
+            let rowStart = row.get(appointmentsT.cols.start);
+            if (rowStart > start) {
+                if (res === null || res > rowStart) {
+                    res = rowStart;
+                }
+            }
+        });
+        return res;
+    };
     for (let mentor in mentorDayUsage) {
         let usage = mentorDayUsage[mentor];
         budget.appointments.mergeDayUsage(usage.free, true);
@@ -718,12 +731,11 @@ budget.widgets.Bookings.makeAppointmentMap_ = function(avail, holidays, appointm
                 block.forEach(function (row) {
                     let rowStart = row.get(appointmentsT.cols.start);
                     
-                    if (row.get(appointmentsT.cols.start) === start) {
+                    if (rowStart === start) {
                         startAppointment = row;
                         minAppt = row;
                     }
                     else if (rowStart > start) {
-                        maxStop = Math.min(maxStop, row.get(appointmentsT.cols.start));
                         if (!minAppt || rowStart < minAppt.get(appointmentsT.cols.start)) {
                             if (rowStart < start + len) {
                                 minAppt = row;
@@ -732,9 +744,14 @@ budget.widgets.Bookings.makeAppointmentMap_ = function(avail, holidays, appointm
 
                     }
                 });
-                let addAppointment = function (appt) {
+                let addAppointment = function (appt, maxStop) {
                     let stop = appt.get(appointmentsT.cols.stop);
                     let startInt = appt.get(appointmentsT.cols.start);
+                    let next = findNextAppointmentStart(block, minAppt);
+
+                    if (next !== null) {
+                        maxStop = Math.min(maxStop, next);
+                    }
                     apptMap.add({
                         key: [startInt, mentor],
                         stop: stop,
@@ -746,7 +763,7 @@ budget.widgets.Bookings.makeAppointmentMap_ = function(avail, holidays, appointm
                 };
                 
                 if (startAppointment) {
-                    addAppointment(startAppointment);
+                    addAppointment(startAppointment, maxStop);
                 }
                 else if (minAppt) {
                     // we have an appointment on our block but it starts after
@@ -755,7 +772,7 @@ budget.widgets.Bookings.makeAppointmentMap_ = function(avail, holidays, appointm
                         key: [start, mentor],
                         stop: stop,
                         avail: [], max: stop  - start});
-                    addAppointment(minAppt);
+                    addAppointment(minAppt, maxStop);
                 }
                 else {                    
                     // no appointments scheduled empty block
@@ -791,17 +808,25 @@ budget.widgets.Bookings.makeMentorAppointmentMap_ = function(appointments) {
         recoil.util.map.safeGet(map, mentor, []).push({start: row.get(appointmentsT.cols.start), stop: row.get(appointmentsT.cols.stop), row: row});
 
     });
-
+    let cmp = (x,y) => x.start - y.start;
+    
+    for (let k in map) {
+        let list = map[k];
+        
+        list.sort(cmp);
+    }
+    
     return function(mentor, start, stop) {
         let res = [];
         let list = map[mentor] || [];
-
+        
         for (let i = 0; i < list.length; i++) {
 
             if (stop > list[i].start && start < list[i].stop) {
                 res.push(list[i].row);
             }
         }
+        
         return res;
 
     };
