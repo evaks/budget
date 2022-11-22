@@ -1651,9 +1651,11 @@ budget.widgets.BusinessHours.prototype.doAddAvailableFunc_ = function(menuInfo) 
         row.set(tblKeys.stop, null);
 
         tbl.addRow(row);
+        const WAS_REPEAT = new recoil.structs.table.ColumnKey('orig-mentor');
+
         let modTableB = frp.createB(tbl.freeze());
         let validTableB = frp.liftBI(function(tbl) {
-            let res = tbl.createEmpty();
+            let res = tbl.createEmpty([], [WAS_REPEAT]);
             let columns = new recoil.ui.widgets.TableMetaData();
             columns.addColumn(new recoil.ui.columns.Time(availT.cols.start, budget.messages.START_TIME.toString()));
             columns.addColumn(new recoil.ui.columns.Time(availT.cols.len, budget.messages.STOP_TIME.toString()));
@@ -1682,6 +1684,7 @@ budget.widgets.BusinessHours.prototype.doAddAvailableFunc_ = function(menuInfo) 
                 // the min
                 res.addColumnMeta(tblKeys.stop, {allowNone: true, min: selectDate});
                 doesRepeat = row.get(tblKeys.repeat) != null;
+                row.set(WAS_REPEAT, doesRepeat);
                 res.addRow(row);
             });
             if (doesRepeat) {
@@ -1691,6 +1694,19 @@ budget.widgets.BusinessHours.prototype.doAddAvailableFunc_ = function(menuInfo) 
         }, function(tbl) {
             let res = modTableB.get().createEmpty();
             tbl.forEachModify(function(row) {
+                let doesRepeat = row.get(tblKeys.repeat) != null;
+                let stop = row.get(tblKeys.len); // stop time
+                let start = row.get(tblKeys.start);
+                let wasRepeat = row.get(WAS_REPEAT);
+                if (!doesRepeat) {
+                    let d = new Date(selectDate);
+                    row.set(tblKeys.stop, recoil.ui.widgets.DateWidget2.convertDateToLocal(d));
+                }
+                
+                else if (doesRepeat != wasRepeat) {
+                    row.set(tblKeys.stop, null);
+                }
+                    
                 res.addRow(row);
             });
             modTableB.set(res.freeze());
