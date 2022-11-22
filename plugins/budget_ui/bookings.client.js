@@ -531,12 +531,13 @@ budget.widgets.Bookings = function(scope) {
                     return frp.liftB(function(tbl) {
                         let res = tbl.unfreeze();
                         let columns = new recoil.ui.widgets.TableMetaData();
-                        columns.add(clientT.cols.username, 'User Name', {displayLength: 10});
                         columns.add(clientT.cols.firstName, msg.FIRST_NAME, {displayLength: 10});
                         columns.add(clientT.cols.lastName, msg.LAST_NAME, {displayLength: 10});
-                        columns.add(clientT.cols.email, 'Email', {displayLength: 20});
+                        columns.add(clientT.cols.username, 'User Name', {displayLength: 10});
+
+                        columns.add(clientT.cols.email, msg.EMAIL, {displayLength: 20});
                                      columns.add(clientT.cols.phone, 'Phone', {displayLength: 7});
-                        columns.add(clientT.cols.address, 'Address', {displayLength: 20});
+                        columns.add(clientT.cols.address, msg.ADDRESS, {displayLength: 20});
 
                         return columns.applyMeta(res);
                     }, sourceB);
