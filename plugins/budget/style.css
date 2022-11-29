@@ -1319,12 +1319,6 @@ button + button {
     line-height: 1.1;
 }
 
-@keyframes wtm-has-message-frames {
-    0% {background-image: url("/resources/images/has_message.png")}
-    75% {background-image: url("/resources/images/no_message.png");}
-    100% {background-image: url("/resources/images/has_message.png")}
-}
-
 
 table.config td.double-bottom {
     border-bottom: 4px double black;
@@ -1689,38 +1683,6 @@ button:disabled .commit-button-label {
   background-position: -168px -24px;
 }
 
-.menu-tree-collapsed-folder-icon {
-    width: 10px;
-    height: 10px;
-    background-image: url("/themes/wtm_portal/icons.png");
-    background-position: -398px -284px;
-    margin-right: 7px;
-    background-repeat: no-repeat;
-    vertical-align: middle;
-}
-
-
-.menu-tree-expanded-folder-icon {
-    width: 10px;
-    height: 10px;
-    background-image: url("/themes/wtm_portal/icons.png");
-    background-position: -427px -285px;
-    margin-right: 7px;
-    background-repeat: no-repeat;
-    vertical-align: middle;
-}
-
-.menu-tree-file-icon {
-    display: inline-block;
-    width: 10px;
-    height: 13px;
-    background-image: url("/themes/wtm_portal/icons.png");
-    background-position: -398px -493px;
-    background-clip: content-box;
-    vertical-align: middle;
-    padding-right: 5px;
-
-}
 .menu-search {
     background-color: #333333;
     position: fixed;
@@ -6078,3 +6040,5 @@ div.budget-info, td.budget-info {
     border: 1px solid #41b2d7;
     background-color: #41b2d73d;
 }
+
+

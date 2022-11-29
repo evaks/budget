@@ -257,7 +257,18 @@ budget.widgets.Bookings = function(scope) {
 
         }, tableB);
     };
-    
+    const descheduledDecorator = function() {
+        let inner = cd('div');
+        let outer = goog.dom.createDom(
+            'td', {class: 'budget-appt-descheduled'},
+            cd ('h3', {class: 'warning'}, 'Mentor unavailable at ', inner),
+        );
+
+        return new recoil.ui.RenderedDecorator(
+            descheduledDecorator,
+            outer, inner);
+    };
+
     let readOnly1 = [
         appointmentsT.cols.firstName,
         appointmentsT.cols.lastName,
@@ -392,6 +403,11 @@ budget.widgets.Bookings = function(scope) {
                     let start = row.get(appointmentsT.cols.start);
                     let stop = row.get(appointmentsT.cols.stop);
                     row.set(START_COL, recoil.ui.widgets.TimeWidget.convertTimeToLocal(new Date(start)));
+                    if (entry.descheduled) {
+                        row.addCellMeta(START_COL, {cellDecorator: descheduledDecorator});
+                        row.addCellMeta(LEN_COL, {editable: false});
+                        
+                    }
                     let mentorid = row.get(appointmentsT.cols.mentorid).db;
                     row.addCellMeta(LEN_COL, {max: Math.floor(entry.max/60000)});
                     row.set(LEN_COL, Math.floor((stop-start)/60000));
@@ -716,6 +732,17 @@ budget.widgets.Bookings.makeAppointmentMap_ = function(avail, holidays, appointm
         });
         return res;
     };
+    let todoApptsMap = new goog.structs.AvlTree(recoil.util.object.compareKey);
+
+    appointments.forEach(appt => {
+        let stop = appt.get(appointmentsT.cols.stop);
+        let start = appt.get(appointmentsT.cols.start);
+        if (startTime <= start && start < endTime) {
+            todoApptsMap.add({key: appt.get(appointmentsT.cols.id), row: appt});
+        }
+    });
+    
+    
     for (let mentor in mentorDayUsage) {
         let usage = mentorDayUsage[mentor];
         budget.appointments.mergeDayUsage(usage.free, true);
@@ -753,11 +780,13 @@ budget.widgets.Bookings.makeAppointmentMap_ = function(avail, holidays, appointm
                     if (next !== null) {
                         maxStop = Math.min(maxStop, next);
                     }
+                    
                     apptMap.add({
                         key: [startInt, mentor],
                         stop: stop,
                         avail: [appt], max: maxStop  - startInt});
 
+                    todoApptsMap.remove({key: appt.get(appointmentsT.cols.id)});
                     // start must be at least 1 minute otherwize we get an infinite loop
                     start = Math.max(stop, startInt + 60000);                    
                     len = getAppointmentLength(usage.lengths, start);
@@ -792,6 +821,16 @@ budget.widgets.Bookings.makeAppointmentMap_ = function(avail, holidays, appointm
         });
 
     }
+    todoApptsMap.inOrderTraverse(info => {
+        let stop = info.row.get(appointmentsT.cols.stop);
+        let start = info.row.get(appointmentsT.cols.start);
+        let mentor = info.row.get(appointmentsT.cols.mentor);
+        
+        apptMap.add({key: [start, mentor],
+                     stop: stop,
+                     descheduled: true,
+                     avail: [info.row], max: stop-start});
+    });
     return apptMap;
 };
 
