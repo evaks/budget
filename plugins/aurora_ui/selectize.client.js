@@ -13,7 +13,7 @@ aurora.widgets.Selectize = function(scope) {
     let frp = scope.getFrp();
     let self = this;
     this.scope_ = scope;
-    this.controlInput_ = createDom('input', {type: 'text', autocomplete: 'off'});
+    this.controlInput_ = createDom('input', {type: 'text', autocomplete: 'new-password'});
     this.errorDiv_ = createDom('div', {class:'recoil-error'});
     this.control_ = createDom('div', {class: 'selectize-input items'}, this.controlInput_);
     this.dropdownContent_ = createDom('div', {class: 'selectize-dropdown-content'});
@@ -62,6 +62,7 @@ aurora.widgets.Selectize = function(scope) {
             }
             // blur on click outside
             if (!goog.dom.contains(self.control_, e.target) && e.target !== self.control_) {
+                self.finishCreate();
                 self.blur(e.target);
             }
         }
@@ -1175,6 +1176,29 @@ aurora.widgets.Selectize.prototype.focus = function() {
         self.onFocus();
     }, 0);
 };
+
+/**
+ * Forces the control out of focus.
+ *
+ */
+aurora.widgets.Selectize.prototype.finishCreate = function() {
+    let frp = this.scope_.getFrp();
+
+    let self = this;
+    // for now since I can't test only do it for single
+    let inputMode = self.mode_();
+
+    if (inputMode == 'single' && self.canCreate(self.controlInput_.value)) {
+        let res = self.createItem(self.controlInput_.value);
+        if (res) {
+            frp.accessTrans(function() {
+                self.setActiveOption(res, true);
+            }, self.activeOptionB_);
+            //                self.optionsHelper_.forceUpdate();
+        }
+    }
+};
+
 
 /**
  * Forces the control out of focus.
