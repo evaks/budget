@@ -143,7 +143,7 @@ aurora.widgets.Chat = function(scope, opt_manageButtons) {
     this.availB_ = frp.createB({});
     this.settingsB_ = frp.liftB(function (tbl) {
         let res = {};
-        let RTCIceServer = {};
+        let servers = null;
         tbl.forEach(function (row) {
             let name = row.get(settingsT.cols.name);
             let value = row.get(settingsT.cols.value);
@@ -152,30 +152,18 @@ aurora.widgets.Chat = function(scope, opt_manageButtons) {
                 return;
             }
             
-            if (name == 'stun/server/address') {
-                RTCIceServer.urls = value.split(',');
-            }
-
-            if (name == 'stun/server/password') {
-                RTCIceServer.credential = value;
-            }
-
-            if (name == 'stun/server/user') {
-                RTCIceServer.username = value;
-            }
-
-            if (name == 'stun/server/password-type') {
-                RTCIceServer.credentialType = value;
+            if (name == 'stun/servers') {
+                servers = value;
             }
             
         });
 
-        if (RTCIceServer.urls) {
-            res.iceServers = [RTCIceServer];
+        if (servers) {
+            res.iceServers = servers;
         }
 
         return res;
-    }, scope.getDb().get(settingsT.key));
+    }, aurora.widgets.SystemSettings.get(scope));
     this.stateB_ = frp.createB({state: State.idle, caller: null});
     this.whoB_ = frp.createB('');
     this.channelStateB_ = frp.createB({audio: true, video: true});

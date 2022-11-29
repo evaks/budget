@@ -3,6 +3,7 @@ goog.provide('aurora.ui');
 goog.provide('aurora.ui.registerWindowSizes');
 
 
+goog.require('aurora.converters.ObjectStringConverter');
 goog.require('aurora.db.Comms');
 goog.require('aurora.db.Schema');
 goog.require('aurora.recoil.frp');
@@ -282,7 +283,7 @@ aurora.Client.typeFactories = {
 
     'object': function(key, name) {
         var col = new recoil.ui.widgets.table.StringColumn(key, name);
-        //col.meta_.converter = new wtm.converters.ObjectStringConverter();
+        col.meta_.converter = new aurora.converters.ObjectStringConverter();
         return col;
     }
 };

@@ -19,9 +19,9 @@ aurora.widgets.SystemSettings = function(scope, userid) {
     const settingsT = aurora.db.schema.tables.base.system_settings;
     this.tableWidget_ = new recoil.ui.widgets.table.TableWidget(scope);
 
-    let settingsB = scope.getDb().get(settingsT.key);
+    let settingsB = aurora.widgets.SystemSettings.get(scope);
     let contextB = aurora.permissions.getContext(scope);
-
+    
     let displaySettingsB = frp.liftBI(function(tbl, context) {
         let columns = new recoil.ui.widgets.TableMetaData();
         let res = tbl.createEmpty();
@@ -41,8 +41,18 @@ aurora.widgets.SystemSettings = function(scope, userid) {
         rows.sort(function(x, y) {
             return x.get(settingsT.cols.name).localeCompare(y.get(settingsT.cols.name));
         });
-        rows.forEach(function(row, i) {
+        let factories = tbl.getMeta().typeFactories;
+        rows.forEach (function(row, i) {
             row.setPos(i);
+            let type = row.get(settingsT.cols.type);
+            let factory = factories[type];
+
+            if (factory) {
+                let meta = factory(settingsT.cols.value, '', {}).getMeta({});
+                row.addCellMeta(settingsT.cols.value, meta);
+            }
+            
+            
             res.addRow(row);
         });
         return columns.applyMeta(res);
@@ -54,6 +64,55 @@ aurora.widgets.SystemSettings = function(scope, userid) {
 
 };
 
+/**
+ * @param {!aurora.widgetscope} scope
+ * @return {!recoil.frp.Behaviour<!recoil.structs.table.Table>}
+ */
+aurora.widgets.SystemSettings.get = function (scope) {
+    let frp = scope.getFrp();
+    const settingsT = aurora.db.schema.tables.base.system_settings;
+    let settingsB = scope.getDb().get(settingsT.key);
+    const converters = {
+        'boolean' : {
+            encode: v => v === 'true',
+            decode: v => v ? 'true' : 'false'
+        },
+        'object': {
+            encode: v => {try {return JSON.parse(v);} catch (e) {return v;}},
+            decode: v => JSON.stringify(v),
+        }
+    };
+
+    return frp.liftBI(tbl => {
+        let res = tbl.createEmpty();
+        tbl.forEachModify(row => {
+            let type = row.get(settingsT.cols.type);
+            let converter = converters[type];
+
+            
+            if (converter) {
+                row.set(settingsT.cols.value, converter.encode(row.get(settingsT.cols.value)));
+            }
+            res.addRow(row);
+        });
+        return res.freeze();
+    }, tbl => {
+        let res = tbl.createEmpty();
+        tbl.forEachModify(row => {
+            let type = row.get(settingsT.cols.type);
+            let converter = converters[type];
+
+            
+            if (converter) {
+                row.set(settingsT.cols.value, converter.decode(row.get(settingsT.cols.value)));
+            }
+            res.addRow(row);
+        });
+        
+        settingsB.set(res.freeze());
+    }, settingsB);
+                      
+};
 
 /**
  * @return {!goog.ui.Component}

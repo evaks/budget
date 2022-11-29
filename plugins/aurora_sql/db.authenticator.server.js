@@ -319,7 +319,8 @@ aurora.db.Authenticator.prototype.getPermissions = function(token, socket, callb
             let userT = aurora.db.schema.tables.base.user;
             let groupT = aurora.db.schema.tables.base.group;
             let permT = aurora.db.schema.tables.base.permission;
-            if (data.userid == null) {
+            
+            if (!data || data.userid == null) {
                 me.cacheAndContinue_(token, socket, {userid: null, permissions: {}}, callback);
                 return;
             }
