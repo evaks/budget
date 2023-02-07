@@ -320,8 +320,10 @@ budget.widgets.Budget.prototype.exportToExcelB_ = function(budgetB, userB) {
             let totalArrears = 0;
             let totalOwing = 0;
             tbl.forEach(function(row) {
-                let entries = row.get(budgetT.cols.entries);
+                let entries = goog.array.clone(row.get(budgetT.cols.entries));
+                entries.sort((x, y) => x.order - y.order);
                 bPeriod = row.get(budgetT.cols.period);
+                
                 entries.forEach(function(entry) {
                     let type = entry[entryT.cols.type.getName()];
                     let desc = entry[entryT.cols.description.getName()];
@@ -349,8 +351,6 @@ budget.widgets.Budget.prototype.exportToExcelB_ = function(budgetB, userB) {
 
                         totalOwing += owingVal ? owingVal * 100 : 0;
                         totalArrears += arrearsVal ? arrearsVal * 100 : 0;
-
-
 
                         debts.push([desc, notes, {f: value}, period, {c: periodValue}, {f: arrears}, {f: owing}]);
                     }
@@ -733,11 +733,11 @@ budget.widgets.Budget.prototype.attach = function(idB) {
                 let owing = recoil.util.ExpParser.instance.eval(row.get(entryT.cols.owing));
                 let period = row.get(entryT.cols.period);
                 maxPos = Math.max(row.pos(), maxPos);
+                owingSum += owing ? Math.round(owing * 100) : 0;
+                arrearsSum += arrears ? Math.round(arrears * 100) : 0;
                 if (value != undefined) {
                     let type = row.get(entryT.cols.type);
                     let info = periodMeta.enumInfo[period];
-                    owingSum += Math.round(owing * 100);
-                    arrearsSum += Math.round(arrears * 100);
                     if (info) {
                         let val = Math.round(value * 100 / info.rate * budgetRate);
                         sum += val;
