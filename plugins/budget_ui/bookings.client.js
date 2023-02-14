@@ -61,7 +61,8 @@ budget.widgets.Bookings = function(scope) {
     }, securityContextB);
     
     let mentorB = recoil.frp.util.localDefaultValue(defaultMentorB, '1', 'bookings.mentor', localStorage, new recoil.db.Cache.BigIntSerializer());
-        
+
+    let startOverridesB = frp.createB(new goog.structs.AvlTree(recoil.util.object.compareKey));
     
     this.appointmentsB_ = frp.switchB(frp.liftB(function(date, mentor) {
         let query = new recoil.db.Query();
@@ -139,6 +140,7 @@ budget.widgets.Bookings = function(scope) {
     }, this.curDateB_, mentorB));
 
     let START_COL = new recoil.structs.table.ColumnKey('starttime');
+    let VIRTUAL_KEY_COL = new recoil.structs.table.ColumnKey('vkey');
     let LEN_COL = new recoil.structs.table.ColumnKey('len');    
     let SEARCH_COL = new recoil.structs.table.ColumnKey('search');
     this.siteB_ = scope.getDb().get(siteT.key);
@@ -189,17 +191,7 @@ budget.widgets.Bookings = function(scope) {
             }
         };
     }, mentorsB);
-    let idMap = {};
-    let getId = function(mentor, time) {
-        let key = mentor + ':' + time.getTime();
-        let res = idMap[key];
-        if (!res) {
-            res = appointmentsT.info.pk.getDefault();
-            idMap[key] = res;
-        }
-        return res;
 
-    };
     let newUser = function() {
         return cd('em', {class: 'appt-new-user'}, cd('i', {class: 'far fa-plus-square'}), ' create');
     };
@@ -269,7 +261,10 @@ budget.widgets.Bookings = function(scope) {
             outer, inner);
     };
 
+    const toTime = date => recoil.ui.widgets.TimeWidget.convertTimeToLocal(new Date(date));
+    
     let readOnly1 = [
+        START_COL,
         appointmentsT.cols.firstName,
         appointmentsT.cols.lastName,
         SEARCH_COL
@@ -284,10 +279,10 @@ budget.widgets.Bookings = function(scope) {
         appointmentsT.cols.scheduled,  LEN_COL
     ];
     let tableB = keepKeys(frp.liftBI(function(site, holidays, appointments, avail, startDate, mentorConverter, userMap, sec) {
+        let startOverrides = startOverridesB.get();
         // this reuses the some columns so we can get the meta data
-        let table = appointments.createEmpty([], [START_COL, SEARCH_COL, LEN_COL, clientCK]);
+        let table = appointments.createEmpty([], [START_COL, SEARCH_COL, LEN_COL, VIRTUAL_KEY_COL, clientCK]);
         // make the key an array of [time, mentor] we get the right order
-
 
         let startTime = recoil.ui.widgets.DateWidget2.convertLocaleDate(startDate).getTime();
         let endTime = budget.widgets.BusinessHours.addDays(startTime, 7);
@@ -314,7 +309,6 @@ budget.widgets.Bookings = function(scope) {
             columns.addColumn(spinnerColumn);
         }
         columns.add(appointmentsT.cols.showed, 'Came', {displayLength: 20});
-        table.addColumnMeta(START_COL, {editable: false});
         table.addColumnMeta(appointmentsT.cols.mentorid, {editable: false, converter: mentorConverter});
         table.addColumnMeta(appointmentsT.cols.firstName, {displayLength: 10});
         table.addColumnMeta(appointmentsT.cols.lastName, {displayLength: 10});
@@ -350,6 +344,7 @@ budget.widgets.Bookings = function(scope) {
                 row.set(appointmentsT.cols.email, '');
                 row.set(appointmentsT.cols.phone, '');
                 row.set(appointmentsT.cols.notes, '');
+                row.set(VIRTUAL_KEY_COL, null);
                 row.set(appointmentsT.cols.scheduled, false);
                 row.set(appointmentsT.cols.userid, null);
                 row.set(clientCK, null);
@@ -362,16 +357,25 @@ budget.widgets.Bookings = function(scope) {
 
             if (entry.avail.length === 0) {
                 let row = new recoil.structs.table.MutableTableRow(pos++);
-                
-                row.set(appointmentsT.cols.id, getId(entry.key[1], now));
+                let virtualKey = {mentor: entry.key[1], start: now.getTime()};
+                let override = startOverrides.findFirst({key: virtualKey});
+
+                let key = override ? override.id : appointmentsT.info.pk.getDefault();
+                row.set(appointmentsT.cols.id, key);
                 row.set(appointmentsT.cols.showed, false);
-                row.set(START_COL, recoil.ui.widgets.TimeWidget.convertTimeToLocal(now));
+                if (override) {
+                    row.set(START_COL, override.start);
+                }
+                else {
+                    row.set(START_COL, recoil.ui.widgets.TimeWidget.convertTimeToLocal(now));
+                }
+                row.set(VIRTUAL_KEY_COL, virtualKey);
+                row.addCellMeta(START_COL, {min: toTime(entry.minStart), max: toTime(entry.maxStart)});
                 row.set(appointmentsT.cols.start, entry.key[0]);
                 row.set(appointmentsT.cols.stop, entry.stop);
                 row.set(LEN_COL, Math.floor(entry.stop - entry.key[0])/60000);
 
                 row.addCellMeta(LEN_COL, {max: Math.floor(entry.max/60000), enabled: recoil.ui.BoolWithExplanation.FALSE});
-                row.addCellMeta(appointmentsT.cols.notes, {enabled: recoil.ui.BoolWithExplanation.FALSE});
                 row.set(appointmentsT.cols.mentorid, entry.key[1]);
                 row.set(SEARCH_COL, null);
                 row.set(appointmentsT.cols.firstName, '');
@@ -403,12 +407,14 @@ budget.widgets.Bookings = function(scope) {
                     let start = row.get(appointmentsT.cols.start);
                     let stop = row.get(appointmentsT.cols.stop);
                     row.set(START_COL, recoil.ui.widgets.TimeWidget.convertTimeToLocal(new Date(start)));
+                    row.addCellMeta(START_COL, {min: toTime(entry.minStart), max: toTime(entry.maxStart)});
                     if (entry.descheduled) {
-                        row.addCellMeta(START_COL, {cellDecorator: descheduledDecorator});
+                        row.addCellMeta(START_COL, {cellDecorator: descheduledDecorator, editable: false});
                         row.addCellMeta(LEN_COL, {editable: false});
                         
                     }
                     let mentorid = row.get(appointmentsT.cols.mentorid).db;
+                    row.addCellMeta(START_COL, {max: toTime(entry.maxStart), min: toTime(entry.minStart)});
                     row.addCellMeta(LEN_COL, {max: Math.floor(entry.max/60000)});
                     row.set(LEN_COL, Math.floor((stop-start)/60000));
                     row.set(appointmentsT.cols.mentorid, mentorid);
@@ -450,6 +456,7 @@ budget.widgets.Bookings = function(scope) {
                     row.addCellMeta(appointmentsT.cols.scheduled, {editable: true});
                     if (row.get(appointmentsT.cols.scheduled)) {
                         let cols = [
+                            START_COL,
                             appointmentsT.cols.firstName, appointmentsT.cols.lastName,
                             appointmentsT.cols.phone, SEARCH_COL, appointmentsT.cols.notes,
                             appointmentsT.cols.address, appointmentsT.cols.email,
@@ -459,11 +466,12 @@ budget.widgets.Bookings = function(scope) {
                             row.addCellMeta(col, {enabled: new recoil.ui.BoolWithExplanation(false, budget.messages.UNSCHEDULE_TO_EDIT)});
                         });
                     }
-
+                    row.set(VIRTUAL_KEY_COL, null);
                     row.setPos(pos++);
                     table.addRow(row);
                 });
             }
+
         });
         return columns.applyMeta(table);
 
@@ -475,6 +483,8 @@ budget.widgets.Bookings = function(scope) {
         let seen = new goog.structs.AvlTree(recoil.util.compare);
         let res = origAppointments.createEmpty();
         let aKeys = appointmentsT.cols;
+        let startOverrides = new goog.structs.AvlTree(recoil.util.object.compareKey);
+        
         tbl.forEach(function(row, pks) {
             //console.log("updating start time", row.get(START_COL));
             if (row.get(SEARCH_COL)) {
@@ -613,6 +623,9 @@ budget.widgets.Bookings = function(scope) {
 
             seen.add(row.get(aKeys.id));
             if (blank) {
+                // remember start values
+                startOverrides.add({key: row.get(VIRTUAL_KEY_COL), id: row.get(aKeys.id), start: row.get(START_COL)});
+                
                 // need to remove
             }
             else {
@@ -644,7 +657,12 @@ budget.widgets.Bookings = function(scope) {
                 }
                 mrow.set(aKeys.mentorid, new aurora.db.PrimaryKey(row.get(aKeys.mentorid)));
                 mrow.set(aKeys.stop, row.get(LEN_COL) * 60000 + row.get(aKeys.start));
-
+                let newStart = recoil.ui.widgets.TimeWidget.convertToDateMs(mrow.get(aKeys.start), row.get(START_COL));
+                let oldStart = mrow.get(aKeys.start);
+                if (newStart != oldStart) {                    
+                    mrow.set(aKeys.start,  newStart);
+                    mrow.set(aKeys.stop, row.get(LEN_COL) * 60000 + newStart);
+                }
 
                 // do not change scheduled it is not allowed the action will do it
                 mrow.set(aKeys.scheduled, orig ? orig.get(aKeys.scheduled) : null);
@@ -659,8 +677,9 @@ budget.widgets.Bookings = function(scope) {
                 res.addRow(row);
             }
         });
+        startOverridesB.set(startOverrides);
         me.appointmentsB_.set(res.freeze());
-    }, this.siteB_, this.holidaysB_, this.appointmentsB_, this.availableB_, this.curDateB_, mentorConverterB, userMapB, securityContextB, scheduleActionB, unscheduleActionB));
+    }, this.siteB_, this.holidaysB_, this.appointmentsB_, this.availableB_, this.curDateB_, mentorConverterB, userMapB, securityContextB, scheduleActionB, unscheduleActionB, startOverridesB));
     this.tableWidget_.attachStruct(tableB);
     this.tableWidget_.getComponent().render(this.containerDiv_);
 
@@ -772,11 +791,14 @@ budget.widgets.Bookings.makeAppointmentMap_ = function(avail, holidays, appointm
 
                     }
                 });
-                let addAppointment = function (appt, maxStop) {
+                let addAppointment = function (appt, maxStop, minStart) {
                     let stop = appt.get(appointmentsT.cols.stop);
                     let startInt = appt.get(appointmentsT.cols.start);
+                    let apptLen = stop - startInt;
+                    let maxApptStop = stop - 60000;
+                        
                     let next = findNextAppointmentStart(block, minAppt);
-
+                    
                     if (next !== null) {
                         maxStop = Math.min(maxStop, next);
                     }
@@ -784,7 +806,7 @@ budget.widgets.Bookings.makeAppointmentMap_ = function(avail, holidays, appointm
                     apptMap.add({
                         key: [startInt, mentor],
                         stop: stop,
-                        avail: [appt], max: maxStop  - startInt});
+                        avail: [appt], max: maxStop  - startInt, maxStart: maxApptStop, minStart});
 
                     todoApptsMap.remove({key: appt.get(appointmentsT.cols.id)});
                     // start must be at least 1 minute otherwize we get an infinite loop
@@ -793,7 +815,7 @@ budget.widgets.Bookings.makeAppointmentMap_ = function(avail, holidays, appointm
                 };
                 
                 if (startAppointment) {
-                    addAppointment(startAppointment, maxStop);
+                    addAppointment(startAppointment, maxStop, start);
                 }
                 else if (minAppt) {
                     // we have an appointment on our block but it starts after
@@ -801,15 +823,15 @@ budget.widgets.Bookings.makeAppointmentMap_ = function(avail, holidays, appointm
                     apptMap.add({
                         key: [start, mentor],
                         stop: stop,
-                        avail: [], max: stop  - start});
-                    addAppointment(minAppt, maxStop);
+                        avail: [], max: stop  - start, maxStart: stop - 60000, minStart: start});
+                    addAppointment(minAppt, maxStop, start);
                 }
                 else {                    
                     // no appointments scheduled empty block
                     apptMap.add({
                         key: [start, mentor],
                         stop: start + len,
-                        avail: [], max: maxStop  - start});
+                        avail: [], max: maxStop  - start, maxStart: maxStop - 60000, minStart: start});
                     start += len;
                     len = getAppointmentLength(usage.lengths, start);
                     
