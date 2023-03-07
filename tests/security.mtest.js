@@ -148,6 +148,9 @@ let client3Id;
 function makeUser(obj) {
     let base = {active: true, lockcount: 0, email: ''};
     goog.object.extend(base, obj);
+    if (obj.firstName == undefined) {
+        base.firstName = 'test';
+    }
     return base;
     
 };

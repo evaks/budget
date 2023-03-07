@@ -86,12 +86,15 @@
 	},
 	{
 	    "name" : "student_loan",
+		"version": 1,
 	    "indexes": [{"columns": ["start","stop"]}],
 	    "access": "aurora.db.access.basic([{'site-management': 'crud'}, {'': 'r'}])",
 	    "accessFilter": [{"" : "all"}],
 
 	    "initial": [
-		{"start":20000101, "stop": 20500401, "rate":139, "weeklyMin": 39000, "rate": 1200} 
+			{"start":20000101, "stop": 20500401, "rate":139, "weeklyMin": 39000, "rate": 1200},
+			{"start":20220401, "stop": 20230331, "rate":139, "weeklyMin": 40800, "rate": 1200},
+			{"start":20230401, "stop": 20500331, "rate":139, "weeklyMin": 43900, "rate": 1200}
 	    ],
 	    "columns": [
 		{"name": "id", "type": "id"},

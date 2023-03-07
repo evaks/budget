@@ -199,6 +199,9 @@ budget.widgets.Bookings = function(scope) {
     let existingUser = function(uname) {
         return cd('em', {class: 'appt-existing-user'}, cd('i', {class: 'fas fa-edit'}), ' ' + uname);
     };
+    let selfUser = function(uname) {
+        return cd('em', {class: 'appt-existing-user', title: 'Created by Client'}, cd('i', {class: 'far fa-user'}), ' ' + uname);
+    };
     let searchIcon = function() {
         let res = cd('i', 'fas fa-search');
         res.equals = function(other) {
@@ -348,6 +351,7 @@ budget.widgets.Bookings = function(scope) {
                 row.set(appointmentsT.cols.scheduled, false);
                 row.set(appointmentsT.cols.userid, null);
                 row.set(clientCK, null);
+                row.set(appointmentsT.cols.creator, null);
                 table.addRow(row);
 
 
@@ -387,6 +391,8 @@ budget.widgets.Bookings = function(scope) {
                 row.set(appointmentsT.cols.scheduled, false);
                 row.set(appointmentsT.cols.userid, null);
                 row.set(clientCK, null);
+                row.set(appointmentsT.cols.creator, null);
+                
                 row.addCellMeta(SEARCH_COL, {text: searchIcon()});
 
                 if (!editable(sec)) {
@@ -447,7 +453,10 @@ budget.widgets.Bookings = function(scope) {
 
 
                     if (userid) {
-                        row.addCellMeta(clientCK, {text: userMap[userid.db] || 'unknown', formatter: existingUser});
+                        let creator = row.get(appointmentsT.cols.creator);
+                        row.addCellMeta(clientCK, {
+                            text: userMap[userid.db] || 'unknown',
+                            formatter: (creator &&  userid.db == creator.db) ? selfUser : existingUser});
                     }
                     else {
                         row.addCellMeta(clientCK, {formatter: newUser});
@@ -632,6 +641,7 @@ budget.widgets.Bookings = function(scope) {
                 let mrow = row.unfreeze();
                 let orig = origAppointments.getRow(pks);
                 if (orig && (orig.get(aKeys.firstName) != row.get(aKeys.firstName) || orig.get(aKeys.lastName) != row.get(aKeys.lastName))) {
+                    mrow.set(aKeys.creator, new aurora.db.PrimaryKey(securityContextB.get().userid));
                     mrow.set(aKeys.userid, null);
                 }
                 if (orig && (orig.get(aKeys.scheduled) !== null) != row.get(aKeys.scheduled)) {

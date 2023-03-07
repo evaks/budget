@@ -771,7 +771,6 @@ budget.actions.addAppointment = function(coms, context, reader, mentorid, userid
         callback('Can\'t schedule an appointment in the past');
         return;
     }
-
     let holidaysT = aurora.db.schema.tables.base.site_holidays;
     let appointmentsT = aurora.db.schema.tables.base.appointments;
     let availT = aurora.db.schema.tables.base.mentor_availablity;
@@ -803,6 +802,10 @@ budget.actions.addAppointment = function(coms, context, reader, mentorid, userid
             throw 'Mentor does not exist';
         }
 
+        if ((users[0].firstName || '').trim() == '' && (users[0].lastName || '').trim() == '') {
+            throw 'You must specify a name to schedule an appointment';
+        }
+        
         let mentorGroups = await reader.readObjectsAsync(
             context, groupT, query.isIn(query.field(groupT.cols.id), mentors[0].groups.map(x => x.groupid)), null);
 
@@ -854,7 +857,7 @@ budget.actions.addAppointment = function(coms, context, reader, mentorid, userid
         let appt = {
             showed: 0, mentorid: mentorid, scheduled: null, userid: userid,
             start, stop, firstName: user.firstName || '', lastName: user.lastName || '',
-            phone: user.phone || '' , email: user.email || '', address: user.address || ''};
+            phone: user.phone || '' , email: user.email || '', address: user.address || '', creator:     context.userid };
         let res = await reader.insertAsync(context, appointmentsT, appt);
         appt.id = res.insertId;
         let uuid = budget.actions.createScheduleId(appt.id);
@@ -1115,7 +1118,9 @@ budget.actions.register = function(coms, context, reader, inputs, callback) {
         }
 
         let makeUser = function(username) {
+            console.log('make user', username);
             object[userT.cols.username.getName()] = username.toLowerCase();
+            object[userT.cols.lastaccess.getName()] = new Date().getTime();
             aurora.db.Pool.hashPasswordPromise(password).then(function(pword) {
                 object[userT.cols.password.getName()] = password === '' ? null : pword;
                 return new Promise(function(resolve, reject) {

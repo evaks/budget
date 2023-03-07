@@ -1068,20 +1068,25 @@ function generateDbInit(def, ns, types, out) {
     fs.appendFileSync(out, 'goog.require(\'aurora.log\');\n\n');
 
     fs.appendFileSync(out, '/**\n * @param {!aurora.db.Pool} pool\n');
+    fs.appendFileSync(out, ' * @param {!Object} tableVersions\n');
     fs.appendFileSync(out, ' * @param {function(?)} cb\n */\n');
-    fs.appendFileSync(out, prefix + '.updateDb = function (pool, cb) {\n');
-    fs.appendFileSync(out, '    aurora.db.schema.init.doUpdateDb(pool, ' + prefix + '.updateDb_, cb);\n');
+    fs.appendFileSync(out, prefix + '.updateDb = function (pool, tableVersions, cb) {\n');
+    fs.appendFileSync(out, '    aurora.db.schema.init.doUpdateDb(pool, ' + prefix + '.updateDb_, tableVersions, cb);\n');
     fs.appendFileSync(out, '};\n\n');
     fs.appendFileSync(out, '/**\n * @private\n');
     fs.appendFileSync(out, ' * @param {!aurora.db.Pool} pool\n');
+    fs.appendFileSync(out, ' * @param {!Object} tableVersions\n');
     fs.appendFileSync(out, ' * @param {function(?)} cb\n */\n');
-    fs.appendFileSync(out, prefix + '.updateDb_ = function (pool, cb) {\n');
+    fs.appendFileSync(out, prefix + '.updateDb_ = function (pool, tableVersions, cb) {\n');
 
     fs.appendFileSync(out, '    let log = aurora.log.createModule(' + stringify('DBINIT-' + ns.toUpperCase(ns)) + ');\n');
+    fs.appendFileSync(out, '    let existingTableVersions = {};\n');
+    fs.appendFileSync(out, '    for (let name in tableVersions) {\n');
+    fs.appendFileSync(out, '        existingTableVersions[name] = tableVersions[name];\n');
+    fs.appendFileSync(out, '    }\n');
     fs.appendFileSync(out, '    let todoInserts = [];\n');
     fs.appendFileSync(out, '    let tableResults = {};\n');
     fs.appendFileSync(out, '    const async = require(\'async\');\n');
-
     fs.appendFileSync(out, '    async.series([\n');
 
     let firstTable = true;
@@ -1092,6 +1097,7 @@ function generateDbInit(def, ns, types, out) {
         startTable: function(name, data, stack, tName, parentCol) {
             let tableName = data.tableName;
             tableMap[tableName] = data;
+            
             if (data.initial) {
                 inserts[tableName] = (inserts[tableName] || []).concat(data.initial);
             }
@@ -1099,7 +1105,9 @@ function generateDbInit(def, ns, types, out) {
                 fs.appendFileSync(out, ',\n');
             }
             tableInfo = {passwords: {}};
-            fs.appendFileSync(out, '        function (callback) {\n            log.info(\'Creating table\', ' + stringify(tableName) + ');\n');
+            fs.appendFileSync(out, '        function (callback) {\n');
+            fs.appendFileSync(out, '                 log.info(\'Creating table\', ' + stringify(tableName) + ');\n');
+            fs.appendFileSync(out, '                 tableVersions[' + stringify(tableName) + '] = ' + (data.version || 0) + ';\n');
             fs.appendFileSync(out, '            let fields = {\n');
             if (parentCol) {
                 let parentType = getColType(parentCol, types);
@@ -1191,6 +1199,7 @@ function generateDbInit(def, ns, types, out) {
                 }
             });
         }
+        let tableVersion = tableMap[table].version || 0;
 
         tableMap[table].columns.forEach(function(c) {
             colMap[c.name] = c;
@@ -1244,7 +1253,14 @@ function generateDbInit(def, ns, types, out) {
             }
             fs.appendFileSync(out, '\n' + padding + '        function(callback) {\n');
             if (depth == 0) {
-                fs.appendFileSync(out, padding + '            if (tableResults[' + stringify(table) + '].existed) {callback(null); return;}\n');
+                fs.appendFileSync(out, padding + '            let existingVersion = existingTableVersions[' + stringify(table) +'] || 0;\n');
+                fs.appendFileSync(out, padding + '            let entryVersion = ' + (row.$$version || 0) + ';\n');
+                if (row.$$version != undefined) {
+                    row = {...row};
+                    delete row.$$version;
+                }
+                
+                fs.appendFileSync(out, padding + '            if (tableResults[' + stringify(table) + '].existed && existingVersion >= entryVersion) {callback(null); return;}\n');
             }
 
             if (row['!select']) {

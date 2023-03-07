@@ -23,6 +23,7 @@
 	    { "name": "lastinvalidtime", "type": "datetime", "nullable": true, "access": "aurora.db.access.create" },
 	    { "name": "password", "type": "password", "nullable": true, "access": "aurora.db.access.basic([{'user-management':'crud'},{'': 'r'}])"},
 	    { "name": "email", "type": "string(128)", "default": ""},
+		{ "name": "lastaccess", "type": "datetime", "nullable": true, "default": null},
 	    { "name": "groups", "type": "leaf-list(userid)",
 	      "access": "aurora.db.access.basic([{'user-management':'crud'},{'': 'r'}])",
 	      "table": {

@@ -132,19 +132,20 @@
 		{"client": "budget.filter.userAppointment"}
 	    ],
 	    "columns": [
-		{ "name": "id", "type": "id"},
-		{ "name": "showed", "type": "boolean"},
-		{ "name": "mentorid", "type": "ref(user)", "access" : "aurora.db.access.basic([{'site-management':'crud'}, {'mentor':'crd'}, {'client':'crd'}, {'': 'crd'}])"},
-		{ "name": "scheduled", "type": "string(100)", "nullable": true, "access" : "aurora.db.access.basic([{'': 'r'}])"},
-		{ "name": "userid", "type": "ref(user)", "nullable": true, "access" : "aurora.db.access.basic([{'site-management':'crud'}, {'mentor':'crd'}, {'client':'crd'}, {'': 'r'}])"},
-		{ "name": "start", "type": "datetime"},
-		{ "name": "stop", "type": "datetime", "nullable":true},
+			{ "name": "id", "type": "id"},
+			{ "name": "showed", "type": "boolean"},
+			{ "name": "mentorid", "type": "ref(user)", "access" : "aurora.db.access.basic([{'site-management':'crud'}, {'mentor':'crd'}, {'client':'crd'}, {'': 'crd'}])"},
+			{ "name": "scheduled", "type": "string(100)", "nullable": true, "access" : "aurora.db.access.basic([{'': 'r'}])"},
+			{ "name": "userid", "type": "ref(user)", "nullable": true, "access" : "aurora.db.access.basic([{'site-management':'crud'}, {'mentor':'crd'}, {'client':'crd'}, {'': 'r'}])"},
+			{ "name": "start", "type": "datetime"},
+			{ "name": "stop", "type": "datetime", "nullable":true},
 			{ "name": "firstName", "type": "string(100)", "default": "", "trim": true},
 			{ "name": "lastName", "type": "string(100)", "default": "", "trim": true},
 			{ "name": "notes", "type": "string(255)", "default": ""},
-		{ "name": "phone", "type": "Phone"},
-		{ "name": "email", "type": "string(128)"},
-		{ "name": "address", "type": "string(255)"}
+			{ "name": "phone", "type": "Phone"},
+			{ "name": "email", "type": "string(128)"},
+			{ "name": "address", "type": "string(255)"},
+			{ "name": "creator", "type": "ref(user)", "nullable": true}
 	    ]
 	},
 	

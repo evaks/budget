@@ -1,12 +1,17 @@
 goog.provide('aurora.SystemSettings');
 
+goog.require('aurora.startup');
+
 /**
  * @constructor
  */
 aurora.SystemSettings = function() {
     this.log_ = aurora.log.createModule('SYS-SETTINGS');
     this.settings_ = {};
+    this.loaded_ = false;
+    this.onReady_ = [];
 };
+
 
 /**
  * @param {string} path
@@ -71,12 +76,29 @@ aurora.SystemSettings.prototype.update = function(reader, opt_user) {
                 me.log_.info(opt_user + ' updated system settings');
             }
             me.settings_ = newObject;
+
+            let cbs = me.onReady_;
+            me.loaded_ = true;
+            me.onReady_ = [];
+            cbs.forEach(x => x());
         }
     });
 
 };
-
+/**
+ * @param {function ()} cb
+ */
+aurora.SystemSettings.prototype.onReady = function (cb) {
+    if (this.loaded_) {
+        cb();
+    }
+    else {
+        this.onReady_.push(cb);
+    }
+};
 
 /**
  */
 aurora.SystemSettings.instance = new aurora.SystemSettings();
+
+//aurora.startup.taskStarted('aurora.SystemSettings');

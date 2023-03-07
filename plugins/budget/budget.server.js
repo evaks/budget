@@ -1,6 +1,7 @@
 goog.provide('budget.Server');
 
 goog.require('aurora.Chat');
+goog.require('aurora.SystemSettings');
 goog.require('aurora.auth.Auth');
 goog.require('aurora.auth.DbSessionTable');
 goog.require('aurora.db.Coms');
@@ -38,6 +39,8 @@ budget.Server = function() {
     }
     let dbAuth = null;
     let databases = ((config['database'] || {})['databases']) || [];
+
+
     let auth = aurora.auth.instance;
     if (initDb) {
         aurora.startup.taskStarted('budget.Server.initDb');
@@ -112,6 +115,66 @@ budget.Server = function() {
                 }, 1000);
             });
     }
+
+    let updateAccessTasks = new Map();
+    const userT = aurora.db.schema.tables.base.user;
+    
+    aurora.http.addMidRequestCallback(/.*/, (state) => {
+        if (state.userid != null) {
+            let id = state.userid;
+            let existing = updateAccessTasks.get(id);
+            if (existing) {
+                clearTimeout(existing);
+            }
+            // update access no more that once a minute
+            updateAccessTasks.set(id, setTimeout(() => {
+                let query = new recoil.db.Query();
+
+                this.reader_.updateOneLevel(
+                    {}, userT,
+                    {id: state.userid, lastaccess: new Date().getTime()},
+                    query.eq(userT.cols.id, BigInt(id)), () => {});
+            }, 60000));
+            
+        }
+        
+        return null;
+    });
+
+   
+        
+    const NOT_CLIENT = "(select ug.userid from  user_group ug, `group` g where  g.id = ug.groupid and g.name <> 'client')";
+    const RECENT_APPOINTMENT = "(select a.userid from appointments a where a.stop > xxx)";
+    
+    const doPurge = () => {
+        const PURGE_INTERVAL = 3600000;
+        let purgeDays = aurora.SystemSettings.instance.getSettings('purge/days', null);
+
+        if (!purgeDays) {
+            setTimeout(doPurge, PURGE_INTERVAL);
+            return;
+        }
+
+        let last = new Date() - 3600000 * 24 * purgeDays;
+        let query = new recoil.db.Query();
+        
+            this.reader_.deleteObjects(
+                {}, userT,
+                query.and(
+                    query.notIn(userT.cols.id, query.raw(NOT_CLIENT.replaceAll('xxx', last))),
+                    query.notIn(userT.cols.id, query.raw(RECENT_APPOINTMENT.replaceAll('xxx', last))),
+                    query.not(query.null(userT.cols.lastaccess)),
+                query.lt(userT.cols.lastaccess, query.val(last))), null,
+                (x, y) => {
+                    setTimeout(doPurge, PURGE_INTERVAL);
+                }
+            );
+        
+        //    		
+        //                               
+    };
+    aurora.SystemSettings.instance.onReady(doPurge);
+        
 
     if (dbAuth) {
         new aurora.db.Coms(/** @type {!aurora.db.Authenticator} */ (dbAuth));

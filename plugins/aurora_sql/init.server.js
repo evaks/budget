@@ -85,7 +85,41 @@ aurora.db.schema.init.insert = function (pool, table, row,  lookups, cb) {
  * @param {function(?)} done
  */
 aurora.db.schema.init.doUpdateDb = function(pool, updateFunc, done) {
+    let tableVersions = {};
+    let getVersionsAndUpdateAsync = async function (pool)  {
+        await pool.createTableAsync('table_versions', {
+            'id' : {type: aurora.db.type.types.bigint, pk: true},
+            'name': {type: aurora.db.type.types.varchar,length: 1024},
+            'version': {type: aurora.db.type.types.bigint}
+        }, [], {exists: true});
+        let {results, fields} = await pool.queryAsync('SELECT id, name, version FROM `table_versions`');
+        let versions = {};
+        results.forEach(val => {
+            versions[val.name] = BigInt(val.version);
+        });
+        return versions;
+    };
 
+    let updateVersions = async (pool, versions) => {
+        await pool.deleteAsync('table_versions', {});
+        for (let name in versions) {
+            await pool.insertAsync('table_versions', {'name': name, 'version' : versions[name]});
+        }
+    };
+    let getVersionsAndUpdate = function (pool, cb)  {
+        getVersionsAndUpdateAsync(pool).then((versions) => {
+            updateFunc(pool, versions, (err) => {
+                if (err) {
+                    cb(err);
+                }
+                else {
+                    updateVersions(pool, versions).then(() => cb()).catch(cb);
+                }
+            });
+        }).catch(cb);
+    };
+
+    
     let log = aurora.log.createModule('DBINIT-BASE');
     log.info('Backing up database');
     pool.backup(function(err, fname) {
@@ -97,7 +131,7 @@ aurora.db.schema.init.doUpdateDb = function(pool, updateFunc, done) {
         if (fname) {
             // the database existed do restore if failed
             log.info('Backed up to ', fname);
-            updateFunc(pool, function(err) {
+            getVersionsAndUpdate(pool, function(err) {
                 if (err && fname) {
                     pool.restore(fname, function(rbError) {
                         done(rbError || err);
@@ -115,7 +149,7 @@ aurora.db.schema.init.doUpdateDb = function(pool, updateFunc, done) {
                     done(err);
                 }
                 else {
-                    updateFunc(pool, function(rbError) {
+                    getVersionsAndUpdate(pool, function(rbError) {
                         if (err) {
                             pool.dropDb(function() {
                                 done(rbError);

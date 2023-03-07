@@ -411,6 +411,26 @@ aurora.db.mysql.Pool.formatQuery = function(query, valueMap) {
     test('hi+?0bc,', {'0bc': 4},{sql: 'hi+?,' , values: [4]});
 })();
 
+
+/**
+ * @param {string} query
+ * @param {!Object<string,?>=} opt_params 
+ * @return {Promise<{results:(Array|!aurora.db.type.InsertDef),fields:?}>}
+ */
+
+aurora.db.mysql.Pool.prototype.queryAsync = function(query, opt_params) {
+    return new Promise((accept, reject) => {
+        this.query(query, opt_params || {}, (error, results, fields) => {
+            if (error) {
+                reject(error);
+            }
+            else {
+                accept({results, fields});
+            }
+        });
+    });
+};
+
 /**
  * @param {string} query
  * @param {function(?,(Array|!aurora.db.type.InsertDef),?)|!Object<string,?>} params (error, results, fields)
@@ -477,6 +497,25 @@ aurora.db.mysql.Pool.prototype.queryLarge = function(query, params, rowCb, doneC
     }
 
 };
+
+/**
+ * @param {string} table
+ * @param {!Object<string,?>} value
+ * @return {Promise<?aurora.db.type.InsertDef>} 
+ */
+aurora.db.mysql.Pool.prototype.insertAsync = function(table, value) {
+    return new Promise((accept, reject) => {
+        this.insert(table, value, (err, res) => {
+            if (err) {
+                reject(err);
+            }
+            else {
+                accept(res);
+            }
+        });
+    });
+};
+            
 /**
  * @param {string} table
  * @param {!Object<string,?>} values
@@ -547,6 +586,25 @@ aurora.db.mysql.Pool.prototype.safeInsert = function(table, pk, values, callback
     return aurora.db.Pool.mkSeqFunc(this.insert, table, values, callback);
 };
 
+/**
+ * @param {string} table
+ * @param {!Object<string,?>} keys
+ * @return {Promise<number>} number of row effected
+ */
+aurora.db.mysql.Pool.prototype.deleteAsync = function(table, keys) {
+    return new Promise((accept, reject) => {
+        this.delete(table, keys, (err, effected) => {
+            if (err) {
+                reject(err);
+            }
+            else {
+                accept(effected);
+            }
+        });
+    });
+};
+            
+
 
 /**
  * @param {string} table
@@ -566,8 +624,7 @@ aurora.db.mysql.Pool.prototype.delete = function(table, keys, callback) {
         }).join(' AND ');
     }
     this.query(sql, values, function(err, results) {
-        console.log('todo get effected', results);
-        callback(err, 0);
+        callback(err, results ? (results.affectedRows || 0) : 0);
     });
 };
 
@@ -829,6 +886,28 @@ aurora.db.mysql.Pool.prototype.makeFieldDef_ = function (name, field) {
     }
     return sql;
 };
+
+/**
+ * @param {string} table
+ * @param {!Object<string,aurora.db.type.ColumnDef>} fields
+ * @param {!Array<!aurora.db.type.IndexDef>} indexes
+ * @param {!aurora.db.type.TableOptions} options
+ * @return {Promise<{existed:boolean,changes:!aurora.db.Pool.TableChanges}>}
+ */
+
+aurora.db.mysql.Pool.prototype.createTableAsync = function(table, fields, indexes, options) {
+    return new Promise((accept, reject) => {
+        this.createTable(table, fields, indexes, options, (err, existed, changes) => {
+            if (err) {
+                reject(err);
+            }
+            else {
+                accept({existed, changes});
+            }
+        });
+    });
+};
+
 /**
  * @param {string} table
  * @param {!Object<string,aurora.db.type.ColumnDef>} fields
