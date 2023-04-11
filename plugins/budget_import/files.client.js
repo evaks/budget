@@ -364,13 +364,40 @@ budget.widgets.import.FileWidget.prototype.flatten = recoil.frp.struct.NO_FLATTE
 
 /**
  * @param {string} txt
+ * @param {{col: number, count: number}=} handleComma if this is defined then this column can have unescaped commas it this will just be added to the  
  * @return {Array<Array<string>>}
-*/
-budget.widgets.import.FileWidget.parseCSV = function(txt) {
+ */
+budget.widgets.import.FileWidget.parseCSV = function(txt, handleComma) {
     let lines = [];
     let inQuote = false;
     let curField = '';
     let curLine = [];
+    function fixComma(line) {
+        // strip any blanks at the end of the line in the csv
+        if (handleComma) {
+            while (line.length > 0 && line[line.length -1].trim() == '') {
+                line.pop();
+            }
+        }
+        if (handleComma && line.length > handleComma.count) {
+            let diff = line.length - handleComma.count;
+            
+            let newLine = [];
+            let pos = 0;
+            while (newLine.length <= handleComma.col) {
+                newLine.push(line[pos++]);
+            }
+            for (let i = 0; i < diff; i++) {
+                newLine[newLine.length -1] =  newLine[newLine.length -1] + ',' + line[pos++];
+            }
+            while (pos < line.length) {
+                newLine.push(line[pos++]);
+            }
+            return newLine;
+        }
+            
+        return line;
+    }
     for (let i = 0; i < txt.length; i++) {
         let ch = txt[i];
         if (!inQuote) {
@@ -394,7 +421,7 @@ budget.widgets.import.FileWidget.parseCSV = function(txt) {
                 }
                 else {
                     curLine.push(curField.trim());
-                    lines.push(curLine);
+                    lines.push(fixComma(curLine));
                     curLine = [];
                     curField = '';
                 }
@@ -424,7 +451,7 @@ budget.widgets.import.FileWidget.parseCSV = function(txt) {
         if (curField.trim().length > 0) {
             curLine.push(curField);
         }
-        lines.push(curLine);
+        lines.push(fixComma(curLine));
     }
     return lines;
 };
@@ -485,7 +512,7 @@ budget.widgets.import.FileWidget.makeMatcher = function(
     let minRowSize = [dateCol, partCol, refCol, amountCol].reduce((a, v) => Math.max(headers.indexOf(v), a), 0) + 1;
 
     let parse = function(content, name) {
-        let lines = budget.widgets.import.FileWidget.parseCSV(content);
+        let lines = budget.widgets.import.FileWidget.parseCSV(content, opts.handleCommas != undefined ? {col: opts.handleCommas, count: headers.length} : undefined);
         let pos = skip(lines);
         let amountIndex = headers.indexOf(amountCol);
         let refIndex = refCol ? headers.indexOf(refCol) : -1;
@@ -806,6 +833,29 @@ budget.widgets.import.FileWidget.RABO_CSV = budget.widgets.import.FileWidget.mak
     });
     
 
+/**
+ * @param {string} name
+ * @param {string} content
+ * @param {?} data
+ * @return {boolean}
+ */
+budget.widgets.import.FileWidget.COOP_CSV = budget.widgets.import.FileWidget.makeMatcher(
+    ['Date','Details','Amount','Balance'], 'Date', 'Details', undefined, 'Amount', {
+        needsHeader: true,
+        handleCommas: 1,
+        matchFunc: function (lines, header) {
+            if (lines.length < 1) {
+                 return false;
+            }
+            return recoil.util.object.isEqual(header, lines[0]);
+        },
+        parseAmount(v, line) {
+            return Math.round(parseFloat(v) * 100) / 100;
+         },
+        getRange: null
+        
+     });
+
 
 /**
  * @param {string} name
@@ -889,6 +939,7 @@ budget.widgets.import.FileWidget.FILE_TYPES = (function() {
         {name: 'ASB (CSV)', matcher: budget.widgets.import.FileWidget.ASB_CSV },
         {name: 'ANZ (CSV)', matcher: budget.widgets.import.FileWidget.ANZ_CSV},
         {name: 'BNZ (CSV)', matcher: budget.widgets.import.FileWidget.BNZ_CSV},
+        {name: 'Co-operative Bank(CSV)', matcher: budget.widgets.import.FileWidget.COOP_CSV},
         {name: 'RABO (CSV)', matcher: budget.widgets.import.FileWidget.RABO_CSV},
         {name: 'Budget (CSV)', matcher: budget.widgets.import.FileWidget.BUDGET_CSV},
         {name: 'ANZ Visa (CSV)', matcher: budget.widgets.import.FileWidget.ANZ_CSV_VISA},

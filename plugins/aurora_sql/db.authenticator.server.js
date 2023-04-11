@@ -55,14 +55,15 @@ aurora.db.Authenticator.prototype.validate = function(token, cred, data, cb) {
         // hide errors
         let maxLocks = ((config['authentication'] || {})['maxTries'] || 3);
         let locktimeout = ((config['authentication'] || {})['lockoutMins'] || 15) * 60 * 1000;
-
+        let maxLocksExceeded = user && (maxLocks > 0 && user.lastinvalidtime && user.lockcount >= maxLocks);
+        
         if (err || !user) {
             if (!err) {
                 me.log_.warn('Invalid User', cred.username);
             }
             cb({message: 'Invalid User/Password'});
         }
-        else if (maxLocks > 0 && user.lastinvalidtime && user.lockcount >= maxLocks && user.lastinvalidtime + locktimeout > new Date().getTime()) {
+        else if (maxLocksExceeded && user.lastinvalidtime + locktimeout > new Date().getTime()) {
             cb({message: 'Account locked out try again in ' + Math.ceil(locktimeout / 60000) + ' Minutes'});
             me.log_.warn('Account Locked for', cred.username);
             let query = new recoil.db.Query();
@@ -75,7 +76,11 @@ aurora.db.Authenticator.prototype.validate = function(token, cred, data, cb) {
                     me.log_.warn('Invalid Password for', cred.username);
                     cb({message: 'Invalid User/Password'});
                     let query = new recoil.db.Query();
-                    reader.updateOneLevel({}, userT, {lockcount: reader.expression('lockcount + 1'), lastinvalidtime: new Date().getTime()}, query.eq(userT.info.pk, user.id), function(err) {});
+                    // we need this because we are only here because the timeout has expired
+                    // if we dont reset it, the users will exceed their max tries the next time
+                    // they log in if their password was wrong
+                    let lockcount = maxLocksExceeded ? 1 : reader.expression('lockcount + 1');
+                    reader.updateOneLevel({}, userT, {lockcount: lockcount, lastinvalidtime: new Date().getTime()}, query.eq(userT.info.pk, user.id), function(err) {});
                 }
                 else {
                     let query = new recoil.db.Query();

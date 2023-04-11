@@ -1,78 +1,101 @@
 {
     "namespace": "base",
+	"types": {
+		"AuditType": {"type": "enum", "enum": [
+			{"id":0, "name": "message"},
+			{"id":1, "name": "create"},
+			{"id":2, "name": "update"},
+			{"id":3, "name": "delete"},
+			{"id":4, "name": "read"}
+
+		]}
+	},
     "tables" : [{
-	"name": "user",
-	"indexes": [{"unique": true, "columns": ["username"]}],
-	"access": "aurora.db.access.basic([{'user-management':'crud'},{'': 'rud'}])",
-	"accessFilter": [
-	    {"user-management" : "all"},
-	    {"": "aurora.db.access.filter.equal('user','@userid')"}],
-	"initial": [
-	    {"active": true, "username": "admin", "password":"admin", "email":"", "groups" : [
-		{"!select": {"cols":
-			     [{"to": "order", "exp" : 1},{"to": "groupid", "from": "id"}],
-			     "query": " FROM `group` WHERE name = 'admin' "}}]}
-	],
-	"columns": [
-	    { "name": "id", "type": "id", "start":1},
-	    { "name": "active", "type": "boolean", "default":true},
-	    { "name": "username", "type": "string(100)"},
-	    { "name": "resetcode", "type": "string(20)", "nullable": true, "access": "aurora.db.access.create" },
-	    { "name": "resetcodetimeout", "type": "datetime", "nullable": true, "access": "aurora.db.access.create" },
-	    { "name": "lockcount", "type": "int", "default": 0, "access": "aurora.db.access.create" },
-	    { "name": "lastinvalidtime", "type": "datetime", "nullable": true, "access": "aurora.db.access.create" },
-	    { "name": "password", "type": "password", "nullable": true, "access": "aurora.db.access.basic([{'user-management':'crud'},{'': 'r'}])"},
-	    { "name": "email", "type": "string(128)", "default": ""},
-		{ "name": "lastaccess", "type": "datetime", "nullable": true, "default": null},
-	    { "name": "groups", "type": "leaf-list(userid)",
-	      "access": "aurora.db.access.basic([{'user-management':'crud'},{'': 'r'}])",
-	      "table": {
-		  "name": "user_group",
-		  "columns": [
-		      {"name" : "id", "type": "id"},
-		      {"name" : "order", "type": "order"},		      
-		      {"name" : "groupid", "type": "ref(group)"}
-		  ]
-	      },
-	      "validation": "aurora.db.validators.unique"
-	      
-	    }
-	    
-	]
+		"name": "user",
+		"indexes": [{"unique": true, "columns": ["username"]}],
+		"access": "aurora.db.access.basic([{'user-management':'crud'},{'': 'rud'}])",
+		"accessFilter": [
+			{"user-management" : "all"},
+			{"": "aurora.db.access.filter.equal('user','@userid')"}],
+		"initial": [
+			{"active": true, "username": "admin", "password":"admin", "email":"", "groups" : [
+				{"!select": {"cols":
+							 [{"to": "order", "exp" : 1},{"to": "groupid", "from": "id"}],
+							 "query": " FROM `group` WHERE name = 'admin' "}}]}
+		],
+		"columns": [
+			{ "name": "id", "type": "id", "start":1},
+			{ "name": "active", "type": "boolean", "default":true},
+			{ "name": "username", "type": "string(100)"},
+			{ "name": "resetcode", "type": "string(20)", "nullable": true, "access": "aurora.db.access.create" },
+			{ "name": "resetcodetimeout", "type": "datetime", "nullable": true, "access": "aurora.db.access.create" },
+			{ "name": "lockcount", "type": "int", "default": 0, "access": "aurora.db.access.create" },
+			{ "name": "lastinvalidtime", "type": "datetime", "nullable": true, "access": "aurora.db.access.create" },
+			{ "name": "password", "type": "password", "nullable": true, "access": "aurora.db.access.basic([{'user-management':'crud'},{'': 'r'}])"},
+			{ "name": "email", "type": "string(128)", "default": ""},
+			{ "name": "lastaccess", "type": "datetime", "nullable": true, "default": null},
+			{ "name": "groups", "type": "leaf-list(userid)",
+			  "access": "aurora.db.access.basic([{'user-management':'crud'},{'': 'r'}])",
+			  "table": {
+				  "name": "user_group",
+				  "columns": [
+					  {"name" : "id", "type": "id"},
+					  {"name" : "order", "type": "order"},		      
+					  {"name" : "groupid", "type": "ref(group)"}
+				  ]
+			  },
+			  "validation": "aurora.db.validators.unique"
+			  
+			}
+			
+		]
     },{
-	"name": "group",
-	"indexes": [{"unique": true, "columns": ["name"]}],
-	"initial": [{
-	    "name": "admin",
-	    "permission": [{"!select": {"cols": [{"to": "permissionid", "from": "id"}], "query": " FROM permission"}}]
-	}],
-	"access": "aurora.db.access.basic([{'user-management': 'crud'},{'':'r'}])",
-	"accessFilter": "all",
-	"columns": [
-	    { "name": "id", "type": "id", "start": 1},		
-	    { "name": "name", "type": "string(30)"},		
-	    { "name": "permission", "type": "owned-list(groupid)",
-	      "table": {
-		  "name": "group_permission",
-		  "columns": [
-		      {"name" : "id", "type": "id"},
-		      {"name" : "permissionid", "type": "ref(permission)"}
-		  ]
-	      }
-	    }
-	]
+		"name": "group",
+		"indexes": [{"unique": true, "columns": ["name"]}],
+		"initial": [{
+			"name": "admin",
+			"permission": [{"!select": {"cols": [{"to": "permissionid", "from": "id"}], "query": " FROM permission"}}]
+		}],
+		"access": "aurora.db.access.basic([{'user-management': 'crud'},{'':'r'}])",
+		"accessFilter": "all",
+		"columns": [
+			{ "name": "id", "type": "id", "start": 1},		
+			{ "name": "name", "type": "string(30)"},		
+			{ "name": "permission", "type": "owned-list(groupid)",
+			  "table": {
+				  "name": "group_permission",
+				  "columns": [
+					  {"name" : "id", "type": "id"},
+					  {"name" : "permissionid", "type": "ref(permission)"}
+				  ]
+			  }
+			}
+		]
     }, {
-	"name": "permission",
-	"initial": [
-	    {"name": "user-management", "description": "Manage Users on the system"},
-	    {"name": "site-management", "description": "Manage System, E.g add pages etc"}
-	],
-	"access": "aurora.db.access.basic([{'': 'r'}])",
-	"accessFilter": "all",
-	"columns": [
-	    { "name": "id", "type": "id"},		
-	    { "name": "name", "type": "string(100)"},		
-	    { "name": "description", "type": "string(128)"}
-	]
-    }]	
+		"name": "permission",
+		"initial": [
+			{"name": "user-management", "description": "Manage Users on the system"},
+			{"name": "site-management", "description": "Manage System, E.g add pages etc"}
+		],
+		"access": "aurora.db.access.basic([{'': 'r'}])",
+		"accessFilter": "all",
+		"columns": [
+			{ "name": "id", "type": "id"},		
+			{ "name": "name", "type": "string(100)"},		
+			{ "name": "description", "type": "string(128)"}
+		]
+    },{
+		"name": "audit",
+		"access": "aurora.db.access.basic([{'user-management': 'r'}])",
+		"accessFilter": "none",
+		"columns": [
+			{ "name": "id", "type": "id"},
+			{ "name": "userid", "type": "ref(user)"},
+			{ "name": "message", "type": "string(128)"},		
+			{ "name": "table", "type": "string(128)"},
+			{ "name": "type", "type": "AuditType"},
+			{ "name": "info", "type": "json"}
+		]
+    }]
+		
 }

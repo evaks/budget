@@ -1055,12 +1055,12 @@ budget.actions.doResetPassword = function(coms, context, reader, uid, secret, pa
                 callback('Unable to reset password', []);
             }
             else if (data[0].resetcodetimeout + delay < new Date().getTime()) {
-                callback('Password reset password expired.', []);
+                callback('Password reset has expired.', []);
             }
             else {
                 let user = data[0];
                 aurora.db.Pool.hashPasswordPromise(password).then(function(pword) {
-                    reader.updateOneLevel(context, userT, {resetcode: null, resetcodetimeout: null, password: pword}, query.eq(user.id, query.val(user.id)), function(err) {
+                    reader.updateOneLevel(context, userT, {resetcode: null, resetcodetimeout: null, password: pword, lockcount: 0}, query.eq(user.id, query.val(user.id)), function(err) {
                         callback(err, []);
                     });
                 }, function(err) {
