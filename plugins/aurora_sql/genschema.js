@@ -1055,6 +1055,7 @@ function generateDbInit(def, ns, types, out) {
     let prefix = 'aurora.db.schema.init.' + ns;
     let provides = [prefix + '.updateDb'];
     let inserts = {};
+    let upgrades = {};
     let passwords = makePasswords(def, types);
     let tableMap = {};
 
@@ -1100,6 +1101,9 @@ function generateDbInit(def, ns, types, out) {
             
             if (data.initial) {
                 inserts[tableName] = (inserts[tableName] || []).concat(data.initial);
+            }
+            if (data.upgrade) {
+                upgrades[tableName] = (upgrades[tableName] || []).concat(data.upgrade);
             }
             if (!firstTable) {
                 fs.appendFileSync(out, ',\n');
@@ -1187,6 +1191,28 @@ function generateDbInit(def, ns, types, out) {
         }
 
     });
+    function doUpgrades(table, upgradeInfo, depth) {
+        let padding = '    '.repeat(depth * 3 + 2);
+
+        upgradeInfo.sort((x,y) => x.version - y.version);
+
+        upgradeInfo.forEach(info => {
+            fs.appendFileSync(out, ',\n' + padding + 'function(callback) {');
+            fs.appendFileSync(out, '\n' + padding + '   // upgrade table ' + table);
+            fs.appendFileSync(out, '\n' + padding + '   let existingVersion = existingTableVersions[' + stringify(table) + '] || 0;');
+            fs.appendFileSync(out, '\n' + padding + '   let existed = tableResults[' + stringify(table) + '].existed;');
+            
+            fs.appendFileSync(out, '\n' + padding + '   if (!existed || existingVersion >= ' + info.version + ') {callback(null); return;}');
+
+            fs.appendFileSync(out, '\n' + padding + '   pool.query(' + stringify(info.script) + ', callback);');
+            
+            
+            
+            fs.appendFileSync(out, '\n' + padding + '}');
+        });
+        
+    };
+    
     function doInserts(start, table, tInserts, parent, depth) {
         let padding = '     '.repeat(depth * 3);
         let colMap = {};
@@ -1385,6 +1411,18 @@ function generateDbInit(def, ns, types, out) {
         return x.localeCompare(y);
     }
 
+    function doInOrder(tableMap, callback) {
+        let tables = Object.keys(tableMap);
+        tables.sort(depComparator);
+        tables.forEach(function(table) {
+           callback(table, tableMap[table]);
+        });
+    }
+
+    doInOrder(upgrades, function (table, upgradeInfo) {
+        doUpgrades(table, upgradeInfo, 0);
+    });
+
     let insertKeys = Object.keys(inserts);
     insertKeys.sort(depComparator);
     insertKeys.forEach(function(table) {
@@ -1423,6 +1461,13 @@ function mergeTable(oldTable, newTable) {
         oldTable.access = newTable.access;
     }
 
+    if (newTable.version != undefined) {
+        oldTable.version = Math.max(newTable.version || 0, oldTable.version || 0);
+    }
+    if (newTable.upgrade) {
+        oldTable.upgrade = (oldTable.upgrade || []).concat(newTable.upgrade);
+    }
+        
     if (newTable.accessFilter) {
         oldTable.accessFilter = newTable.accessFilter;
     }

@@ -56,6 +56,7 @@ budget.widgets.SignUp = function(scope, opt_userid) {
     let suggestUsernameButton = new recoil.ui.widgets.ButtonWidget(scope);
     this.printWidget_ = new recoil.ui.widgets.ButtonWidget(scope);
     let mentorsB = budget.widgets.UserManagement.getMentors(scope);
+    let mentorListB = budget.widgets.UserManagement.getMentorList(scope);
     let html = new recoil.ui.HtmlHelper(scope);
 
     let createWidget = function(widget, options, val) {
@@ -279,7 +280,8 @@ budget.widgets.SignUp = function(scope, opt_userid) {
         
         
         tableB, scope.getDb().get(groupsT.key));
-
+    let showMentorB = frp.liftB(isClient => isClient && !createClient, isClientB);
+    
     let keysB = frp.liftB(function(t) {
         let res = [];
         t.forEach(function(row, pks) {
@@ -301,13 +303,13 @@ budget.widgets.SignUp = function(scope, opt_userid) {
         let cellWidgetFactory = column.getMeta(meta).cellWidgetFactory;
         let tableCellB = recoil.frp.table.TableCell.create(frp, tableB, keysB, col);
 
-        let cellB = frp.liftBI(function(cell) {
+        let cellB = frp.liftBI(function(cell, options) {
             let m = {};
             goog.object.extend(m, meta, cell.getMeta(), options);
             return cell.setMeta(m);
         }, function(cell) {
             tableCellB.set(tableCellB.get().setValue(cell.getValue()));
-        }, tableCellB);
+        }, tableCellB, recoil.frp.struct.flatten(frp, options));
 
         let widget = cellWidgetFactory(scope, cellB);
         let value = recoil.frp.table.TableCell.getValue(frp, cellB);
@@ -333,7 +335,6 @@ budget.widgets.SignUp = function(scope, opt_userid) {
     let waiver = tableWidget(userT.cols.waiverSigned, {});
     let agreement = tableWidget(userT.cols.agreementSigned, {});
     let referral = tableWidget(userT.cols.referral, {displayLength: 25});
-    let referralFrom = tableWidget(userT.cols.referralFrom, {});
     let reason = tableWidget(userT.cols.reason, {displayLength: 25});
     let debtCause = tableWidget(userT.cols.debtCause, {displayLength: 25});
     let referralDate = tableWidget(userT.cols.referralDate, {});
@@ -385,6 +386,8 @@ budget.widgets.SignUp = function(scope, opt_userid) {
         aurora.widgets.TableWidget.createSizable(aurora.ui.ErrorWidget.createTable(scope, timeSpentB)));
     timeSpent.widget.getComponent().render(timeSpent.div);
 
+    let mentorRendererB = budget.widgets.UserManagement.getMentorRenderer(scope);
+
     let gender = tableWidget(userT.cols.gender, {});
     let incomeSource = tableWidget(userT.cols.incomeSource, {});
     let housing = tableWidget(userT.cols.housing, {});
@@ -410,9 +413,16 @@ budget.widgets.SignUp = function(scope, opt_userid) {
             value: valueListB}, '');
     };
 
+    let mentor = tableWidget(userT.cols.mentorid, {
+        list: mentorListB,
+        renderer: mentorRendererB
+    });
+
+    
 
     let country = createCombo(userT.cols.countryOfBirth, budget.widgets.SignUp.COUNTRIES);
     let ethnicity = createCombo(userT.cols.ethnicity, ['Maori', 'Pacific Island', 'Asian', 'NZ European']);
+    let referralFrom = createCombo(userT.cols.referralFrom, ['Work & Income (Te Hiranga Tangata)', 'Other']);
     html.show(selectUserDiv, showUserSelectB);
     html.show(tick, recoil.frp.logic.equal(password.value, confirmPassword.value));
     html.show(cross, recoil.frp.logic.notEqual(password.value, confirmPassword.value));
@@ -555,6 +565,7 @@ budget.widgets.SignUp = function(scope, opt_userid) {
         cd('tr', {class: 'first-item'}, cd('th', {class: 'group-header', colspan: 4}, mess.SUGGESTED.toString())),
         cd('tr', {}, cd('th', {class: 'field-name'}, aurora.messages.EMAIL_ADDRESS.toString()), cd('td', {colspan: 4}, email.cont)),
         cd('tr', {}, cd('th', {class: 'group-header', colspan: 4}, mess.OPTIONAL.toString())),
+        show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.MENTOR.toString()), cd('td', {colspan: 3}, mentor.cont)), showMentorB),
         show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.NEW_CLIENT.toString()), cd('td', {colspan: 3}, newClient.cont)), isClientB),
         cd('tr', {}, cd('th', {class: 'field-name'}, mess.FIRST_NAME.toString()), cd('td', {}, firstName.cont), cd('th', {class: 'field-name'}, mess.LAST_NAME.toString()), cd('td', {}, lastName.cont)),
         show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.ADDRESS.toString()), cd('td', {colspan: 3}, address.cont)), isClientB),
@@ -563,7 +574,9 @@ budget.widgets.SignUp = function(scope, opt_userid) {
         show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.GENDER.toString()), cd('td', {colspan: 3}, gender.cont)), isClientB),
         show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.INCOME_SOURCE.toString()), cd('td', {colspan: 3}, incomeSource.cont)), isClientB),
         show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.HOUSING.toString()), cd('td', {colspan: 3}, housing.cont)), isClientB),
-        show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.REFERRER.toString()), cd('td', {colspan: 3}, referralFrom.cont)), isClientB),
+        show(
+            cd('tr', {}, cd('th', {class: 'field-name'}, mess.REFERRER.toString()),
+               cd('td', {colspan: 3}, referralFrom.cont)), isClientB),
 
         show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.MARITAL_STATUS.toString()), cd('td', {colspan: 3}, maritalStatus.cont)), isClientB),
         show(cd('tr', {}, cd('th', {class: 'field-name'}, mess.ETHICITY.toString()), cd('td', {colspan: 3}, ethnicity.cont)), isClientB),

@@ -250,6 +250,9 @@ aurora.Client.typeFactories = {
     function(key, name, meta) {
         return new recoil.ui.widgets.table.NumberColumn(key, name, meta);
     },
+    'ref' : function(meta, name) {
+        return new recoil.ui.widgets.table.SelectColumn(meta, name, []);
+    }, 
     'enum' : function(meta, name) {
         return new recoil.ui.widgets.table.SelectColumn(meta, name, []);
     }, 'int': function(key, name, meta) {

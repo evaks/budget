@@ -31,3 +31,5 @@ ResizeObserver.prototype.unobserve = function (el) {};
  * 
  */
 ResizeObserver.prototype.disconnect = function () {};
+
+var localStorage;

@@ -304,7 +304,7 @@ budget.print.ClientPrinter.prototype.makeUserDetails_ = function(user, budgets, 
                     this.getEnum(user, this.userT.cols.incomeSource)],
                 [
                     fieldName(this.mesg.REFERRAL),
-                    user.get(this.userT.cols.referral) || '' , '',
+                    user.get(this.userT.cols.referralFrom) || '' , '',
                     fieldName(this.mesg.HOUSING),
                     this.getEnum(user, this.userT.cols.housing)],
                 [
