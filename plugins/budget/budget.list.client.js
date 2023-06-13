@@ -98,13 +98,17 @@ budget.widgets.BudgetList = function(scope) {
             if (row.getMeta().doAdd) {
                 budget.widgets.BudgetList.createEmptyBudget(userId, mrow, templateB.get());
             }
+            else if (row.getMeta().doCopy) {
+                mrow.set(budgetT.cols.name, row.get(budgetT.cols.name) + '-Copy');
+                mrow.set(budgetT.cols.createTime, new Date().getTime());
+            }
             res.addRow(mrow);
         });
         budgetsB.set(res.freeze());
 
     }, budgetsB, templateB);
 
-    this.widget_.attachStruct(aurora.widgets.TableWidget.createSizable(formatedB));
+    this.widget_.attachStruct(aurora.widgets.TableWidget.createSizable(formatedB, true));
 };
 /**
  * @param {number} userId

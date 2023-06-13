@@ -31,22 +31,111 @@ aurora.widgets.TableWidget.delFactory = function(scope, cellB) {
     return widget;
 };
 
+/**
+ * @param {!recoil.ui.WidgetScope} scope
+ * @param {!reciol.frp.Behaviour} cellB
+ * @return {recoil.ui.Widget}
+ */
+aurora.widgets.TableWidget.copyFactory = function(scope, cellB) {
+    let ico = goog.dom.createDom('i', {class: 'fas fa-copy'});
+    var frp = scope.getFrp();
+    var widget = new recoil.ui.widgets.ButtonWidget(scope);
+    var value = recoil.frp.table.TableCell.getValue(frp, cellB);
+    let meta = recoil.frp.table.TableCell.getMeta(frp, cellB);
+     widget.attachStruct(recoil.frp.struct.extend(frp, meta, {action: value, classes: ['aurora-icon-button'], text: ico}));
+    return widget;
+};
+
+/**
+ * @param {recoil.structs.table.ColumnKey} column
+ * @param {?} value
+ * @param {function(!recoil.structs.table.ColumnKey, ?):({value:?}|null)=} opt_override
+ * @return {?}
+ */
+aurora.widgets.TableWidget.cloneColumn = function(column, value, opt_override) {
+    let meta = null;
+    let tbl = null;
+
+    // if override overrides this then use it
+    if (opt_override) {
+        let res = opt_override(column, value);
+        if (res) {
+            return res.value;
+        }
+    }
+
+    if (!column) {
+        return recoil.util.object.clone(value);
+    }
+        
+    try {
+        meta = aurora.db.schema.getMeta(column);
+    }
+    catch (e) {
+    }
+
+    if (!meta) {
+        // column key doesn't exits just clone the value
+        return recoil.util.object.clone(value);
+    }
+    
+    try {
+        tbl = aurora.db.schema.getTable(column);
+    }
+    catch (e) {}
+
+    if (meta.primary) {
+        return column.getDefault();
+    }
+
+    
+    if (meta.isList && value instanceof Array && tbl) {
+        let res = [];
+        for (let i =0; i < value.length; i++) {
+            let child = value[i];
+            let newChild;
+            if (child) {
+                newChild = {};
+                for (let k in child) {
+                    let childCol = tbl.meta[k] ? tbl.meta[k].key : null;
+                    newChild[k] = aurora.widgets.TableWidget.cloneColumn(childCol, child[k], opt_override);
+                }
+            }
+            else  {
+                newChild = child;
+            }
+            res.push(newChild);
+        }
+        return res;
+    }
+
+    if (tbl && value) {
+        let res = {};
+        for (let k in value) {
+            let childCol = tbl.meta[k] ? tbl.meta[k].key : null;
+            res[k] = aurora.widgets.TableWidget.cloneColumn(childCol, value[k], opt_override);
+        }
+        return res;
+    }
+    return recoil.util.object.clone(value);
+};
 
 /**
  * add columns and actions to make it possible to reorder columns and and rows
  *
  * @param {!recoil.frp.Behaviour<!recoil.structs.table.Table>} tableB
  * @param {boolean=} opt_movable
+ * @param {(boolean|function(recoil.structs.ColumnKey,?):(null|{value:?}))=} opt_copy
  * @return {!recoil.frp.Behaviour<!recoil.structs.table.Table>}
  */
 
-aurora.widgets.TableWidget.createMovableSizable = function(tableB, opt_movable) {
+aurora.widgets.TableWidget.createMovableSizable = function(tableB, opt_movable, opt_copy) {
     let movable = opt_movable === undefined || !!opt_movable;
     let frp = tableB.frp();
     let ADD_COL = new recoil.structs.table.ColumnKey('add');
     let DEL_COL = new recoil.structs.table.ColumnKey('del');
     let MOVE_COL = new recoil.structs.table.ColumnKey('move');
-
+    let COPY_COL =  new recoil.structs.table.ColumnKey('copy');
     let makeNewRow = function(tbl, pos) {
         let newRow = new recoil.structs.table.MutableTableRow();
         tbl.forEachColumn(function(col) {
@@ -57,6 +146,15 @@ aurora.widgets.TableWidget.createMovableSizable = function(tableB, opt_movable) 
         }
         newRow.addRowMeta({doAdd: true});
         return newRow;
+    };
+    let copyRow = function (tbl, pos, src) {
+        let newRow = new recoil.structs.table.MutableTableRow();
+        tbl.forEachColumn(function (col) {
+            let val = src.get(col);
+           newRow.set(col, aurora.widgets.TableWidget.cloneColumn(col, val, opt_copy instanceof Function ? opt_copy : null));
+	     });
+       newRow.addRowMeta({doCopy: true});
+       return newRow;
     };
 
 
@@ -70,6 +168,7 @@ aurora.widgets.TableWidget.createMovableSizable = function(tableB, opt_movable) 
         widget.attachStruct(recoil.frp.struct.extend(frp, meta, {action: value, classes: ['aurora-icon-button'], text: ico}));
         return widget;
     };
+    let copyFactory = aurora.widgets.TableWidget.copyFactory;
     let delFactory = aurora.widgets.TableWidget.delFactory;
     let moveFactory = function(scope, cellB) {
 
@@ -266,6 +365,7 @@ aurora.widgets.TableWidget.createMovableSizable = function(tableB, opt_movable) 
     return frp.liftBI(function(tbl, decorators) {
         let tblMeta = tbl.getMeta();
         let canAdd = tblMeta.canAdd !== false;
+        let canCopy = opt_copy && tblMeta.canAdd !== false;
         let canDel = tblMeta.canRemove !== false;
         let canMove = tblMeta.editable !== false && tblMeta.canUpdate !== false;
 
@@ -290,6 +390,9 @@ aurora.widgets.TableWidget.createMovableSizable = function(tableB, opt_movable) 
         if (!hasHeaderRow && canAdd) {
             newCols.push(ADD_COL);
         }
+        if (canCopy) {
+            newCols.push(COPY_COL);
+        }
         if (movable && canMove) {
             newCols.push(MOVE_COL);
         }
@@ -301,7 +404,10 @@ aurora.widgets.TableWidget.createMovableSizable = function(tableB, opt_movable) 
             lastPos = Math.max(lastPos, meta.position || 0);
         });
 
-        res.addColumnMeta(ADD_COL, {position: lastPos + 1, cellWidgetFactory: addFactory});
+        if (opt_copy) {
+	          res.addColumnMeta(COPY_COL, {position:++lastPos, cellWidgetFactory: copyFactory});
+	      }
+	      res.addColumnMeta(ADD_COL, {position: lastPos + 1, cellWidgetFactory: addFactory});
         res.addColumnMeta(DEL_COL, {position: lastPos + 2, cellWidgetFactory: delFactory, name: canAdd ? addHeader : ''});
         res.addColumnMeta(MOVE_COL, {position: lastPos + 3, cellWidgetFactory: moveFactory});
         let newDecorators = new goog.structs.AvlTree(recoil.util.object.compareKey);
@@ -310,6 +416,8 @@ aurora.widgets.TableWidget.createMovableSizable = function(tableB, opt_movable) 
             mrow.set(ADD_COL, null);
             mrow.set(DEL_COL, null);
             mrow.set(MOVE_COL, null);
+	          mrow.set(COPY_COL, null);
+	          
             if (canMove && movable && row.getRowMeta().movable !== false) {
                 let decorator = decorators.findFirst({key: pks, decorator: null});
                 if (!decorator) {
@@ -337,6 +445,9 @@ aurora.widgets.TableWidget.createMovableSizable = function(tableB, opt_movable) 
                 if (row.get(ADD_COL)) {
                     res.addRow(makeNewRow(tbl, pos++));
                 }
+		else if(row.get(COPY_COL)) {
+	            res.addRow(copyRow(tbl, pos++, row));
+		}
             }
 
         });
@@ -347,11 +458,12 @@ aurora.widgets.TableWidget.createMovableSizable = function(tableB, opt_movable) 
 
 /**
  * @param {!recoil.frp.Behaviour<!recoil.structs.table.Table>} tableB
+ * @param {(boolean|function(recoil.structs.ColumnKey,?):(null|{value:?}))=} opt_copy
  * @return {!recoil.frp.Behaviour<!recoil.structs.table.Table>}
  */
 
-aurora.widgets.TableWidget.createSizable = function(tableB) {
-    return aurora.widgets.TableWidget.createMovableSizable(tableB, false);
+aurora.widgets.TableWidget.createSizable = function(tableB, opt_copy) {
+    return aurora.widgets.TableWidget.createMovableSizable(tableB, false, opt_copy);
 };
 
 /**
