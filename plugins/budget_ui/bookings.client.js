@@ -312,7 +312,7 @@ budget.widgets.Bookings = function(scope) {
             columns.addColumn(spinnerColumn);
         }
         columns.add(appointmentsT.cols.showed, 'Came', {displayLength: 20});
-        table.addColumnMeta(appointmentsT.cols.mentorid, {editable: false, converter: mentorConverter});
+        table.addColumnMeta(appointmentsT.cols.mentorid, {type: 'string',editable: false, converter: mentorConverter});
         table.addColumnMeta(appointmentsT.cols.firstName, {displayLength: 10});
         table.addColumnMeta(appointmentsT.cols.lastName, {displayLength: 10});
         table.addColumnMeta(appointmentsT.cols.address, {displayLength: 20});
