@@ -6042,3 +6042,12 @@ div.budget-info, td.budget-info {
 }
 
 
+.budget-div .aurora-icon-button button.goog-button {
+		font-size: 10pt;
+		margin: 0;
+}
+
+.budget-budget-list .small-time {
+		font-size: 8pt;
+		white-space: nowrap;
+}

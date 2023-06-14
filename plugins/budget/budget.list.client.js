@@ -72,6 +72,8 @@ budget.widgets.BudgetList = function(scope) {
         }
         return false;
     };
+    let dateFormatter = (d) => (new Date(d).toLocaleString("en-NZ", {day: 'numeric', month: 'numeric', year: '2-digit', hour:'2-digit', minute:'2-digit', hour12: false }));
+    
     let formatedB = frp.liftBI(function(tbl) {
         let columns = new recoil.ui.widgets.TableMetaData();
         columns.add(budgetT.cols.name, 'Name');
@@ -81,7 +83,7 @@ budget.widgets.BudgetList = function(scope) {
             headerRowDecorator: null, confirmDelete: 5000,
             reselector: reselect
         });
-        res.addColumnMeta(budgetT.cols.createTime, {editable: false, converter: converter, classes: ['small-time']});
+        res.addColumnMeta(budgetT.cols.createTime, {type: 'readonly-string', editable: false, formatter: dateFormatter, classes: ['small-time']});
         res.addColumnMeta(budgetT.cols.name, {displayLength: 7});
         tbl.forEach(function(row) {
             let mrow = row.unfreeze();

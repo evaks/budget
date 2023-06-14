@@ -14,6 +14,7 @@ goog.require('recoil.frp.Frp');
 goog.require('recoil.ui.columns.Date2');
 goog.require('recoil.ui.columns.DateTime');
 goog.require('recoil.ui.widgets.table.BooleanColumn');
+goog.require('recoil.ui.widgets.table.LabelColumn');
 goog.require('recoil.ui.widgets.table.NumberColumn');
 goog.require('recoil.ui.widgets.table.PasswordColumn');
 goog.require('recoil.ui.widgets.table.SelectColumn');
@@ -259,6 +260,8 @@ aurora.Client.typeFactories = {
         return new recoil.ui.widgets.table.NumberColumn(key, name, meta);
     }, 'string': function(key, name) {
         return new recoil.ui.widgets.table.StringColumn(key, name);
+    }, 'readonly-string': function(key, name, meta) {
+        return new recoil.ui.widgets.table.LabelColumn(key, name, meta);        
     }, 'text': function(key, name) {
         return new recoil.ui.widgets.table.TextAreaColumn(key, name);
     }, 'password': function(key, name) {
