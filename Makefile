@@ -192,6 +192,9 @@ upgrade-no-db:
 	sudo cp -r output/resources /var/www
 	sudo service budget restart
 
+upgrade-debug-client: debug-client
+	sudo cp output/client.* /var/www
+	sudo cp -r output/resources /var/www
 
 upgrade-client: client
 	sudo cp output/client.* /var/www

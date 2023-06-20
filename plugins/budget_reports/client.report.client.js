@@ -102,7 +102,7 @@ budget.widgets.ClientReport = function(scope) {
                            curUser.firstBudget.budgetid == null ? '-' : (curUser.firstBudget.owing/100).toFixed(2));
                 outRow.set(LAST_OWING,
                            curUser.lastBudget.budgetid == null ? '-' : (curUser.lastBudget.owing/100).toFixed(2));
-                outRow.set( reportT.cols.referralFrom, prevRow.get( reportT.cols.referralFrom));
+                outRow.set( reportT.cols.referralFrom, prevRow.get( reportT.cols.referralFrom) || 'Unknown');
                 res.addRow(outRow);
                 curUser = newRowInfo();
                 
@@ -126,7 +126,7 @@ budget.widgets.ClientReport = function(scope) {
             if (curUser.id !== id.db || budgetid === null) {
                 doLastRow();
             }
-            curUser.id = id.db;
+            curUser.id = id;
             let when = budgetid ? BigInt(row.get(reportT.cols.createTime)) : null;
             budgetid = budgetid ? budgetid.db: null;
             
