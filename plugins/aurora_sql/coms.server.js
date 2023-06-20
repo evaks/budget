@@ -1120,8 +1120,8 @@ aurora.db.Coms.prototype.doGetHelper_ = function(clientId, id, reader, secContex
             }, options);
     }
     else {
-        me.log_.error('unable to get security context');
-        response['value-error'] = 'unable to get security context';
+        me.log_.error('unable to get security context', response['error-value']);
+        response['value-error'] =  'unable to get security context';
         me.channel_.send(response, clientId);
 
         if (opt_done) {

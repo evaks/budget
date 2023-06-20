@@ -147,20 +147,29 @@ budget.widgets.Menu.prototype.makeMenuBar = function() {
                     }
 
                     else {
-                        let itemWidget = new recoil.ui.widgets.MenuItemActionWidget(scope);
+                        if (menuItems.children) {
+                            let itemWidget = new recoil.ui.widgets.SubMenuWidget(scope);
 
-                        itemWidget.attach(menuItemInfo.name.toString(), true, menuItemInfo.action ?
-                                          menuItemInfo.action(scope) :
-                                          frp.createCallback(function(e) {
-                                              if (e.button == 1 || e.ctrlKey) {
-                                                  window.open(menuItemInfo.url);
+                            itemWidget.attachStruct(menuItemInfo.name.toString(), true);
+                            menuItems.push(itemWidget);
+                        }
+                        else {
+                            let itemWidget = new recoil.ui.widgets.MenuItemActionWidget(scope);
+                            
+                            
+                            itemWidget.attach(menuItemInfo.name.toString(), true, menuItemInfo.action ?
+                                              menuItemInfo.action(scope) :
+                                              frp.createCallback(function(e) {
+                                                  if (e.button == 1 || e.ctrlKey) {
+                                                      window.open(menuItemInfo.url);
                                               }
-                                              else {
-                                                  
-                                                  window.location = menuItemInfo.url;
-                                              }
+                                                  else {
+                                                      
+                                                      window.location = menuItemInfo.url;
+                                                  }
                                           }, frp.createB(null)));
-                        menuItems.push(itemWidget);
+                            menuItems.push(itemWidget);
+                        }
                     }
                 });
                 menuButton.attach(menuIconB, menuItems);

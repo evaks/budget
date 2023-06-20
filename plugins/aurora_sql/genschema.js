@@ -35,7 +35,7 @@ let getSourceColumn = function(tableDefs, view, name) {
                 return view.columns[i];
             }
         }
-
+        
         for (let i = 0; i < view.queryCols.length; i++) {
             if (view.queryCols[i].name === name) {
                 let res = {...view.queryCols[i]};
@@ -559,6 +559,17 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
             }
             if (data.query && data.view) {
                 fs.appendFileSync(out, '    query: ' + stringify(data.query) + ',\n');
+                if (data.where) {
+                    fs.appendFileSync(out, '    where: ' + stringify(data.where) +',\n');
+                }
+                
+                if (!client && data.order) {
+                    fs.appendFileSync(out, '    order: ' + stringify(data.order) +',\n');
+                }
+                if (!client && data.genid) {
+                    fs.appendFileSync(out, '    genid: true,\n');
+                }
+
             }
             tablePathMap[data.tableName] = tablePath;
             if (!client) {
@@ -1599,7 +1610,6 @@ module.exports = {
                 tableDefs[name] = {info: data, path: stack.map(function(v) {return v.name;}).join('/')};
             }
         });
-
         doGenerate(defs, ns, true, filterReq(requires, requiresServerOnly), types, actions, output + '.gen.client.js', tableDefs);
         doGenerate(defs, ns, false, filterReq(requires, requiresClientOnly), types, actions, output + '.gen.server.js', tableDefs);
         doGenerate(defs, ns, false, filterReq(requires, requiresClientOnly), types, actions, output + '.gen.module-test.js', tableDefs, true);

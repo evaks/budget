@@ -922,23 +922,51 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
                 // this the toplevel
                 sql.filter = me.addSecurityFilter_(filter, securityFilter);
             }
-
             if (filter) {
                 // todo add extra JOINs to table so we can get subtables
 
-                sql.query += ' WHERE ' + sql.filter.query(scope);
+               
+                if (table && table.info && table.info.where) {
+                    let validKeys = {};
+                    for (let k in table.meta) {
+                        if (table.meta[k].query) {
+                            validKeys[k] = true;
+                        }
+                    }
+                    let bindOptions = v => {
+                        if (!opt_options) {
+                            return v;
+                        }
+                        
+                        return opt_options.bind(v, validKeys, v => driver.escape(v));
+                    };
+                    
+                    let where = table.info.where.map(bindOptions).map(x => '(' + x + ')').join(' AND ');
+                    sql.query += ' WHERE ' +  where + ' AND (' + sql.filter.query(scope) + ')';
+                }
+                else {
+                    sql.query += ' WHERE ' + sql.filter.query(scope);
+                }
                 
             }
-            
+
+            let genid = table && table.info && table.info.genid ? BigInt(1) : null;
+                
+            if (table && table.info && table.info.order) {
+                sql.query += ' ORDER BY ' + table.info.order.join(',');
+                
+            }
             if (sql.suffix != undefined) {
                 sql.query += sql.suffix;
                 
             }
 
+
             driver.query(driver.addOptions(sql.query, opt_options), function(error, data, colInfo) {
                 try {
                     if (error) {
-                        aurora.db.sql.log.error('SQL error', error);
+                        aurora.db.sql.log.error('SQL error', error, 'SQL', driver.addOptions(sql.query, opt_options));
+                       
                         callback(error, null);
                         return;
                     }
@@ -947,6 +975,13 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
                         callback(null, data[0]['count']);
                         return;
                     } if (data && data.length > 0) {
+                        
+                        if (genid) {
+                            data.map(entry => {
+                                let mapped = colMap[table.info.pk.getId()];
+                                entry[mapped] = (genid++).toString();
+                            });
+                        }
                         let res = null;
                         do {
                             res = readObject(me.driver_, cur.path, res ? res.next : 0, /** @type {!Array} */(data), cur.table, colMap, unreadTables);

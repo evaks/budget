@@ -1,0 +1,32 @@
+{
+		"namespace": "base",
+		"views": [
+				{
+						"name" : "client_report",
+						"access": "aurora.db.access.basic([{'site-management': 'r'}])",
+						"accessFilter": [{"site-management": "all"} , {"": "none"}],
+						"tables": [],
+						"where": ["u.id IN (select userid from appointments where start >= ?:start: and stop < ?:stop:)"],
+						"order": ["u.id", "b.createTime", "b.id"],
+						"genid": true,
+						"query": "select u.id userid, firstName, u.referralFrom, lastName, e.id id, b.id budgetid, createTime, type, owing FROM user u LEFT JOIN budget b ON u.id = b.userid LEFT JOIN budget_entry e ON b.id = e.budgetid AND trim(owing) <> ''",
+						"columns": [
+								{"name": "id", "type": "id"},
+								{"name": "userid", "type": "ref(user)"},								
+								{"name": "budgetid", "type": "ref(budget)"},								
+								{"name": "createTime", "type": "date"},
+								{"name": "referralFrom","type": "string(100)"},
+								{"name": "owing", "type": "string(100)"},
+								{"name": "firstName", "type": "string(100)"},
+								{"name": "lastName", "type": "string(100)"}
+						],
+						"queryCols" : [
+								{"name": "start", "type": "date"},
+								{"name": "stop", "type": "date"}								
+						]
+						
+				}
+		]
+}
+						
+					

@@ -6051,3 +6051,8 @@ div.budget-info, td.budget-info {
 		font-size: 8pt;
 		white-space: nowrap;
 }
+
+
+.budget-report {
+		width: calc(100vw - 30px);
+}
