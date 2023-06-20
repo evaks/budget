@@ -290,10 +290,11 @@ budget.print.BudgetPrinter.prototype.makeTotals_ = function (tally, rows, debtRo
 
 /**
  * @private
+ * @param {string} reason
  * @return {Object} pdfmake print object structure
  */
 
-budget.print.BudgetPrinter.prototype.makeFooter_ = function () {
+budget.print.BudgetPrinter.prototype.makeFooter_ = function (reason) {
     
     return {
         style: 'left-bottom-table',
@@ -318,7 +319,7 @@ budget.print.BudgetPrinter.prototype.makeFooter_ = function () {
                     {
                         text: this.mesg.CLIENT_WANTS.toField(), border: [false, false, false, false]
                     },
-                    { text: "", border: [false, false, false, true]}
+                    { text: reason || '', border: [false, false, false, true]}
                 ],
                 [
                     {
@@ -414,9 +415,18 @@ budget.print.BudgetPrinter.prototype.makeUserDetails_ = function (user, mentor) 
     for (let i = 0; i < address.lines || i < 3; i++) {
         let addrLine = (address[i] || '');
         let name = i === 0 ? this.mesg.ADDRESS.toField() : '';
-        rows.push([
+        let line = [
             {text: name, bold: true},
-            {text: addrLine, style: 'grey-cell'}, '']);
+            {text: addrLine, style: 'grey-cell'}];
+        if (i == 0) {
+            line.push({text: 'Date Printed: ' + (new Date().toLocaleDateString(undefined, {
+                year: 'numeric', month: 'long', day: 'numeric'
+            }) )});
+        } else {
+            line.push('');
+        }
+        
+        rows.push(line);
     }
                 
     rows.push([        
@@ -443,12 +453,25 @@ budget.print.BudgetPrinter.prototype.makeUserDetails_ = function (user, mentor) 
 
 /**
  * @private
+ * @param {Array<Object>} goals
  * @return {Object} pdfmake print object structure
  */
 
-budget.print.BudgetPrinter.prototype.makeGoals_ = function () {
+budget.print.BudgetPrinter.prototype.makeGoals_ = function (goals) {
     let empty = {text: '', border: [false, false, false, false]};
     let underline = {text: '', border:[false, false, false, true]};
+    let body =  [];
+    
+    for (let i = 0; i < 5 || i < goals.length; i++) {
+        let goal = goals[i];
+        let line = [];
+
+        line.push(i == 0 ? {text: this.mesg.GOALS_TO_BE_OBTAINED.toField(), border: [false,false, false,false]} : empty);
+
+        line.push({text: goal ? goal.goal : '', border: [false,false, false,true]});
+        body.push(line);
+    }
+    
     return {
         style: 'goals-table',
         layout: {
@@ -457,17 +480,7 @@ budget.print.BudgetPrinter.prototype.makeGoals_ = function () {
         table: {
             widths: ['auto', '*'],
             heights:this.scale(this.lineH),
-            body: [
-                [
-                    {text: this.mesg.GOALS_TO_BE_OBTAINED.toField(), border: [false,false, false,false]},
-                    underline
-                ],
-                [empty, underline],
-                [empty, underline],
-                [empty, underline],
-                [empty, underline],
-            ]
-
+            body
         }
     };
 
@@ -615,8 +628,8 @@ budget.print.BudgetPrinter.prototype.createDoc_ = function (mentor, user, budget
     let debt = this.makeDebt(period, entries, totals, col2Rows);
     let pdfTotals = this.makeTotals_(totals, col1Rows, col2Rows);
     let me = this;
-    let goals = this.makeGoals_();
-    
+    let goals = this.makeGoals_(user.get(this.userT.cols.goals));
+    let reason = user.get(this.userT.cols.reason);
     return {
         pageOrientation: 'landscape',
         pageSize : "A4",
@@ -631,7 +644,7 @@ budget.print.BudgetPrinter.prototype.createDoc_ = function (mentor, user, budget
                         width: "40%",
                         stack: [
                             income,
-                            this.makeFooter_()
+                            this.makeFooter_(reason)
                         ]
                     },{width:10, text:""},
                     {
@@ -672,6 +685,25 @@ budget.print.BudgetPrinter.prototype.createDoc_ = function (mentor, user, budget
     };
 };
 /**
+ * @param {!recoil.structs.table.TableRowInterface} user
+ * @return {string}
+ */
+budget.print.BudgetPrinter.makeName = function (user) {
+    let userT = aurora.db.schema.tables.base.user;
+    let firstName = (user.get(userT.cols.firstName) || '').trim();
+    let lastName = (user.get(userT.cols.lastName) || '').trim();    
+    return (firstName + ' ' + lastName).trim();
+};
+
+/**
+ * @param {string} name
+ * @return {string} 
+ */
+budget.print.BudgetPrinter.sanatizeFileName = function (name) {
+    return name.replace(/[^A-Za-z0-9_. ]/g, '_');
+};
+
+/**
  * @param {?string} mentor
  * @param {!recoil.structs.table.TableRowInterface} user
  * @param {!recoil.structs.table.TableRowInterface} budgetIn
@@ -679,9 +711,10 @@ budget.print.BudgetPrinter.prototype.createDoc_ = function (mentor, user, budget
  */
 budget.print.BudgetPrinter.prototype.print = function (mentor, user, budgetIn, site) {
     let me = this;
-
+    let cls = budget.print.BudgetPrinter;
+    
     let print = function (doc) {
-        budget.print.ClientPrinter.print('budget', user, doc);
+        budget.print.ClientPrinter.print('budget_' + cls.sanatizeFileName(cls.makeName(user)), user, doc);
     };
     // since there no function to tell me how big its going to be just do a binary search to
     // find the scale factor
