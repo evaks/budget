@@ -123,7 +123,7 @@ budget.widgets.ClientReport = function(scope) {
                 return;
             }
             
-            if (curUser.id !== id.db || budgetid === null) {
+            if (curUser.id !== id || budgetid === null) {
                 doLastRow();
             }
             curUser.id = id;
