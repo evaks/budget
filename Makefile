@@ -185,6 +185,14 @@ upgrade:
 	sudo node ${WWW}/server.min.js --upgrade
 	sudo service budget start
 
+
+upgrade-no-db:
+	sudo cp output/client.* /var/www
+	sudo cp output/server.* /var/www
+	sudo cp -r output/resources /var/www
+	sudo service budget restart
+
+
 upgrade-client: client
 	sudo cp output/client.* /var/www
 	sudo cp -r output/resources /var/www
