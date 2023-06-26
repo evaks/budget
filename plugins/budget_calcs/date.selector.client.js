@@ -35,6 +35,7 @@ budget.widgets.management.calc.DateSelector.prototype.attach = function(tableB) 
     let displayTableB = frp.liftBI(
         function(tbl) {
             let res = tbl.createEmpty();
+            res.addMeta({confirmDelete: 5000});
             let columns = new recoil.ui.widgets.TableMetaData();
             columns.add(tableT.cols.start, 'Start Date');
             columns.add(tableT.cols.stop, 'End Date');

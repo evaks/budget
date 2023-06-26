@@ -40,6 +40,7 @@ budget.widgets.management.calc.AccRates = function(scope, userid) {
     let accDisplayB = frp.liftBI(
         function(tbl) {
             let res = tbl.createEmpty();
+            res.addMeta({confirmDelete: 5000});
             let columns = new recoil.ui.widgets.TableMetaData();
             columns.add(accT.cols.start, 'Start Date');
             columns.add(accT.cols.stop, 'End Date');

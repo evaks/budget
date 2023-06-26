@@ -45,7 +45,7 @@ budget.widgets.management.calc.TaxRates = function(scope, userid) {
             columns.add(tierT.cols.amount, 'From');
             columns.add(TOCOL, 'To');
             columns.add(tierT.cols.rate, 'Tax %');
-
+            res.addMeta({confirmDelete: 5000});
             res.addColumnMeta(tierT.cols.amount, {min: 0, max: 10000000, step: 0.01});
             res.addColumnMeta(TOCOL, {type: 'int', min: 0, max: 10000000, step: 0.01, editable: false, displayLength: -1});
             res.addColumnMeta(tierT.cols.rate, {min: 0, max: 100, step: 0.01, displayLength: 6});

@@ -41,6 +41,8 @@ budget.widgets.management.calc.StudentLoans = function(scope, userid) {
         function(tbl) {
             let res = tbl.createEmpty();
             let columns = new recoil.ui.widgets.TableMetaData();
+            
+            res.addMeta({confirmDelete: 5000});
             columns.add(loanT.cols.start, 'Start Date');
             columns.add(loanT.cols.stop, 'End Date');
             columns.add(loanT.cols.rate, 'Rate %');
