@@ -27,7 +27,9 @@
 				"AttendanceType": {"type": "enum", "enum": [
 						{"id":0, "name": "Unknown"},
 						{"id":2, "name": "Confirmed"},
-						{"id":1, "name": "Attended"}
+						{"id":1, "name": "Attended"},
+						{"id":3, "name": "Missed"}
+
 				]}
 		},
 	"views": [
