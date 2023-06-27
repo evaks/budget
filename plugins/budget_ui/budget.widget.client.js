@@ -54,19 +54,22 @@ budget.widgets.Budget = function(scope) {
     let totals = makePart();
 
     let periodDiv = cd('div', 'goog-inline-block');
+    let citedDiv = cd('div', 'goog-inline-block cited-check');
     this.incomeWidget_ = income.widget;
     this.householdWidget_ = household.widget;
     this.totalsWidget_ = totals.widget;
     this.debtWidget_ = debts.widget;
     this.periodWidget_ = new recoil.ui.widgets.SelectorWidget(scope);
     this.periodWidget_.getComponent().render(periodDiv);
+    this.citedWidget_ = new recoil.ui.widgets.CheckboxWidget(scope);
+    this.citedWidget_.getComponent().render(citedDiv);
 
     this.readyContainer_ = cd(
         'div', {class: 'budget-budget'}, cd('div', 'goog-inline-block', exportDiv, printDiv),
         cd('div', {class: 'budget-header'}, mess.SERVICE_NAME.toString()),
         cd('div', {class: 'budget-subheader'}, 'Ph: 04 5666357'),
 
-        cd('div', {class: 'budget-subheader'}, periodDiv, ' Budget'),
+        cd('div', {class: 'budget-subheader'}, periodDiv, ' Budget, Cited: ', citedDiv),
         cd('div', {class: 'budget-budget-template'},
            cd('div', {class: 'budget-budget-template-column'},
               cd('div', {class: 'group-header'}, 'Income'),
@@ -674,7 +677,25 @@ budget.widgets.Budget.prototype.attach = function(idB) {
 
         budgetB.set(res.freeze());
     }, budgetB);
+    
+    let citedB = frp.liftBI(function(budget) {
+        let res = goog.object.clone(budget.getColumnMeta(budgetT.cols.period));
+        budget.forEach(function(row) {
+            res.value = row.get(budgetT.cols.cited);
+        });
+        return res;
+    }, function(cited) {
+        let res = budgetB.get().createEmpty();
+        budgetB.get().forEachModify(function(row) {
+            row.set(budgetT.cols.cited, cited.value);
+            res.addRow(row);
+        });
+
+        budgetB.set(res.freeze());
+    }, budgetB);
+
     this.periodWidget_.attachStruct(periodB);
+    this.citedWidget_.attachStruct(citedB);
     let valueColumn = new recoil.ui.columns.Expr(entryT.cols.value, 'Value', {decimalPlaces: 2});
     let arrearsColumn = new recoil.ui.columns.Expr(entryT.cols.arrears, 'Arrears', {decimalPlaces: 2});
     let owingColumn = new recoil.ui.columns.Expr(entryT.cols.owing, 'Owing', {decimalPlaces: 2});

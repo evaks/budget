@@ -347,10 +347,16 @@ budget.print.BudgetPrinter.prototype.makeFooter_ = function (reason) {
  * @param {?string} mentor
  * @param {!recoil.structs.table.TableRowInterface} site
  * @param {number} period
+ * @param {boolean} cited
  * @return {Object} pdfmake print object structure
  */
 
-budget.print.BudgetPrinter.prototype.makeHeader_ = function (mentor, site, period) {
+budget.print.BudgetPrinter.prototype.makeHeader_ = function (mentor, site, period, cited) {
+    let disclaimer = [[{text: [
+        {text: this.mesg.PLEASE_NOTE.toString() , bold: true},
+        this.mesg.THIS_BUDGET_IS_BASED.toString() + ' '+ this.mesg.ON_INFORMATION.toString()
+    ]}]];
+    let title = [this.mesg._HOUSEHOLD_BUDGET.toString({period: this.periodName(period)}).toUpperCase()];
     return {
         fontSize: this.scale(this.headerFontSize),
         columns: [
@@ -361,24 +367,21 @@ budget.print.BudgetPrinter.prototype.makeHeader_ = function (mentor, site, perio
             },
             {
                 width: '*',
-                text: this.mesg._HOUSEHOLD_BUDGET.toString({period: this.periodName(period)}).toUpperCase(),
+                text: title,
+                stack: [
+                    { text: title, decoration: "underline" },
+                    cited ? {} : {fontSize: this.scale(this.headerFontSize * 0.8), text: 'ACCOUNTS NOT CITED', border: [false, false, false, false],bold: true, color: '#c00',alignment: 'center' }],
+                
                 alignment: 'center', bold: true,
-                decoration: "underline"
             },
-
             {
                 width: '30%',
-		style: 'note-table',
+		            style: 'note-table',
                 stack: [
                     {
-		        table: {
-		            body: [
-                                [{text:  [
-                                    {text: this.mesg.PLEASE_NOTE.toString() , bold: true},
-                                    this.mesg.THIS_BUDGET_IS_BASED.toString() + ' '+ this.mesg.ON_INFORMATION.toString()
-                                ]}]
-		            ]
-		        }
+		                    table: {
+		                        body: disclaimer
+		                    }
                     },
                     mentor == null ? {} : {
                         alignment:'right',
@@ -621,6 +624,7 @@ budget.print.BudgetPrinter.prototype.createDoc_ = function (mentor, user, budget
         sum: 0
     };
     let period = budget.get(this.budgetT.cols.period);
+    let cited = budget.get(this.budgetT.cols.cited);
     let col1Rows = [];
     let col2Rows = [];
     let income = this.makeIncome(period, entries,totals, col1Rows);
@@ -636,7 +640,7 @@ budget.print.BudgetPrinter.prototype.createDoc_ = function (mentor, user, budget
         fontSize: this.scale(this.fontSize),
         pageMargins: [ 20, 20, 20, 20 ],
         content: [
-            this.makeHeader_(mentor, site, period),
+            this.makeHeader_(mentor, site, period, cited),
             this.makeUserDetails_(user, mentor),
             {
                 columns: [

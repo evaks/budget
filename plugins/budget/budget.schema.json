@@ -3,29 +3,34 @@
     "depends": ["aurora_sql"],
     "require": ["budget.filter"],
     "types": {
-	"BudgetEntryType": {"type": "enum", "enum": [
-	    {"id":0, "name": "Income"},
-	    {"id":1, "name": "Household"},
-	    {"id":2, "name": "Debt"}
-	]},
-	"BudgetImportType": {"type": "enum", "enum": [
-	    {"id":0, "name": "Split"},
-	    {"id":1, "name": "Income"},
-	    {"id":2, "name": "Payment"},
-	    {"id":3, "name": "Transfer"},
-	    {"id":4, "name": "Debt"}
-	]},
-	"PeriodType": {"type": "enum", "enum": [
-	    {"id":0, "name": "Daily", "info": {"rate": 1, "weeklyRate": 0.142857}},
-	    {"id":1, "name": "Weekly", "info": {"rate": 7, "weeklyRate": 1}},
-	    {"id":2, "name": "Fortnightly", "info": {"rate": 14, "weeklyRate": 2}},
-	    {"id":6, "name": "4 Weekly", "info": {"rate": 28, "weeklyRate": 4}},
-	    {"id":3, "name": "Monthly", "info": {"rate": 30.416666666667, "weeklyRate":4.3333333}},
-	    {"id":4, "name": "Quarterly", "info": {"rate": 91.25, "weeklyRate": 13}},
-	    {"id":5, "name": "Yearly", "info": {"rate": 365, "weeklyRate": 52}}
-	], "null" : "None"}
-    },
-    "views": [
+				"BudgetEntryType": {"type": "enum", "enum": [
+						{"id":0, "name": "Income"},
+						{"id":1, "name": "Household"},
+						{"id":2, "name": "Debt"}
+				]},
+				"BudgetImportType": {"type": "enum", "enum": [
+						{"id":0, "name": "Split"},
+						{"id":1, "name": "Income"},
+						{"id":2, "name": "Payment"},
+						{"id":3, "name": "Transfer"},
+						{"id":4, "name": "Debt"}
+				]},
+				"PeriodType": {"type": "enum", "enum": [
+						{"id":0, "name": "Daily", "info": {"rate": 1, "weeklyRate": 0.142857}},
+						{"id":1, "name": "Weekly", "info": {"rate": 7, "weeklyRate": 1}},
+						{"id":2, "name": "Fortnightly", "info": {"rate": 14, "weeklyRate": 2}},
+						{"id":6, "name": "4 Weekly", "info": {"rate": 28, "weeklyRate": 4}},
+						{"id":3, "name": "Monthly", "info": {"rate": 30.416666666667, "weeklyRate":4.3333333}},
+						{"id":4, "name": "Quarterly", "info": {"rate": 91.25, "weeklyRate": 13}},
+						{"id":5, "name": "Yearly", "info": {"rate": 365, "weeklyRate": 52}}
+				], "null" : "None"},
+				"AttendanceType": {"type": "enum", "enum": [
+						{"id":0, "name": "Unknown"},
+						{"id":2, "name": "Confirmed"},
+						{"id":1, "name": "Attended"}
+				]}
+		},
+	"views": [
 	{
 	    "name" : "secure_appts",
 	    "access": "aurora.db.access.basic([{'': 'r'}])",
@@ -133,7 +138,7 @@
 	    ],
 	    "columns": [
 			{ "name": "id", "type": "id"},
-			{ "name": "showed", "type": "boolean"},
+			{ "name": "showed", "type": "AttendanceType"},
 			{ "name": "mentorid", "type": "ref(user)", "access" : "aurora.db.access.basic([{'site-management':'crud'}, {'mentor':'crd'}, {'client':'crd'}, {'': 'crd'}])"},
 			{ "name": "scheduled", "type": "string(100)", "nullable": true, "access" : "aurora.db.access.basic([{'': 'r'}])"},
 			{ "name": "userid", "type": "ref(user)", "nullable": true, "access" : "aurora.db.access.basic([{'site-management':'crud'}, {'mentor':'crd'}, {'client':'crd'}, {'': 'r'}])"},
@@ -226,7 +231,8 @@
 		{ "name": "id", "type": "id"},
 		{ "name": "userid", "type": "ref(user)"},
 		{ "name": "name", "type": "string(100)"},
-		{"name": "period", "type": "PeriodType"},
+					{"name": "period", "type": "PeriodType"},
+					{"name": "cited", "type": "boolean", "default": false},
 		{ "name": "createTime", "type": "datetime"},
 		{ "name": "entries", "type": "owned-list(budgetid)",
 		  "table": {

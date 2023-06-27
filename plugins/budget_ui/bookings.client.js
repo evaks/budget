@@ -39,6 +39,7 @@ budget.widgets.Bookings = function(scope) {
     let mentorT = aurora.db.schema.tables.base.mentor;
     let availT = aurora.db.schema.tables.base.mentor_availablity;
     let milliPerDay = budget.widgets.BusinessHours.MILLI_PER_DAY;
+    let attendanceE = aurora.db.schema.getEnum(appointmentsT.cols.showed);
     let today = new Date();
     let userT = aurora.db.schema.tables.base.user;
     today.setHours(0, 0, 0, 0);
@@ -311,7 +312,7 @@ budget.widgets.Bookings = function(scope) {
         else {
             columns.addColumn(spinnerColumn);
         }
-        columns.add(appointmentsT.cols.showed, 'Came', {displayLength: 20});
+        columns.add(appointmentsT.cols.showed, 'Attendance');
         table.addColumnMeta(appointmentsT.cols.mentorid, {type: 'string',editable: false, converter: mentorConverter});
         table.addColumnMeta(appointmentsT.cols.firstName, {displayLength: 10});
         table.addColumnMeta(appointmentsT.cols.lastName, {displayLength: 10});
@@ -327,7 +328,8 @@ budget.widgets.Bookings = function(scope) {
             today.setHours(0, 0, 0, 0);
             if (prevDay !== today.getTime()) {
                 let row = new recoil.structs.table.MutableTableRow(pos++);
-                row.set(appointmentsT.cols.showed, false);
+                row.set(appointmentsT.cols.showed, attendanceE.unknown);
+                row.addCellMeta(appointmentsT.cols.showed, {enabled: recoil.ui.BoolWithExplanation.FALSE});
 
                 row.addCellMeta(START_COL, /** @type {!Object} */(dateCol.getMeta({
                     editable: false, cellDecorator: recoil.ui.widgets.TableMetaData.createSpanDecorator(13, {class: 'budget-seperator-row'})})));
@@ -366,7 +368,9 @@ budget.widgets.Bookings = function(scope) {
 
                 let key = override ? override.id : appointmentsT.info.pk.getDefault();
                 row.set(appointmentsT.cols.id, key);
-                row.set(appointmentsT.cols.showed, false);
+                row.set(appointmentsT.cols.showed, attendanceE.unknown);
+                row.addCellMeta(appointmentsT.cols.showed, {enabled: recoil.ui.BoolWithExplanation.FALSE});
+                
                 if (override) {
                     row.set(START_COL, override.start);
                 }

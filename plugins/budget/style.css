@@ -6056,3 +6056,7 @@ div.budget-info, td.budget-info {
 .budget-report {
 		width: calc(100vw - 30px);
 }
+
+div.cited-check .goog-checkbox {
+		margin-bottom: 5px;
+}
