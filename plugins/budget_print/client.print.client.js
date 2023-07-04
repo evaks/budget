@@ -367,7 +367,8 @@ budget.print.ClientPrinter.prototype.addTimeSpent_ = function(rows, timeSpentLis
     rows.push([fieldName(this.mesg.TIME_SPENT_ON_CASE), formatTime(timeSpent)]);
 
     let cur = 0;
-
+    let start = budget.print.ClientPrinter.finYearStart();
+    normList = normList.filter(v => recoil.ui.widgets.DateWidget2.convertLocaleDate(v.day).getTime() >= start.getTime());
     if (normList.length > 0) {
         let widths = [];
         for (let i = 0; i < timeCols; i++) {
@@ -380,14 +381,14 @@ budget.print.ClientPrinter.prototype.addTimeSpent_ = function(rows, timeSpentLis
             body: []
         };
        
-    
-
         for (let i = 0; i < normList.length; i += timeCols) {
+	    
             let headerRow = [];
             let dataRow = [];
             let j = i;
             for (; j < normList.length && j < i + timeCols; j++) {
                 let el = normList[j];
+		
                 headerRow.push(moment(recoil.ui.widgets.DateWidget2.convertLocaleDate(el.day)).format('D/MM/YY'));
                 dataRow.push({alignment: 'right', text: formatTime(el.mins)});
 
@@ -399,9 +400,24 @@ budget.print.ClientPrinter.prototype.addTimeSpent_ = function(rows, timeSpentLis
             table.body.push(headerRow);
             table.body.push(dataRow);
         }
+	
         rows.push([{colSpan: 2, layout: 'noBorders',
                     table}, '']);
     }
+};
+
+/**
+ * @return {Date}
+ */
+budget.print.ClientPrinter.finYearStart = function () {
+    let start = new Date();
+    start.setHours(0,0,0,0);
+    if (start.getMonth() < 6) {
+       start.setFullYear(start.getFullYear() - 1);
+    }
+    start.setMonth(6);
+    start.setDate(1);
+    return start;
 };
 /**
  * @private
@@ -417,9 +433,10 @@ budget.print.ClientPrinter.prototype.makeGoals_ = function(user, appointments) {
     let seenDates = [];
     let now = new Date().getTime();
     let times = [];
+    let finStart = budget.print.ClientPrinter.finYearStart().getTime();
     appointments.forEach(function(row) {
         let when = row.get(me.appointmentsT.cols.start);
-        if (when < now) {
+        if (when < now && finStart <= when) {
             times.push(when);
         }
     });
@@ -454,7 +471,7 @@ budget.print.ClientPrinter.prototype.makeGoals_ = function(user, appointments) {
         [fieldName(this.mesg.CLIENT_REASON_FOR_COMING), user.get(this.userT.cols.reason) || ''],
     ]);
 
-    timeSpentList.forEach(info => {
+    timeSpentList.filter((v,i) => i > timeSpentList.length - 6).forEach(info => {
         if (info.description && info.description.trim().length > 0) {
             let dt = moment(recoil.ui.widgets.DateWidget2.convertLocaleDate(info.when)).format('DD/MM/YY ');
             rows.push([{colSpan: 2, text: dt + info.description}, '']);

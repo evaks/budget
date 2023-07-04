@@ -27,7 +27,8 @@
 		"Housing": {"type":"enum", "enum": [
 			{"id": 0, "name": "Rent"},
 			{"id": 1, "name": "Mortgage"},
-			{"id": 2, "name": "Board"}
+			{"id": 2, "name": "Board"},
+			{"id": 3, "name": "Housing NZ"}
 		]},
 		"Referral": {
 			"type":"enum", "enum": [
