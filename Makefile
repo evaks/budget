@@ -182,7 +182,7 @@ upgrade:
 	sudo cp output/server.* /var/www
 	sudo cp -r output/resources /var/www
 	sudo service budget stop
-	sudo node ${WWW}/server.min.js --upgrade
+	sudo `which node` ${WWW}/server.min.js --upgrade
 	sudo service budget start
 
 

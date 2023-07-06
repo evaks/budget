@@ -264,6 +264,54 @@ aurora.db.mysql.Pool.prototype.restore = function(fname, cb) {
 };
 
 /**
+ * this should skip looking inside strings and tables
+ *
+ * @param {string} str
+ * @param {string} lookup
+ * @param {number} start
+ * @return {string}
+ */
+aurora.db.mysql.Pool.prototype.indexOf = function(str, lookup, start) {
+    start = Math.max(0, start);
+    let inStr = false;
+    
+    for (let i = start; i < str.length; i++) {
+        let ch = str[i];
+        if (inStr) {
+            let next = str[i+1];
+            if (ch == '\\') {
+                i++;
+            }
+            else if (ch == inStr) {
+                if (next == inStr) {
+                    i++;
+                }
+                else {
+                    inStr = false;
+                }
+            }
+            
+        }
+        else if (ch == '\'' || ch == '\"' || ch == '`') {
+            inStr = ch;
+        }
+        else if (str.substring(i, i + lookup.length) == lookup) {
+            let j = 0;
+            for (; j < lookup.length; j++) {
+                if (str[i +j] !=  lookup[j]) {
+                    break;
+                }
+            }
+            if (j === lookup.length) {
+                // found our match
+                return i;
+            }
+        }
+    }
+    return -1;
+};
+
+/**
  * @param {{host:string, user:string, password:string, database:string}} options
  * @param {function(?)} cb
  */

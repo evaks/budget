@@ -815,6 +815,30 @@ aurora.db.sql.Reader.prototype.readObjectsAsync = function(context, table, filte
 };
 
 /**
+ * @param {string} sql
+ * @param {!aurora.db.schema.TableType} table
+ * @param {recoil.db.QueryOptions=} opt_options
+ * @return {string}
+ */
+aurora.db.sql.Reader.prototype.bind = function (sql, table, opt_options) {
+    let validKeys = {};
+    let found = false;
+    for (let k in table.meta) {
+        if (table.meta[k].query) {
+            validKeys[k] = true;
+            found = true;
+        }
+    }
+    if (!opt_options || !found) {
+        return sql;
+    }
+    return opt_options.bind(
+        sql, validKeys,
+        v => this.driver_.escape(v),
+        (str, query, start) => this.driver_.indexOf(str, query, start));
+};
+
+/**
  * @param {!Object} context
  * @param {!aurora.db.schema.TableType} table
  * @param {recoil.db.Query} filter
@@ -911,6 +935,8 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
                             colMap[meta.key.getId()] = colMap[srcMeta.key.getId()];
                         }
                     }
+
+                    sql.query = me.bind(sql.query, cur.table, opt_options);
                 }
                 else {
                     sql = me.mkSelectSql_(scope, colMap, cur, columns, limit, colFilter);
@@ -927,18 +953,8 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
 
                
                 if (table && table.info && table.info.where) {
-                    let validKeys = {};
-                    for (let k in table.meta) {
-                        if (table.meta[k].query) {
-                            validKeys[k] = true;
-                        }
-                    }
                     let bindOptions = v => {
-                        if (!opt_options) {
-                            return v;
-                        }
-                        
-                        return opt_options.bind(v, validKeys, v => driver.escape(v));
+                        return me.bind(v, table, opt_options);
                     };
                     
                     let where = table.info.where.map(bindOptions).map(x => '(' + x + ')').join(' AND ');
@@ -956,11 +972,15 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
                 sql.query += ' ORDER BY ' + table.info.order.join(',');
                 
             }
+            if (table && table.info && table.info.groupby) {
+                sql.query += ' GROUP BY ' + table.info.groupby.join(',');
+                
+            }
+
             if (sql.suffix != undefined) {
                 sql.query += sql.suffix;
                 
             }
-
 
             driver.query(driver.addOptions(sql.query, opt_options), function(error, data, colInfo) {
                 try {

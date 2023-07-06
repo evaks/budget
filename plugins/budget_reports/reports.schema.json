@@ -21,11 +21,34 @@
 								{"name": "lastName", "type": "string(100)"}
 						],
 						"queryCols" : [
-								{"name": "start", "type": "date"},
-								{"name": "stop", "type": "date"}								
+								{"name": "start", "type": "date", "bind": true},
+								{"name": "stop", "type": "date", "bind":  true}								
+						]
+						
+				},
+				{
+						"name" : "client_hours",
+						"access": "aurora.db.access.basic([{'site-management': 'r'}])",
+						"accessFilter": [{"site-management": "all"} , {"": "none"}],
+						"tables": [],
+						"genid": true,
+						"query": "SELECT 1 id, userid, firstname, lastname, sum(len) scheduled, sum(missed) missed FROM (select userid, firstname, lastname, date, max(len) len, sum(missed) missed FROM (SELECT firstname, lastname, userid, date, sum(len) len, sum(missed) missed FROM (SELECT coalesce(u.firstname, a.firstname) firstname, coalesce(u.lastname, a.lastname) lastname, a.userid, convert(replace(left(from_unixtime(a.start/1000),10),'-',''),UNSIGNED) date, (stop - start)/60000 len, IF(showed = 1,  0, (stop - start)/60000) missed FROM appointments a left join user u on a.userid = u.id where trim(a.firstname) <> '' or trim(a.lastname) <> '') appt WHERE appt.date >= ?:start: AND appt.date <= ?:stop: GROUP BY firstname, lastname, userid, date UNION SELECT u.firstname, u.lastname, u.id, ut.when, sum(ut.len), 0 missed FROM user u, user_time ut WHERE ut.userid = u.id AND ut.when >= ?:start: AND ut.when <= ?:stop: group by u.id, u.firstname, u.lastname, ut.when) aa GROUP BY userid, firstname, lastname, date) aaa",
+						"groupby" : ["userid", "firstname", "lastname"],
+						"columns": [
+								{"name": "id", "type": "id"},
+								{"name": "userid", "type": "ref(user)"},								
+								{"name": "firstName", "type": "string(100)"},								
+								{"name": "lastName", "type": "string(100)"},								
+								{"name": "scheduled", "type": "int"},
+								{"name": "missed", "type": "int"}
+						],
+						"queryCols" : [
+								{"name": "start", "type": "date", "bind": true},
+								{"name": "stop", "type": "date", "bind":  true}								
 						]
 						
 				}
+				
 		]
 }
 						

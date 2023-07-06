@@ -17,6 +17,13 @@ goog.require('recoil.ui.frp.LocalBehaviour');
  * @implements {recoil.ui.Widget}
  */
 budget.widgets.ClientReport = function(scope) {
+    /* gets appointments with users who are repeat active
+       
+       encase in another select to get active on maxdate
+       
+
+select id , userid, max(start) > $enddate - 5months active, max(if(userid is NULL, 0, 1) ) active, max(showed), max(missed) from (select a1.id id, a2.userid userid, a1.start, a1.showed showed, MOD(a1.showed + 1,2) as missed from appointments a1 LEFT join appointments a2 ON a1.userid = a2.userid and a2.start < a1.start and a2.start > a1.start - 5months ) a3 group by id, userid, a3.start;
+*/
     this.scope_ = scope;
     let me = this;
     let frp = scope.getFrp();
@@ -24,6 +31,7 @@ budget.widgets.ClientReport = function(scope) {
     let amess = aurora.messages;
     let cd = goog.dom.createDom;
     let reportT = aurora.db.schema.tables.base.client_report;
+    const hoursT = aurora.db.schema.tables.base.client_hours;
     let fromDiv = cd('div',{class: 'goog-inline-block'});
     let toDiv = cd('div',{class: 'goog-inline-block'});
     let dateDiv = cd('div',{},  cd('b', {},'From '), fromDiv, cd('b', {}, 'To '),  toDiv);
@@ -34,6 +42,14 @@ budget.widgets.ClientReport = function(scope) {
     today.setMonth(today.getMonth() - 1);
     this.startDateB_ = frp.createB(recoil.ui.widgets.DateWidget2.convertDateToLocal(today));    
 
+    this.hoursB_ = frp.switchB(frp.liftB((start, stop) => {
+        let query = new recoil.db.Query();
+        return scope.getDb().get(hoursT.key, undefined, new recoil.db.QueryOptions({binds: {
+            start: start, stop: stop
+        }}));
+        
+    }, this.startDateB_, this.endDateB_));
+    
     this.reportB_ = frp.switchB(frp.liftB((start, stop) => {
         let startDate = recoil.ui.widgets.DateWidget2.convertLocaleDate(start);
         let stopDate = recoil.ui.widgets.DateWidget2.convertLocaleDate(stop);
@@ -49,7 +65,10 @@ budget.widgets.ClientReport = function(scope) {
     this.containerDiv_ = cd('div', {class: 'budget-report'}, dateDiv);
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(this.containerDiv_);
     this.reportBody_ = new budget.widgets.Report(scope);
-    let NAME = new recoil.structs.table.ColumnKey('name');
+    const NAME = new recoil.structs.table.ColumnKey('name');
+    const DISCHARGED = new recoil.structs.table.ColumnKey('discharged');
+    const ATTENDED = hoursT.cols.scheduled;
+    const MISSED = hoursT.cols.missed;
     let LAST_OWING = new recoil.structs.table.ColumnKey('last owing');
     let calcInt = recoil.util.ExpParser.instance.eval.bind(recoil.util.ExpParser.instance);
     let calc = v => {
@@ -60,10 +79,11 @@ budget.widgets.ClientReport = function(scope) {
         return res * 100;
     };
     
-
-    let dataB = frp.liftB(function(tbl) {
-        let res = new recoil.structs.table.MutableTable([reportT.cols.id], [reportT.cols.userid, NAME,  LAST_OWING, reportT.cols.owing, reportT.cols.referralFrom]);
-
+    let userCols = [LAST_OWING, DISCHARGED, reportT.cols.owing, reportT.cols.referralFrom];
+    
+    let dataB = frp.liftB(function(tbl, hours) {
+        let  resTbl = hours.createEmpty([], userCols.concat([NAME]));
+        let resUsers = new Map();
 
 
         let newRowInfo = () => ({
@@ -96,14 +116,18 @@ budget.widgets.ClientReport = function(scope) {
             if (curUser.id !== null) {
 
                 let outRow = new recoil.structs.table.MutableTableRow(pos++);
-                outRow.set(reportT.cols.userid, prevRow.get(reportT.cols.userid).db);
-                outRow.set(NAME, (prevRow.get(reportT.cols.firstName) + ' ' + prevRow.get(reportT.cols.lastName)));
-                outRow.set(reportT.cols.owing,
-                           curUser.firstBudget.budgetid == null ? '-' : (curUser.firstBudget.owing/100).toFixed(2));
-                outRow.set(LAST_OWING,
-                           curUser.lastBudget.budgetid == null ? '-' : (curUser.lastBudget.owing/100).toFixed(2));
+                let userId = prevRow.get(reportT.cols.userid).db;
+                
+                outRow.set(reportT.cols.userid, userId);
+
+                let owing = curUser.firstBudget.budgetid == null ? null : (curUser.firstBudget.owing/100);
+                let lastOwing = curUser.lastBudget.budgetid == null ? null : (curUser.lastBudget.owing/100);
+                outRow.set(reportT.cols.owing,owing);
+                outRow.set(LAST_OWING, lastOwing);
+                outRow.set(DISCHARGED,owing == null || lastOwing == null ? null : Math.max(0, owing - lastOwing));
                 outRow.set( reportT.cols.referralFrom, prevRow.get( reportT.cols.referralFrom) || 'Unknown');
-                res.addRow(outRow);
+                
+                resUsers.set(userId, outRow);
                 curUser = newRowInfo();
                 
             }
@@ -138,16 +162,40 @@ budget.widgets.ClientReport = function(scope) {
             }
             prevRow = row;
         });
-
         doLastRow();
-        return res.freeze();
-    }, this.reportB_);
+        
+        hours.forEachModify(row => {
+            let id = row.get(hoursT.cols.userid);
+            let usrRow = id ? resUsers.get(id.db) : null;
+            userCols.forEach(c => {
+                row.set(c, usrRow ? usrRow.get(c) : null);
+            });
+            let scheduled = Math.round(row.get(hoursT.cols.scheduled));
+            let missed = Math.round(row.get(hoursT.cols.missed));
+            row.set(ATTENDED, Math.round((scheduled - missed) / 6) / 10);
+            row.set(MISSED, Math.round(missed / 6)/10);
+            row.set(NAME, (row.get(hoursT.cols.firstName) + ' ' +row.get(hoursT.cols.lastName)));
+            resTbl.addRow(row);
+        });
+
+        return resTbl.freeze();
+    }, this.reportB_, this.hoursB_);
+    const currency = budget.widgets.Report.currency;
+    
     this.reportBody_.attach([
-        {col: reportT.cols.userid, title: 'ID'},
+        {col: hoursT.cols.userid, title: 'Link', render: v => {
+            if (v) {
+                return cd('a', {class: 'aurora-link-widget', href: '/client?id=' + v.db},cd('div'));
+            }
+            return '';
+        }},
         {col: NAME, title: 'Name'},
-        {col:  reportT.cols.referralFrom, title: 'Referred From'},
-        {col: reportT.cols.owing, title: 'Initial Owing'},
-        {col: LAST_OWING, title: 'Final Owing'},
+        {col: ATTENDED, title: 'Hours Attended', sum: true},
+        {col: MISSED, title: 'Hours Missed', sum: true},
+        {col: reportT.cols.referralFrom, title: 'Referred From' },
+        {col: reportT.cols.owing, title: 'Initial Owing', render: currency, sum: true},
+        {col: LAST_OWING, title: 'Final Owing', render: currency, sum: true},
+        {col: DISCHARGED, title: 'Debt Retired', render: currency, sum: true},
         ], dataB);
     this.reportBody_.getComponent().render(this.containerDiv_);
 
@@ -201,15 +249,23 @@ budget.widgets.Report.prototype.update_ = function() {
         let cd = goog.dom.createDom;
     goog.dom.removeChildren(this.tableDiv_);
     goog.dom.removeChildren(this.errorsDiv_);
-    let stringify = v => {
+    let stringify = (v, info) => {
+        if (info.render) {
+            return info.render(v);
+        }
         if (v instanceof Element) {
             return v;
+        }
+        else if (v == null) {
+            return '-';
         }
         else {
             return '' + v;
         }
     };
     if (this.helper_.isGood()) {
+        let sums = new Map();
+        
         let tbl = this.rowsB_.get();
         if (tbl.size() > 0) {
             let columns = this.columnsB_.get();
@@ -224,10 +280,28 @@ budget.widgets.Report.prototype.update_ = function() {
                 this.tableDiv_.appendChild(tr);
                 columns.forEach(info => {
                     let data = row.get(info.col);
-                    tr.appendChild(cd('td', {}, stringify(data)));
+                    if (info.sum) {
+                        let v = (sums.get(info) || 0) + (data || 0);
+                        sums.set(info, v);
+                    }
+                    tr.appendChild(cd('td', {}, stringify(data, info)));
                 });
                 
             });
+            if (sums.size > 0) {
+                let tr = cd('tr', {class: 'total'});
+                this.tableDiv_.appendChild(tr);
+                columns.forEach(info => {
+                    let total = sums.get(info);
+                    if (total == undefined) {
+                        tr.appendChild(cd('td', {}));
+                    }
+                    else {
+                        tr.appendChild(cd('td', {}, stringify(total, info)));
+                    }
+                });
+            }
+            
         }
     }
     else if (this.helper_.errors().length > 0) {
@@ -243,7 +317,13 @@ budget.widgets.Report.prototype.update_ = function() {
         
 
 };
-
+/**
+ * @param {number} v
+ * @return {string}
+ */
+budget.widgets.Report.currency = function (v) {
+    return v == undefined ? '-' : v.toFixed(2);
+};
 /**
  * @return {!goog.ui.Component}
  */

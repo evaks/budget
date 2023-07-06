@@ -28,7 +28,8 @@
 						{"id":0, "name": "Unknown"},
 						{"id":2, "name": "Confirmed"},
 						{"id":1, "name": "Attended"},
-						{"id":3, "name": "Missed"}
+						{"id":3, "name": "Missed"},
+						{"id":4, "name": "Reserved"}
 
 				]}
 		},

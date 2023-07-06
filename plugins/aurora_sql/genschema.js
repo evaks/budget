@@ -566,6 +566,9 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
                 if (!client && data.order) {
                     fs.appendFileSync(out, '    order: ' + stringify(data.order) +',\n');
                 }
+                if (!client && data.groupby) {
+                    fs.appendFileSync(out, '    groupby: ' + stringify(data.groupby) +',\n');
+                }
                 if (!client && data.genid) {
                     fs.appendFileSync(out, '    genid: true,\n');
                 }

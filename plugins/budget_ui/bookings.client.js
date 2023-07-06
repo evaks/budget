@@ -327,6 +327,7 @@ budget.widgets.Bookings = function(scope) {
             let now = new Date(entry.key[0]);
             today.setHours(0, 0, 0, 0);
             if (prevDay !== today.getTime()) {
+                // this is the date seperator row
                 let row = new recoil.structs.table.MutableTableRow(pos++);
                 row.set(appointmentsT.cols.showed, attendanceE.unknown);
                 row.addCellMeta(appointmentsT.cols.showed, {enabled: recoil.ui.BoolWithExplanation.FALSE});
@@ -369,7 +370,7 @@ budget.widgets.Bookings = function(scope) {
                 let key = override ? override.id : appointmentsT.info.pk.getDefault();
                 row.set(appointmentsT.cols.id, key);
                 row.set(appointmentsT.cols.showed, attendanceE.unknown);
-                row.addCellMeta(appointmentsT.cols.showed, {enabled: recoil.ui.BoolWithExplanation.FALSE});
+                row.addCellMeta(appointmentsT.cols.showed, {list: [attendanceE.unknown, attendanceE.reserved]});
                 
                 if (override) {
                     row.set(START_COL, override.start);
@@ -412,6 +413,7 @@ budget.widgets.Bookings = function(scope) {
                 entry.avail.forEach(function(inRow) {
                     let row = inRow.unfreeze();
                     let userid = inRow.get(appointmentsT.cols.userid);
+                    let blank = budget.widgets.Bookings.isBlank(row);
                     row.addCellMeta(SEARCH_COL, {text: searchIcon()});
                     row.set(SEARCH_COL, null);
                     let start = row.get(appointmentsT.cols.start);
@@ -428,6 +430,9 @@ budget.widgets.Bookings = function(scope) {
                     row.addCellMeta(LEN_COL, {max: Math.floor(entry.max/60000)});
                     row.set(LEN_COL, Math.floor((stop-start)/60000));
                     row.set(appointmentsT.cols.mentorid, mentorid);
+                    if (blank) {
+                        row.addCellMeta(appointmentsT.cols.showed, {list: [attendanceE.unknown, attendanceE.reserved]});
+                    }
                     row.set(clientCK, userid ? '/client?id=' + userid.db : '/client/new?data=' + encodeURI(JSON.stringify(
                         {
                             firstName: row.get(appointmentsT.cols.firstName),
@@ -439,6 +444,9 @@ budget.widgets.Bookings = function(scope) {
                             mentorid: mentorid,
                         }
                     )));
+                    if (blank) {
+                        row.set(clientCK, null);
+                    }
 
                     if (!editable(sec)) {
 
@@ -466,7 +474,7 @@ budget.widgets.Bookings = function(scope) {
                         row.addCellMeta(clientCK, {formatter: newUser});
                     }
                     row.set(appointmentsT.cols.scheduled, row.get(appointmentsT.cols.scheduled) !== null);
-                    row.addCellMeta(appointmentsT.cols.scheduled, {editable: true});
+                    row.addCellMeta(appointmentsT.cols.scheduled, {editable: !blank});
                     if (row.get(appointmentsT.cols.scheduled)) {
                         let cols = [
                             START_COL,
@@ -624,15 +632,8 @@ budget.widgets.Bookings = function(scope) {
                 },me.appointmentsB_), 'Select', 'Find Client', undefined, queryB);
                 dialog.show(true);
             }
-            let relColumns = [aKeys.firstName, aKeys.lastName, aKeys.email, aKeys.phone, aKeys.address];
             let pk = row.get(aKeys.id);
-            let blank = relColumns.reduce(function(total, col) {
-                if (!total) {
-                    return false;
-                }
-                let val = row.get(col);
-                return !val || val.trim().length == 0;
-            }, true);
+            let blank = budget.widgets.Bookings.isBlank(row) && row.get(aKeys.showed) != attendanceE.reserved;
 
             seen.add(row.get(aKeys.id));
             if (blank) {
@@ -968,6 +969,23 @@ budget.widgets.Bookings.generateUniqueNameMap = function(mentors) {
         accepted[id] = name;
     }
     return accepted;
+};
+
+/**
+ * @param {!recoil.structs.table.TableRowInterface} row
+ * @return {boolean}
+ */
+budget.widgets.Bookings.isBlank = function (row) {
+    let appointmentsT = aurora.db.schema.tables.base.appointments;
+    let aKeys = appointmentsT.cols;
+    let relColumns = [aKeys.firstName, aKeys.lastName, aKeys.email, aKeys.phone, aKeys.address];
+    return relColumns.reduce(function(total, col) {
+        if (!total) {
+            return false;
+        }
+        let val = row.get(col);
+        return !val || val.trim().length == 0;
+    }, true);
 };
 /**
  * @return {!goog.ui.Component}

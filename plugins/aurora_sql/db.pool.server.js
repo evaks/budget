@@ -372,6 +372,17 @@ aurora.db.Pool.prototype.escapeId = function(str) {};
  */
 aurora.db.Pool.prototype.escape = function(str) {};
 
+
+/**
+ * this should skip looking inside strings and tables
+ *
+ * @param {string} str
+ * @param {string} lookup
+ * @param {number} start
+ * @return {string}
+ */
+aurora.db.Pool.prototype.indexOf = function(str, lookup, start) {};
+
 /**
  * @final
  * @private

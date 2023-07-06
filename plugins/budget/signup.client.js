@@ -422,7 +422,7 @@ budget.widgets.SignUp = function(scope, opt_userid) {
 
     let country = createCombo(userT.cols.countryOfBirth, budget.widgets.SignUp.COUNTRIES);
     let ethnicity = createCombo(userT.cols.ethnicity, ['Maori', 'Pacific Island', 'Asian', 'NZ European']);
-    let referralFrom = createCombo(userT.cols.referralFrom, ['Work & Income (Te Hiranga Tangata)', 'Other']);
+    let referralFrom = createCombo(userT.cols.referralFrom, ['Work & Income (Te Hiranga Tangata)', 'Other', 'Money Talks']);
     html.show(selectUserDiv, showUserSelectB);
     html.show(tick, recoil.frp.logic.equal(password.value, confirmPassword.value));
     html.show(cross, recoil.frp.logic.notEqual(password.value, confirmPassword.value));
