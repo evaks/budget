@@ -174,6 +174,7 @@ select id , userid, max(start) > $enddate - 5months active, max(if(userid is NUL
             let missed = Math.round(row.get(hoursT.cols.missed));
             row.set(ATTENDED, Math.round((scheduled - missed) / 6) / 10);
             row.set(MISSED, Math.round(missed / 6)/10);
+            row.set(hoursT.cols.slots, row.get(hoursT.cols.slots) - row.get(hoursT.cols.missedSlots));
             row.set(NAME, (row.get(hoursT.cols.firstName) + ' ' +row.get(hoursT.cols.lastName)));
             resTbl.addRow(row);
         });
@@ -192,6 +193,8 @@ select id , userid, max(start) > $enddate - 5months active, max(if(userid is NUL
         {col: NAME, title: 'Name'},
         {col: ATTENDED, title: 'Hours Attended', sum: true},
         {col: MISSED, title: 'Hours Missed', sum: true},
+        {col: hoursT.cols.slots, title: 'Sessions Attended', sum: true},
+        {col: hoursT.cols.missedSlots, title: 'Sessions Missed', sum: true},
         {col: reportT.cols.referralFrom, title: 'Referred From' },
         {col: reportT.cols.owing, title: 'Initial Owing', render: currency, sum: true},
         {col: LAST_OWING, title: 'Final Owing', render: currency, sum: true},

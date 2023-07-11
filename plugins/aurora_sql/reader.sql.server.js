@@ -107,6 +107,14 @@ aurora.db.sql.Reader.converters_ = {
         }
     },
 
+    'int': {
+        fromDb(driver, val) {
+            if (typeof val == 'string') {
+                return parseInt(val, 10);
+            }
+            return val;
+        }
+    },
     'bigint': {
         fromDb(driver, val) {
             return BigInt(val);

@@ -6069,6 +6069,8 @@ div.budget-info, td.budget-info {
 		background-color: #636363;
 		color: white;
 		padding: 0 12px 0 2px;
+		top: 0;
+		position: sticky;
 }
 
 .budget-report td {
