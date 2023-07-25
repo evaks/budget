@@ -127,6 +127,7 @@ budget.widgets.BudgetList.createEmptyBudget = function(userId, row, template) {
     mrow.set(budgetT.cols.name, 'Budget');
     mrow.set(budgetT.cols.createTime, new Date().getTime());
     mrow.set(budgetT.cols.period, PeriodType.weekly);
+    mrow.set(budgetT.cols.cited, false);
     mrow.set(budgetT.cols.userid, new aurora.db.PrimaryKey(userId));
     let entries = [];
     let pos = 0;

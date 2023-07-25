@@ -151,6 +151,20 @@
 		
     ],
     "tables": [
+				{
+						"name" : "referrer",
+						"accessFilter": [{"" : "all"}],
+						"initial": [{"name": "Work & Income (Te Hiranga Tangata)", "order":0},
+												{"name": "Other", "order": 2},
+												{"name": "Money Talks", "order": 1}],
+
+						"access": "aurora.db.access.basic([{'site-management': 'crud'}, {'':'r'}])",
+						"columns": [
+								{"name": "id", "type": "id"},
+								{"name": "order", "type": "order"},
+								{"name": "name", "type": "string(100)", "nullable": false, "trim": true}
+						]
+				},
 		{
 			"version": 1,
 			

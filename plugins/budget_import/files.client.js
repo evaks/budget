@@ -491,6 +491,7 @@ budget.widgets.import.FileWidget.validate = function(parsed) {
  *           skipFunc:((function(number, !Array<string>,!Array<string>):boolean)|undefined),
  *           matchFunc:((function(!Array<!Array<string>>,!Array<string>):boolean)|undefined),
  *           parseAmount:((function(string,!Array<string>):number)|undefined),
+ *           reformat:((function(string,string,!Array<string>):string)|undefined),
  *           parseDate:((function(string):number)|undefined)}} opts
  * @return {function(string, string, ?):boolean} name, content, data
  */
@@ -525,6 +526,9 @@ budget.widgets.import.FileWidget.makeMatcher = function(
             return moment(v, 'D/M/YYYY').toDate().getTime();
         };
 
+        const reformat = opts.reformat || function (value, field, line) {return  value;};
+            
+
         if (recoil.util.object.isEqual(lines[pos], headers) || skipHeaderCheck) {
             pos++;
         } else if (needsHeaders) {
@@ -536,14 +540,14 @@ budget.widgets.import.FileWidget.makeMatcher = function(
         let stop = range.stop;
         for (let i = pos; i < lines.length; i++) {
             let line = lines[i];
-            let date = parseDate(line[dateIndex]);
+            let date = parseDate(reformat(line[dateIndex], dateCol, line));
             start = start === null ? date : Math.min(start, date);
             stop = stop === null ? date : Math.max(stop, date);
             res.push({
                 date: date,
-                description: line[partIndex],
-                memo: line[refIndex] || '',
-                amount: parseAmount(line[amountIndex], line)
+                description: reformat(line[partIndex], partCol, line),
+                memo: reformat(line[refIndex], refCol, line) || '',
+                amount: parseAmount(reformat(line[amountIndex], amountCol, line), line)
             });
         }
 
@@ -882,6 +886,43 @@ budget.widgets.import.FileWidget.BNZ_CSV = budget.widgets.import.FileWidget.make
          
      });
 
+/**
+ * @param {string} name
+ * @param {string} content
+ * @param {?} data
+ * @return {boolean}
+ */
+budget.widgets.import.FileWidget.KIWIBANK_B_CSV = budget.widgets.import.FileWidget.makeMatcher(
+    ['Date','Particulars','X','Amount','Balance'], 'Date', 'Particulars', 'Reference', 'Amount', {
+        needsHeader: true,
+        skipHeaderCheck: true, // not needed and really can't test since it changes based on account        
+        matchFunc: function (lines, header) {
+            if (lines.length < 1) {
+                return false;
+            }
+            return /^38-[0-9]{4}-[0-9]{7}-[0-9]{2,3}$/.test(lines[0][0]) && lines[0].length ==  header.length;
+        },
+        parseDate: function(v) {
+            return moment(v, "D MMM YYY").toDate().getTime();
+        },
+        reformat: function (v, field, line) {
+            if (field == 'Particulars') {
+                let val = (v.split(';')[0]).trim();
+                if (/-[0-9]{2}:[0-9]{2}$/.test(val)) {
+                    return val.substring(0, val.lastIndexOf('-'));
+                }
+                return val;
+            }
+            if (field == 'Reference') {
+                return line[1].split(';')[1] || '';
+            }
+            return v;
+        },
+        parseAmount(v, line) {
+            return Math.round(parseFloat(v) * 100) / 100;
+        },
+         
+     });
 
 
 /**
@@ -939,6 +980,7 @@ budget.widgets.import.FileWidget.FILE_TYPES = (function() {
         {name: 'ASB (CSV)', matcher: budget.widgets.import.FileWidget.ASB_CSV },
         {name: 'ANZ (CSV)', matcher: budget.widgets.import.FileWidget.ANZ_CSV},
         {name: 'BNZ (CSV)', matcher: budget.widgets.import.FileWidget.BNZ_CSV},
+        {name: 'Kiwibank Brief (CSV)', matcher: budget.widgets.import.FileWidget.KIWIBANK_B_CSV},
         {name: 'Co-operative Bank(CSV)', matcher: budget.widgets.import.FileWidget.COOP_CSV},
         {name: 'RABO (CSV)', matcher: budget.widgets.import.FileWidget.RABO_CSV},
         {name: 'Budget (CSV)', matcher: budget.widgets.import.FileWidget.BUDGET_CSV},

@@ -418,11 +418,19 @@ budget.widgets.SignUp = function(scope, opt_userid) {
         renderer: mentorRendererB
     });
 
+    const getLookup = tblT => {
+        return frp.liftB(tbl => {
+            let res = [];
+            tbl.forEach(r => {
+                res.push(r.get(tblT.cols.name));
+            });
+            return res;
+        },scope.getDb().get(tblT.key));
+    };
     
-
     let country = createCombo(userT.cols.countryOfBirth, budget.widgets.SignUp.COUNTRIES);
     let ethnicity = createCombo(userT.cols.ethnicity, ['Maori', 'Pacific Island', 'Asian', 'NZ European']);
-    let referralFrom = createCombo(userT.cols.referralFrom, ['Work & Income (Te Hiranga Tangata)', 'Other', 'Money Talks']);
+    let referralFrom = createCombo(userT.cols.referralFrom,getLookup(aurora.db.schema.tables.base.referrer));
     html.show(selectUserDiv, showUserSelectB);
     html.show(tick, recoil.frp.logic.equal(password.value, confirmPassword.value));
     html.show(cross, recoil.frp.logic.notEqual(password.value, confirmPassword.value));
