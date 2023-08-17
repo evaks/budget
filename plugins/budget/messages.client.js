@@ -275,6 +275,12 @@ budget.messages.ENTER_ONE_OF = recoil.ui.message.getParamMsg('Enter one of');
 budget.messages.NAME = recoil.ui.message.getParamMsg('Name');
 
 
+/**
+ * @type {!recoil.ui.message.Message}
+ * @final
+ */
+budget.messages.FILE_NAME = recoil.ui.message.getParamMsg('File Name');
+
 
 /**
  * @type {!recoil.ui.message.Message}

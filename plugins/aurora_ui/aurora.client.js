@@ -258,6 +258,8 @@ aurora.Client.typeFactories = {
         return new recoil.ui.widgets.table.SelectColumn(meta, name, []);
     }, 'int': function(key, name, meta) {
         return new recoil.ui.widgets.table.NumberColumn(key, name, meta);
+    }, 'order': function(key, name, meta) {
+        return new recoil.ui.widgets.table.NumberColumn(key, name, {min: 0, max: 1000000});
     }, 'string': function(key, name) {
         return new recoil.ui.widgets.table.StringColumn(key, name);
     }, 'readonly-string': function(key, name, meta) {

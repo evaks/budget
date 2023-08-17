@@ -66,6 +66,23 @@ aurora.db.sql.Reader.prototype.transaction = function(callback, doneFunc) {
 };
 
 /**
+ * @param {function(!aurora.db.Reader,function())} callback first argument reader, second callback when done transaction
+ * @return {!Promise}
+ */
+aurora.db.sql.Reader.prototype.transactionAsyc = function(callback) {
+    return new Promise((resolve, reject) => {
+        this.transaction(callback, (err, res) => {
+            if (err) {
+                reject(err);
+            }
+            else {
+                resolve(res);
+            }
+        });
+    });
+};
+
+/**
  * @const
  */
 aurora.db.sql.log = aurora.log.createModule('READER-SQL');
@@ -490,6 +507,28 @@ aurora.db.sql.Reader.prototype.makeChildPathFunc = function(base) {
         }
     };
 };
+
+/**
+ * @param {!Object} context
+ * @param {!aurora.db.schema.TableType} table
+ * @param {!Array<{col:!recoil.structs.table.ColumnKey,value:?}>} keys
+ * @param {?recoil.db.Query} securityFilter
+ * @param {recoil.db.QueryOptions=} opt_options
+ * @return {!Promise}
+ */
+aurora.db.sql.Reader.prototype.readObjectByKeyAsync = function(context, table, keys, securityFilter, opt_options) {
+    return new Promise((resolve, reject) => {
+        this.readObjectByKey(context, table, keys, securityFilter, function(err, obj) {
+            if (err) {
+                reject(err);
+            }
+            else {
+                resolve(obj);
+            }
+        });
+    });
+};
+
 /**
  * @param {!Object} context
  * @param {!aurora.db.schema.TableType} table
@@ -1137,6 +1176,38 @@ aurora.db.sql.Reader.prototype.insertAsync = function(context, table, object) {
     });
 };
 
+
+/**
+ * sets any order fields to the max value + 1
+ * @param {!Object} context
+ * @param {!aurora.db.schema.TableType} table
+ * @param {!Object} object
+ * @return {!Promise}
+ */
+aurora.db.sql.Reader.prototype.setMaxOrderAsync = async function(context, table, object) {
+    if (table && table.meta && object) {
+        let orders = [];
+        for (let field in table.meta) {
+            if (table.meta[field].type == 'order') {
+                orders.push(field);
+            }
+
+        }
+        if (orders.length > 0) {
+            let sql = 'SELECT ' +
+                orders.map(f => 'MAX(' + this.driver_.escapeId(f) + ') ' + this.driver_.escapeId(f))
+                .join(',') + ' FROM ' + this.driver_.escapeId(table.info.table);
+
+            let res = await this.queryAsync(sql, {});
+            orders.forEach(f => {
+                object[f] = ((res && res[f]) || 0) + 1;
+            });                            
+        }
+            
+        
+    }
+};
+
 /**
  * @param {!Object} context
  * @param {!aurora.db.schema.TableType} table
@@ -1216,7 +1287,6 @@ aurora.db.sql.Reader.prototype.insert = function(context, table, object, callbac
             callback(e, null);
         }
     };
-
     this.transaction(function(reader, transCallback) {
         let parentId = table.info.parentKey ? object[table.info.parentKey.getName()] : null;
         doInsertObject(reader.driver_, table, parentId, object, function(err, insertInfo) {
@@ -1237,6 +1307,24 @@ aurora.db.sql.Reader.prototype.insert = function(context, table, object, callbac
  */
 aurora.db.sql.Reader.prototype.query = function(query, params, opt_callback) {
     this.driver_.query(query, params, opt_callback);
+};
+
+/**
+ * @param {string} query
+ * @param {!Object<string,?>} params 
+ * @return {!Promise<(Array|!aurora.db.type.InsertDef)>}
+ */
+aurora.db.sql.Reader.prototype.queryAsync = function(query, params) {
+    return new Promise((resolve, reject) => {
+        this.driver_.query(query, params, (err, data) => {
+            if (err) {
+                reject(err);
+            }
+            else {
+                resolve(data);
+            }
+        });
+    });
 };
 
 /**

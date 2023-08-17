@@ -1142,7 +1142,7 @@ aurora.db.Coms.prototype.insertFileIntoDb_ = function(reader, context, part, don
     let log = this.log_;
     let async = this.async_;
     let fileT = aurora.db.schema.tables.base.file_storage;
-    let fileObject = {created: new Date().getTime(), user: context.userid, name: part.filename, size: 0, parts: []};
+    let fileObject = {created: new Date().getTime(), user: context.userid , name: part.filename, size: 0, parts: []};
     reader.insert(
         context, fileT, fileObject, function(err, insertRes) {
             if (err) {
@@ -1296,54 +1296,61 @@ aurora.db.Coms.prototype.getUrlPathInfo = function(path, opt_item) {
  * @param {!Object} context
  * @param {http.IncomingMessage} request,
  * @param {http.ServerResponse} response
- * @param {function(?,Array<Object>)} done first param error, last param inserted file ids
+ * @return {!Promise<!Array<Object>>}
  */
-aurora.db.Coms.prototype.doUpload_ = function (reader, context, request, response, done) {
+aurora.db.Coms.prototype.doUpload_ = async function (reader, context, request, response) {
+    const multiparty = require('multiparty');
+    let form = new multiparty.Form();
     let log = this.log_;
     let me = this;
-    const multiparty = require('multiparty');
-    var form = new multiparty.Form();
-    var filename = undefined;
-    let partError = null;
-    let insertedList = [];
-    let async = this.async_;
-    let queue = async.queue(function(data, callback) {
-        if (data.part) {
-            me.insertFileIntoDb_(reader, context, data.part, function (err, inserted) {
-                if (err) {
-                    partError = partError || err;
+    return new Promise((resolve, reject) => {
+        var filename = undefined;
+        let partError = null;
+        let insertedList = [];
+        let async = this.async_;
+        let queue = async.queue(function(data, callback) {
+            if (data.part) {
+                me.insertFileIntoDb_(reader, context, data.part, function (err, inserted) {
+                    if (err) {
+                        partError = partError || err;
+                    }
+                    else {
+                        insertedList.push(inserted);
+                    }
+                    callback();
+                });
+                
+            }
+            else if (data.done) {
+                if (partError) {
+                    reject(partError);
                 }
                 else {
-                    insertedList.push(inserted);
+                    resolve(insertedList);
                 }
-                callback();
-            });
-
-        }
-        else if (data.done) {
-            done(partError, insertedList);
-        }
+            }
+        });
+        form.on('part', function(part) {
+            if (!part.filename) {
+                // filename is not defined when this is a field and not a file
+                // so ignore the field's content
+                part.resume();
+            } else {
+                queue.push({part: part});
+            }
+            // handle a "part" error
+        });
+        form.on('error', function(err) {
+            log.error('File upload error,', err);
+            partError = partError || err;
+            queue.push({done: true});
+        });
+        
+        form.on('close', function () {
+            queue.push({done: true});
+        });
+        form.parse(request);
     });
-    form.on('part', function(part) {
-        if (!part.filename) {
-            // filename is not defined when this is a field and not a file
-            // so ignore the field's content
-            part.resume();
-        } else {
-            queue.push({part: part});
-        }
-        // handle a "part" error
-    });
-    form.on('error', function(err) {
-        log.error('File upload error,', err);
-        partError = partError || err;
-        queue.push({done: true});
-    });
-    
-    form.on('close', function () {
-        queue.push({done: true});
-    });
-    form.parse(request);
 };
 
 /**
@@ -1460,7 +1467,6 @@ aurora.db.Coms.prototype.setupUpload_ = function () {
             let request = state.request;
             let urlInfo = me.getUrlPathInfo(request.url.substring(UPLOAD_URL.length));
             if (state.request.method === 'POST' && me.reader_ && urlInfo && urlInfo.fileField) {
-                let reader = me.reader_;
                 // we know we are handing it here maybe or deal with it in the security check
                 let doneCalled = false;
 
@@ -1472,56 +1478,81 @@ aurora.db.Coms.prototype.setupUpload_ = function () {
                         log.warn("File Upload Access Denied for ", context.userid);
                         return;
                     }
+                    let parentTable = aurora.db.schema.getTableByName(urlInfo.path.parent());
+                    
                     let readContext = aurora.db.Coms.makeReadContext(context);
 
-
-                    let notifies = [];
-                    // check we have create access on the column we are adding to
-                    reader.transaction(function (reader, transDone) {
-                        // check we can even see the row
-                        reader.readObjectByKey(readContext, urlInfo.baseTable, urlInfo.keyValues, urlInfo.baseTable.info.accessFilter(context), function (err, object) {
-                            // we know we are dealing with the request now
-                            doneCalled = true;
-                            let insertEl = me.findElement(object, urlInfo.base, urlInfo.path.parent());
-                            if (err || !insertEl) {
-                                done(undefined);
-                                return;
+                    const linkFileParts = async (reader, inserted, notifies, parentId) => {
+                        let template = {};
+                        let orderFields = {};
+                        for (var k in urlInfo.table.meta) {
+                            let meta = urlInfo.table.meta;
+                            if (meta.defaultVal !== undefined) {
+                                template[k] = meta.defaultVal;
                             }
-                            done(false);
+                            
+                            
+                        }
+                        
+                        if (parentId != null) {
+                            template[urlInfo.table.info.parentKey.getName()] = parentId;
+                        }
+                        template['user'] = context.userid;
+                        for (let i = 0; i < inserted.length; i++) {
+                            let insertedObj = inserted[i];
+                            let obj = Object.assign({}, insertedObj, template);
+                            obj[urlInfo.fileField] = insertedObj.id;
+                            if (parentId == null) {
+                                await reader.setMaxOrderAsync(readContext, urlInfo.table, obj);
+                            }
+                            let insertRes = await reader.insertAsync(readContext, urlInfo.table, obj);
+                            obj[urlInfo.table.info.pk.getName()] = insertRes.insertId + '';
+                                notifies.push(obj);
+                            }
+                            
+
+                    };
+                    
+                    // deal with inserting into table that we are a child of
+                    const childInsertHandler = async (reader, object, notifies) => {
+                        // we know we are dealing with the request now
+                        doneCalled = true;
+                        let insertEl = me.findElement(object, urlInfo.base, urlInfo.path.parent());
+                        if (!insertEl) {
+                            done(undefined);
+                            return;
+                        }
+                        done(false);
+                        
+                        let parentId = insertEl[urlInfo.parentTable.info.pk.getName()];
+                        let inserted = await me.doUpload_(reader, context, request, response);
+                        await linkFileParts(reader, inserted, notifies, parentId);
+                    };
+                    
+                    // check we have create access on the column we are adding to
+                    let notifies = [];
+                    me.reader_.transaction(async (reader, doneFunc) => {
+                        // check we can even see the row
+                        try {
+                            if (parentTable) {
+                                let obj = await reader.readObjectByKeyAsync(readContext, urlInfo.baseTable, urlInfo.keyValues, urlInfo.baseTable.info.accessFilter(context));
+                                await childInsertHandler(reader, obj, notifies);
+                            }
+                            else {
+                                doneCalled = true;
+                                done(false);
+                                // this is a root table
+                                let inserted = await me.doUpload_(reader, context, request, response);
+                                await linkFileParts(reader, inserted, notifies, null);
+                            }
                                 
-                            let parentId = insertEl[urlInfo.parentTable.info.pk.getName()];
-                            me.doUpload_(reader, readContext, request, response, function (err, inserted) {
-                                if (!err) {
-                                    // insert the row in the referencing table so we can access the file
-                                    let template = {};
-                                    for (var k in urlInfo.table.meta) {
-                                        let meta = urlInfo.table.meta;
-                                        if (meta.defaultVal !== undefined) {
-                                            template[k] = meta.defaultVal;
-                                        }
-                                    }
-                                    template[urlInfo.table.info.parentKey.getName()] = parentId;
-                                    template['user'] = context.userid;
-                                    async.eachSeries(inserted, function (insertedObj, callback) {
-                                        let obj = Object.assign({}, insertedObj, template);
-                                        obj[urlInfo.fileField] = insertedObj.id;
-                                        reader.insert(readContext, urlInfo.table, obj, function (err, insertRes) {
-                                            if (!err) {
-                                                obj[urlInfo.table.info.pk.getName()] = insertRes.insertId + '';
-                                                notifies.push(obj);
-                                            }
-                                            callback(err);
-                                        });
-                                    }, function (err) {
-                                        transDone(err);
-                                    });
-                                }
-                                else {
-                                    transDone(err);
-                                }
-                                
-                            });
-                        });
+                            doneFunc(null);
+
+                            
+                        } catch (err) {
+                            console.log('doing eror', err);
+                            doneFunc(err);
+                        }
                     }, function (err) {
                         if (!doneCalled) {
                             doneCalled = true;
