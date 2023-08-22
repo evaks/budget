@@ -12,7 +12,8 @@
 		    "MaritalStatus": {"type": "enum", "enum": [
 			      {"id":0, "name": "Married"},
 			      {"id":1, "name": "Defacto"},
-			      {"id":2, "name": "Single"}
+			      {"id":2, "name": "Single"},
+			      {"id":3, "name": "Widowed"}
 		    ]},
 		    "Sighted": {"type": "enum", "enum": [
 			      {"id":0, "name": "No"},
