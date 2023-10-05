@@ -182,6 +182,7 @@ select id , userid, max(start) > $enddate - 5months active, max(if(userid is NUL
         return resTbl.freeze();
     }, this.reportB_, this.hoursB_);
     const currency = budget.widgets.Report.currency;
+    const hour = budget.widgets.Report.hour;
     
     this.reportBody_.attach([
         {col: hoursT.cols.userid, title: 'Link', render: v => {
@@ -191,8 +192,8 @@ select id , userid, max(start) > $enddate - 5months active, max(if(userid is NUL
             return '';
         }},
         {col: NAME, title: 'Name'},
-        {col: ATTENDED, title: 'Hours Attended', sum: true},
-        {col: MISSED, title: 'Hours Missed', sum: true},
+        {col: ATTENDED, title: 'Hours Spent', sum: true, render: hour},
+        {col: MISSED, title: 'Hours Missed', sum: true, render: hour},
         {col: hoursT.cols.slots, title: 'Sessions Attended', sum: true},
         {col: hoursT.cols.missedSlots, title: 'Sessions Missed', sum: true},
         {col: reportT.cols.referralFrom, title: 'Referred From' },
@@ -277,9 +278,9 @@ budget.widgets.Report.prototype.update_ = function() {
             columns.forEach(info => {
                 header.appendChild(cd('th', {}, info.title));
             });
-            
+            let pos = 0;
             tbl.forEach(row => {
-                let tr = cd('tr', {});
+                let tr = cd('tr', {class: pos %2 ? '' : 'odd'});
                 this.tableDiv_.appendChild(tr);
                 columns.forEach(info => {
                     let data = row.get(info.col);
@@ -289,7 +290,8 @@ budget.widgets.Report.prototype.update_ = function() {
                     }
                     tr.appendChild(cd('td', {}, stringify(data, info)));
                 });
-                
+
+                pos++;
             });
             if (sums.size > 0) {
                 let tr = cd('tr', {class: 'total'});
@@ -327,6 +329,21 @@ budget.widgets.Report.prototype.update_ = function() {
 budget.widgets.Report.currency = function (v) {
     return v == undefined ? '-' : v.toFixed(2);
 };
+
+/**
+ * @param {number} v
+ * @return {string}
+ */
+budget.widgets.Report.hour = function (v) {
+    if (v == undefined) {
+        return '-';
+    }
+    if (Math.floor(v) !== v) {
+        return v.toFixed(1);
+    }
+    return v.toFixed(0);
+};
+
 /**
  * @return {!goog.ui.Component}
  */

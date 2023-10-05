@@ -123,7 +123,9 @@ budget.actions.getEmailTransporterInfo_ = function(secContext, callback) {
 
     }
     if (mailInfo && mailInfo.auth) {
-        callback(null, nodemailer.createTransport(mailInfo), emailInfo, function(info) {});
+        let newMailInfo = goog.object.clone(mailInfo);
+        delete newMailInfo['from'];
+        callback(null, nodemailer.createTransport(newMailInfo), emailInfo, function(info) {});
     }
     else {
         nodemailer.createTestAccount().then(
