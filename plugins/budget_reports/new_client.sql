@@ -7,7 +7,7 @@ FROM (
   DATE(from_unixtime(floor(start/1000))) start 
 FROM appointments a 
   LEFT JOIN user u ON u.id = a.userid 
-  WHERE showed = 1 AND ?:start: <= a.start AND ?:stop: > a.start
+  WHERE showed IN  (0, 1, 2) AND ?:start: <= a.start AND ?:stop: > a.start
 UNION SELECT 
   firstname, lastname, 
   STR_TO_DATE(ut.`when`, '%Y%m%d') start 

@@ -5,7 +5,7 @@ SELECT firstname, lastname, max(start) start, max(start) recent FROM (
   DATE(from_unixtime(floor(start/1000))) start
   FROM appointments a 
   LEFT JOIN user u ON u.id = a.userid 
-  WHERE showed = 1
+  WHERE showed IN  (0, 1, 2)
     AND unix_timestamp(DATE_ADD(from_unixtime(floor(?:start:/1000)), INTERVAL -5 MONTH)) * 1000 <= a.start
     AND a.start < ?:start:
   UNION SELECT 
