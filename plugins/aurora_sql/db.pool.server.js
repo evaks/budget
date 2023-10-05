@@ -332,6 +332,17 @@ aurora.db.Pool.hashPasswordPromise = function(password) {
 /**
  * @param {?string} password
  * @param {buffer.Buffer} hash the whole hash read from the database should include version an salt
+ * @return {!Promise<boolean>} true if password matches
+ */
+aurora.db.Pool.checkPasswordAsync = function(password, hash) {
+    return new Promise((resolve, reject) => {
+        aurora.db.Pool.checkPassword(password, hash, resolve);
+    });
+};
+
+/**
+ * @param {?string} password
+ * @param {buffer.Buffer} hash the whole hash read from the database should include version an salt
  * @param {function(boolean)} callback true if password matches
  */
 aurora.db.Pool.checkPassword = function(password, hash, callback) {

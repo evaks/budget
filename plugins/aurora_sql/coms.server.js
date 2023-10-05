@@ -1380,64 +1380,59 @@ aurora.db.Coms.prototype.setupDownload_ = function () {
     let async = this.async_;
     aurora.http.addMidRequestCallback(
         DOWNLOAD_REGEXP,
-        function(state, done) {
+        async (state) => {
             let response = state.response;
             let request = state.request;
             let urlInfo = me.getUrlPathInfo(request.url.substring(DOWNLOAD_URL.length), true);
             if (state.request.method === 'GET' && me.reader_ && urlInfo && urlInfo.fileField) {
                 let reader = me.reader_;
-                // we know we are handing it here maybe or deal with it in the security check
-                let doneCalled = false;
-                me.authenticator_.getPermissions(state.token, request.socket, function (context) {
-                    if (!aurora.db.schema.hasAccess(context, urlInfo.path, 'r')) {
-                        // we don't exist the user has no access
-                        done(undefined);
-                        log.warn("File Download Access Denied for ", context.userid);
-                        return;
+                // we know we are handing it here maybe or deal with it in the security check\
+                let context = await me.authenticator_.getPermissionsAsync(state.token, request.socket);
+                if (!aurora.db.schema.hasAccess(context, urlInfo.path, 'r')) {
+                    // we don't exist the user has no access
+                    log.warn("File Download Access Denied for ", context.userid);
+                    return undefined;
+                }
+                let readContext = aurora.db.Coms.makeReadContext(context);
+                let object;
+                try {
+                    object = await reader.readObjectByKeyAsync(readContext, urlInfo.baseTable, urlInfo.keyValues, urlInfo.baseTable.info.accessFilter(context));
+                } catch (err) {
+                    return undefined;
+                }
+                let fileInfo = me.findElement(object, urlInfo.base, urlInfo.path);
+                if (!fileInfo) {
+                    return undefined;
+                }
+                        
+                let fileT = aurora.db.schema.tables.base.file_storage;
+                
+                let fileId = fileInfo[urlInfo.fileField];                
+                let headers = state.responseHeaders;
+                    
+                    
+                headers.set('Content-Length', fileInfo.size);
+                headers.set('Content-Type', mime.getType(fileInfo.name));
+                headers.set('Accept-Ranges', 'bytes');
+                headers.set('Cache-Control', 'no-cache, must-revalidate');
+                headers.set('Content-Disposition', 'attachment; filename=' + JSON.stringify(fileInfo.name));
+                
+                headers.set('Last-Modified', new Date(fileInfo.created).toGMTString());
+                response.writeHead(200, headers.toClient());
+                
+                // now read the parts but we need to read it piecewize otherwize it may be too big
+                let query = new recoil.db.Query();
+                reader.readLevel(context, fileT.parts, query.eq(fileT.parts.info.parentKey, query.val(fileId)), null, function (part, cb) {
+                    response.write(part.data);
+                    cb();
+                }, function (err) {
+                    if (err) {
+                        me.log_.error('error reading file', err);
+                        
                     }
-                    let readContext = aurora.db.Coms.makeReadContext(context);
-                    reader.readObjectByKey(readContext, urlInfo.baseTable, urlInfo.keyValues, urlInfo.baseTable.info.accessFilter(context), function (err, object) {
-                        let fileInfo = me.findElement(object, urlInfo.base, urlInfo.path);
-                        if (err || !fileInfo) {
-                            done(undefined);
-                            return;
-                        }
-                        done(false);
-                        
-                        let fileT = aurora.db.schema.tables.base.file_storage;
-
-                        let fileId = fileInfo[urlInfo.fileField];
-
-                        let request = state.request;
-                        let headers = state.responseHeaders;
-
-                        
-                        headers.set('Content-Length', fileInfo.size);
-                        headers.set('Content-Type', mime.getType(fileInfo.name));
-                        headers.set('Accept-Ranges', 'bytes');
-                        headers.set('Cache-Control', 'no-cache, must-revalidate');
-                        headers.set('Content-Disposition', 'attachment; filename=' + JSON.stringify(fileInfo.name));
-                        
-                        headers.set('Last-Modified', new Date(fileInfo.created).toGMTString());
-                        response.writeHead(200, headers.toClient());
-                        
-                        // now read the parts but we need to read it piecewize otherwize it may be too big
-                        let query = new recoil.db.Query();
-                        reader.readLevel(context, fileT.parts, query.eq(fileT.parts.info.parentKey, query.val(fileId)), null, function (part, cb) {
-                            response.write(part.data);
-                            cb();
-                        }, function (err) {
-                            if (err) {
-                                me.log_.error('error reading file', err);
-
-                            }
-                            response.end();
-                        });
-                        
-                    });
-                                            
+                    response.end();
                 });
-                return aurora.http.REQUEST_ASYNC;
+                return false;
             }
             //
             return undefined;
@@ -1462,124 +1457,113 @@ aurora.db.Coms.prototype.setupUpload_ = function () {
     let async = this.async_;
     aurora.http.addMidRequestCallback(
         UPLOAD_REGEXP,
-        function(state, done) {
+        async function(state) {
             let response = state.response;
             let request = state.request;
+            let resolveCalled = false;
+            
             let urlInfo = me.getUrlPathInfo(request.url.substring(UPLOAD_URL.length));
-            if (state.request.method === 'POST' && me.reader_ && urlInfo && urlInfo.fileField) {
-                // we know we are handing it here maybe or deal with it in the security check
-                let doneCalled = false;
-
-                me.authenticator_.getPermissions(state.token, request.socket, function (context) {
-                    if (!aurora.db.schema.hasAccess(context, urlInfo.path, 'c')) {
-                        // we don't exist the user has no access
-                        doneCalled = true;
-                        done(undefined);
-                        log.warn("File Upload Access Denied for ", context.userid);
-                        return;
+            if (state.request.method !== 'POST' || !me.reader_ || !urlInfo || !urlInfo.fileField) {
+                return undefined;
+            }
+                
+            // we know we are handing it here maybe or deal with it in the security check
+            let context = await me.authenticator_.getPermissionsAsync(state.token, request.socket);
+            if (!aurora.db.schema.hasAccess(context, urlInfo.path, 'c')) {
+                // we don't exist the user has no access
+                log.warn("File Upload Access Denied for ", context.userid);
+                return undefined;
+            }
+            let parentTable = aurora.db.schema.getTableByName(urlInfo.path.parent());
+            let readContext = aurora.db.Coms.makeReadContext(context);
+            
+            const linkFileParts = async (reader, inserted, notifies, parentId) => {
+                let template = {};
+                let orderFields = {};
+                for (var k in urlInfo.table.meta) {
+                    let meta = urlInfo.table.meta;
+                    if (meta.defaultVal !== undefined) {
+                        template[k] = meta.defaultVal;
                     }
-                    let parentTable = aurora.db.schema.getTableByName(urlInfo.path.parent());
                     
-                    let readContext = aurora.db.Coms.makeReadContext(context);
-
-                    const linkFileParts = async (reader, inserted, notifies, parentId) => {
-                        let template = {};
-                        let orderFields = {};
-                        for (var k in urlInfo.table.meta) {
-                            let meta = urlInfo.table.meta;
-                            if (meta.defaultVal !== undefined) {
-                                template[k] = meta.defaultVal;
-                            }
-                            
-                            
-                        }
-                        
-                        if (parentId != null) {
-                            template[urlInfo.table.info.parentKey.getName()] = parentId;
-                        }
-                        template['user'] = context.userid;
-                        for (let i = 0; i < inserted.length; i++) {
-                            let insertedObj = inserted[i];
-                            let obj = Object.assign({}, insertedObj, template);
-                            obj[urlInfo.fileField] = insertedObj.id;
-                            if (parentId == null) {
-                                await reader.setMaxOrderAsync(readContext, urlInfo.table, obj);
-                            }
-                            let insertRes = await reader.insertAsync(readContext, urlInfo.table, obj);
-                            obj[urlInfo.table.info.pk.getName()] = insertRes.insertId + '';
-                                notifies.push(obj);
-                            }
-                            
-
-                    };
+                    
+                }
+                    
+                if (parentId != null) {
+                    template[urlInfo.table.info.parentKey.getName()] = parentId;
+                }
+                template['user'] = context.userid;
+                for (let i = 0; i < inserted.length; i++) {
+                    let insertedObj = inserted[i];
+                    let obj = Object.assign({}, insertedObj, template);
+                    obj[urlInfo.fileField] = insertedObj.id;
+                    if (parentId == null) {
+                        await reader.setMaxOrderAsync(readContext, urlInfo.table, obj);
+                    }
+                    let insertRes = await reader.insertAsync(readContext, urlInfo.table, obj);
+                    obj[urlInfo.table.info.pk.getName()] = insertRes.insertId + '';
+                    notifies.push(obj);
+                }
+            };
                     
                     // deal with inserting into table that we are a child of
-                    const childInsertHandler = async (reader, object, notifies) => {
-                        // we know we are dealing with the request now
-                        doneCalled = true;
-                        let insertEl = me.findElement(object, urlInfo.base, urlInfo.path.parent());
-                        if (!insertEl) {
-                            done(undefined);
-                            return;
-                        }
-                        done(false);
-                        
-                        let parentId = insertEl[urlInfo.parentTable.info.pk.getName()];
+            const childInsertHandler = async (reader, object, notifies) => {
+                // we know we are dealing with the request now
+                let insertEl = me.findElement(object, urlInfo.base, urlInfo.path.parent());
+                if (!insertEl) {
+                    return undefined;
+                }
+                let parentId = insertEl[urlInfo.parentTable.info.pk.getName()];
+                let inserted = await me.doUpload_(reader, context, request, response);
+                await linkFileParts(reader, inserted, notifies, parentId);
+                return false;
+            };
+            
+                let notifies = [];
+            // check we have create access on the column we are adding to
+            let res;
+            try {
+                res = await me.reader_.transactionAsyc(async (reader) => {
+                    // check we can even see the row
+                    if (parentTable) {
+                        let obj = await reader.readObjectByKeyAsync(readContext, urlInfo.baseTable, urlInfo.keyValues, urlInfo.baseTable.info.accessFilter(context));
+                        return await childInsertHandler(reader, obj, notifies);
+                    }
+                    else {
+                        // this is a root table
                         let inserted = await me.doUpload_(reader, context, request, response);
-                        await linkFileParts(reader, inserted, notifies, parentId);
-                    };
-                    
-                    // check we have create access on the column we are adding to
-                    let notifies = [];
-                    me.reader_.transaction(async (reader, doneFunc) => {
-                        // check we can even see the row
-                        try {
-                            if (parentTable) {
-                                let obj = await reader.readObjectByKeyAsync(readContext, urlInfo.baseTable, urlInfo.keyValues, urlInfo.baseTable.info.accessFilter(context));
-                                await childInsertHandler(reader, obj, notifies);
-                            }
-                            else {
-                                doneCalled = true;
-                                done(false);
-                                // this is a root table
-                                let inserted = await me.doUpload_(reader, context, request, response);
-                                await linkFileParts(reader, inserted, notifies, null);
-                            }
-                                
-                            doneFunc(null);
+                        await linkFileParts(reader, inserted, notifies, null);
+                        return false;
 
-                            
-                        } catch (err) {
-                            console.log('doing eror', err);
-                            doneFunc(err);
-                        }
-                    }, function (err) {
-                        if (!doneCalled) {
-                            doneCalled = true;
-                            done(false);
-                        }
-                        response.writeHead(err ? 422 : 200, {'content-type': 'text/plain'});
-                        response.end('{}');
-                        if (!err) {
-                            notifies.forEach(function (obj) {
-                                let table = urlInfo.table;
-                                let path = urlInfo.path.setKeys([table.info.pk.getName()], [BigInt(obj[table.info.pk.getName()])]);
-                                let fields = [];
-                                //urlInfo.table.
-                                for (let name in obj) {
-                                    if (name !==  table.info.pk.getName() && name != 'parts') {
-                                        fields.push(new recoil.db.ChangeSet.Set(path.appendName(name), null, obj[name]));
-                                    }
-                                }
-                                me.notifyListeners([new recoil.db.ChangeSet.Add(path, fields)], {});
-                            });
-                        }
-                    });
+                    }
+                    
                 });
-                return aurora.http.REQUEST_ASYNC;
+                if (res === false) {
+                    response.writeHead(200, {'content-type': 'text/plain'});
+                    response.end('{}');
+                    
+                    notifies.forEach(function (obj) {
+                        let table = urlInfo.table;
+                        let path = urlInfo.path.setKeys([table.info.pk.getName()], [BigInt(obj[table.info.pk.getName()])]);
+                        let fields = [];
+                        //urlInfo.table.
+                        for (let name in obj) {
+                            if (name !==  table.info.pk.getName() && name != 'parts') {
+                                fields.push(new recoil.db.ChangeSet.Set(path.appendName(name), null, obj[name]));
+                            }
+                        }
+                        me.notifyListeners([new recoil.db.ChangeSet.Add(path, fields)], {});
+                    });                    
+                }
+                return res;
+                
+            } catch (err) {
+                log.error('Unable to upload file', err);
+                response.writeHead(404, {'content-type': 'text/plain'});
+                response.end('{}');
+                return false;
             }
-            //
-            return undefined;
+
         });
 
 };

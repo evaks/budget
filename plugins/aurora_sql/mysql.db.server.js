@@ -765,6 +765,7 @@ aurora.db.mysql.Pool.prototype.sequence = function(actions, callback) {
 
     });
 };
+
 /**
  * starts and ends the transaction, calls doneFunc is called, the callback inside callback must be called when done
  * @param {function(!aurora.db.mysql.Pool,function(?,...))} callback no error here we go directly to doneFuncif we have an error opening the pool

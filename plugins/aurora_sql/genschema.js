@@ -1,7 +1,18 @@
 const path = require('path');
 const fs = require('fs');
 
-
+function resolveQuery(def, query) {
+    if (query.file) {
+        let res = fs.readFileSync(path.join(def.srcDir, query.file)).toString('utf8');
+        
+        (query.subs || []).forEach(info => {
+            res = res.replaceAll(info.name, fs.readFileSync(path.join(def.srcDir, info.file)).toString('utf8'));
+        });
+        return res;
+        
+    }
+    return query;
+}
 let getSourceColumn = function(tableDefs, view, name) {
     let tables = [];
     if (view.table) {
@@ -558,7 +569,7 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
                 fs.appendFileSync(out, '    fakePk: true,\n');
             }
             if (data.query && data.view) {
-                fs.appendFileSync(out, '    query: ' + stringify(data.query) + ',\n');
+                fs.appendFileSync(out, '    query: ' + stringify(resolveQuery(data, data.query)) + ',\n');
                 if (data.where) {
                     fs.appendFileSync(out, '    where: ' + stringify(data.where) +',\n');
                 }
@@ -1594,6 +1605,7 @@ module.exports = {
                 for (let i = 0; i < curDef.views.length; i++) {
                     let table = curDef.views[i];
                     table.view = true;
+                    table.srcDir = path.dirname(sqlDefFile);
                     defs.views.push(table);
                 }
             }

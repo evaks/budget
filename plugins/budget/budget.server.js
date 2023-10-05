@@ -106,7 +106,7 @@ budget.Server = function() {
         // if we are doing a test allow a remote unauthorised shutdown of the server
         aurora.http.addMidRequestCallback(
             /^\/shutdown/,
-            function(state, done) {
+            async function(state) {
                 log.info('Test server recieved shutdown request');
                 state.response.writeHead(200);
                 state.response.end();
@@ -175,6 +175,10 @@ budget.Server = function() {
     };
     aurora.SystemSettings.instance.onReady(doPurge);
         
+
+    aurora.startup.doWhenStarted(function () {
+        log.info('HTTP Server ready for requests');
+    });
 
     if (dbAuth) {
         new aurora.db.Coms(/** @type {!aurora.db.Authenticator} */ (dbAuth));

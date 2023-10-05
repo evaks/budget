@@ -70,6 +70,23 @@ aurora.db.sql.Reader.prototype.transaction = function(callback, doneFunc) {
  * @return {!Promise}
  */
 aurora.db.sql.Reader.prototype.transactionAsyc = function(callback) {
+    // if callback takes only one argument it must be aysncronus deal with it differently
+    if (callback.length < 2) {
+        return new Promise((resolve, reject) => {
+            this.transaction((reader, done) => {
+                callback(reader).then(val => done(null, val)).catch(err => done(err, null));
+            }, (err, res) => {
+                if (err) {
+                    reject(err);
+                }
+                else {
+                    resolve(res);
+                }
+            });
+    });
+
+        
+    }
     return new Promise((resolve, reject) => {
         this.transaction(callback, (err, res) => {
             if (err) {
@@ -1014,13 +1031,16 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
             }
 
             let genid = table && table.info && table.info.genid ? BigInt(1) : null;
-                
-            if (table && table.info && table.info.order) {
-                sql.query += ' ORDER BY ' + table.info.order.join(',');
-                
-            }
+
+            
             if (table && table.info && table.info.groupby) {
                 sql.query += ' GROUP BY ' + table.info.groupby.join(',');
+                
+            }
+
+            if (table && table.info && table.info.order) {
+                // if it has a suffix add it after the suffix
+                sql.query += ' ORDER BY ' + table.info.order.join(',');
                 
             }
 
@@ -1491,6 +1511,27 @@ aurora.db.sql.Reader.getColumns_ = function(table) {
     }
     return res;
 };
+
+/**
+ * @param {!Object} context
+ * @param {!aurora.db.schema.TableType} table
+ * @param {recoil.db.Query} query
+ * @param {?recoil.db.Query} securityFilter
+ * @return {Promise<number>} callback
+ */
+aurora.db.sql.Reader.prototype.deleteObjectsAsync = function(context, table, query, securityFilter) {
+    return new Promise((resolve, reject) => {
+        this.deleteObjects(context, table, query, securityFilter, (error, value) => {
+            if (error) {
+                reject(error);
+            }
+            else {
+                resolve(value);
+            }
+        });
+    });
+};
+
 /**
  * @param {!Object} context
  * @param {!aurora.db.schema.TableType} table

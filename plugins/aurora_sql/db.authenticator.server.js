@@ -34,9 +34,9 @@ aurora.db.Authenticator = function(reader, allowAnon) {
  * @param {string} token
  * @param {Object} cred
  * @param {Object} data
- * @param {function(?)} cb
+ * @return {!Promise<?>} cb
  */
-aurora.db.Authenticator.prototype.validate = function(token, cred, data, cb) {
+aurora.db.Authenticator.prototype.validate = async function(token, cred, data) {
     let reader = this.reader_;
     let userT = aurora.db.schema.tables.base.user;
     let groupT = aurora.db.schema.tables.base.group;
@@ -48,81 +48,87 @@ aurora.db.Authenticator.prototype.validate = function(token, cred, data, cb) {
         data.ip = cred.srcAddr;
         data.user = cred.username;
         data.userid = null;
-        cb(null);
-        return;
+        return null;
     }
-    reader.readObjectByKey({}, userT, [{col: userT.cols.username, value: cred.username}, {col: userT.cols.active, value: true}], null, function(err, user) {
-        // hide errors
-        let maxLocks = ((config['authentication'] || {})['maxTries'] || 3);
-        let locktimeout = ((config['authentication'] || {})['lockoutMins'] || 15) * 60 * 1000;
-        let maxLocksExceeded = user && (maxLocks > 0 && user.lastinvalidtime && user.lockcount >= maxLocks);
+    let user;
+    try {
+        user = await reader.readObjectByKeyAsync({}, userT, [{col: userT.cols.username, value: cred.username}, {col: userT.cols.active, value: true}], null, columnFilter);
         
-        if (err || !user) {
-            if (!err) {
-                me.log_.warn('Invalid User', cred.username);
-            }
-            cb({message: 'Invalid User/Password'});
-        }
-        else if (maxLocksExceeded && user.lastinvalidtime + locktimeout > new Date().getTime()) {
-            cb({message: 'Account locked out try again in ' + Math.ceil(locktimeout / 60000) + ' Minutes'});
-            me.log_.warn('Account Locked for', cred.username);
+    }
+    catch (err) {
+        me.log_.warn('Invalid User', cred.username);
+    }
+    if (!user) {
+        return {message: 'Invalid User/Password'};
+    }
+    // hide errors
+    let maxLocks = ((config['authentication'] || {})['maxTries'] || 3);
+    let locktimeout = ((config['authentication'] || {})['lockoutMins'] || 15) * 60 * 1000;
+    let maxLocksExceeded = user && (maxLocks > 0 && user.lastinvalidtime && user.lockcount >= maxLocks);
+    if (maxLocksExceeded && user.lastinvalidtime + locktimeout > new Date().getTime()) {
+        
+        me.log_.warn('Account Locked for', cred.username);
+        let query = new recoil.db.Query();
+        // do the increment in an expression as oposed to simply setting to lockcount + 1 an increment is never missed even if they happen at the same time
+        reader.updateOneLevel({}, userT, {lockcount: reader.expression('lockcount + 1'), lastinvalidtime: new Date().getTime()}, query.eq(userT.info.pk, user.id), function(err) {});
+        
+        return {message: 'Account locked out try again in ' + Math.ceil(locktimeout / 60000) + ' Minutes'};
+
+    }
+    else {
+            
+        let valid = await aurora.db.Pool.checkPasswordAsync(cred.password, user.password);
+        if (!valid) {
+            me.log_.warn('Invalid Password for', cred.username);
             let query = new recoil.db.Query();
-            // do the increment in an expression as oposed to simply setting to lockcount + 1 an increment is never missed even if they happen at the same time
-            reader.updateOneLevel({}, userT, {lockcount: reader.expression('lockcount + 1'), lastinvalidtime: new Date().getTime()}, query.eq(userT.info.pk, user.id), function(err) {});
+            // we need this because we are only here because the timeout has expired
+            // if we dont reset it, the users will exceed their max tries the next time
+            // they log in if their password was wrong
+            let lockcount = maxLocksExceeded ? 1 : reader.expression('lockcount + 1');
+            reader.updateOneLevel({}, userT, {lockcount: lockcount, lastinvalidtime: new Date().getTime()}, query.eq(userT.info.pk, user.id), function(err) {});
+            return {message: 'Invalid User/Password'};
+            
         }
         else {
-            aurora.db.Pool.checkPassword(cred.password, user.password, function(valid) {
-                if (!valid) {
-                    me.log_.warn('Invalid Password for', cred.username);
-                    cb({message: 'Invalid User/Password'});
-                    let query = new recoil.db.Query();
-                    // we need this because we are only here because the timeout has expired
-                    // if we dont reset it, the users will exceed their max tries the next time
-                    // they log in if their password was wrong
-                    let lockcount = maxLocksExceeded ? 1 : reader.expression('lockcount + 1');
-                    reader.updateOneLevel({}, userT, {lockcount: lockcount, lastinvalidtime: new Date().getTime()}, query.eq(userT.info.pk, user.id), function(err) {});
-                }
-                else {
-                    let query = new recoil.db.Query();
-                    let groups = user.groups.map(function(group) { return group.groupid; });
-                    reader.updateOneLevel({}, userT, {lockcount: 0}, query.eq(userT.info.pk, user.id), function(err) {});
-                    reader.readObjects({}, groupT, query.isIn(
-                        query.field(groupT.cols.id.getName()), groups), null, function(err, groups) {
-                            let permissions = {};
-                            data.permissions = permissions;
-                            data.ip = cred.srcAddr;
-                            data.user = cred.username;
-                            data.remember = cred.remember;
-                            data.userid = user.id;
-                            if (groups) {
-                                let permMap = {};
-                                groups.forEach(function(group) {
-                                    (group.permission || []).forEach(function(perm) {
-                                        permMap[perm.permissionid] = perm.permissionid;
-                                    });
-                                });
-                                let permList = [];
-                                for (let k in permMap) {
-                                    permList.push(permMap[k]);
-                                }
-                                reader.readObjects({}, permT, query.isIn(permT.cols.id.getName(), permList), null, function(err, perms) {
-                                    perms.forEach(function(p) {
-                                        permissions[p.name] = true;
-                                    });
-                                    cb(null);
-                                });
+            let query = new recoil.db.Query();
+            let queryGroups = user.groups.map(function(group) { return group.groupid; });
 
+            
+            reader.updateOneLevelAsync({}, userT, {lockcount: 0}, query.eq(userT.info.pk, user.id)).catch(()=>{});
 
-                            }
-                            else {
-                                cb(null);
-
-                            }
+            try {
+                let groups = await reader.readObjectsAsync({}, groupT, query.isIn(
+                    query.field(groupT.cols.id.getName()), queryGroups), null);
+                
+                let permissions = {};
+                data.permissions = permissions;
+                data.ip = cred.srcAddr;
+                data.user = cred.username;
+                data.remember = cred.remember;
+                data.userid = user.id;
+                if (groups) {
+                    let permMap = {};
+                    groups.forEach(function(group) {
+                        (group.permission || []).forEach(function(perm) {
+                            permMap[perm.permissionid] = perm.permissionid;
                         });
+                    });
+                    let permList = [];
+                    for (let k in permMap) {
+                        permList.push(permMap[k]);
+                    }
+                    let perms = await reader.readObjectsAsync({}, permT, query.isIn(permT.cols.id.getName(), permList), null);
+                    perms.forEach(function(p) {
+                        permissions[p.name] = true;
+                    });
                 }
-            });
+
+            } catch (err) {
+            }
         }
-    }, new recoil.db.QueryOptions({columnFilters: columnFilter}));
+        return null;
+    }    
+
 };
 
 /**
@@ -139,9 +145,9 @@ aurora.db.Authenticator.formatIp = function(addr) {
 
 /**
  * @param {aurora.http.RequestState} state
- * @param {function(?{response:function(?, aurora.http.RequestState, function(?))})} callback
+ * @return {?{response:function(?, aurora.http.RequestState):!Promise<boolean|undefined>}} callback
  */
-aurora.db.Authenticator.prototype.getCredentials = function(state, callback) {
+aurora.db.Authenticator.prototype.getCredentials = async function(state) {
     var auth = state.request.headers && state.request.headers['authorization'];
     var makeResponse = function(username, password, remember, anon) {
         var request = state.request;
@@ -154,7 +160,7 @@ aurora.db.Authenticator.prototype.getCredentials = function(state, callback) {
             srcAddr: srcAddr,
             srcPort: request.socket.address().port,
             protocol: request.secure ? 'https' : 'http',
-            response: function(message, state, d, doneCallback) {
+            response: async function(message, state, d) {
                 if (d) {
                     let ok = username && !message;
                     state.responseHeaders.set('Set-Cookie', [
@@ -171,30 +177,33 @@ aurora.db.Authenticator.prototype.getCredentials = function(state, callback) {
                     }
                     state.response.writeHead(200, state.responseHeaders.toClient());
                     state.response.end(JSON.stringify(res), 'utf8');
-                    doneCallback(false);
+                    return false;
                 }
                 else {
                     // just continue as normal even though we have done a login
-                    doneCallback(undefined);
+                    return undefined;
                 }
 
             }
         };
     };
 
-    if (aurora.http.getPost(state.request, function(data) {
-        callback(makeResponse(data['username'], data['password'], !!data['remember'], false));
-    })) {
-        return;
+    try {
+        let post = await aurora.http.getPost(state.request);
+        if (post.valid) {
+            let data = post.data;
+            return makeResponse(data['username'], data['password'], !!data['remember'], false);
+        }
+    } catch (e) {
+        return null;
     }
 
     if (this.allowAnon_) {
         // just continue as if we don't login we should have just set the cookies
-        callback(makeResponse(null, '', false, true));
-        return;
+        return makeResponse(null, '', false, true);
     }
     // this is not the authenticator you are looking for
-    callback(null);
+    return null;
 };
 
 /**
@@ -306,6 +315,17 @@ aurora.db.Authenticator.prototype.getUserPermissions = function(users, callback)
 /**
  * @param {string} token
  * @param {?} socket
+ * @return {!Promise<!aurora.db.access.SecurityContext>}
+ */
+aurora.db.Authenticator.prototype.getPermissionsAsync = function(token, socket) {
+    return new Promise((resolve, reject) => {
+        this.getPermissions(token, socket, resolve);
+    });
+};
+
+/**
+ * @param {string} token
+ * @param {?} socket
  * @param {function(!aurora.db.access.SecurityContext)} callback
  */
 aurora.db.Authenticator.prototype.getPermissions = function(token, socket, callback) {
@@ -320,7 +340,7 @@ aurora.db.Authenticator.prototype.getPermissions = function(token, socket, callb
         callback(me.makeServerInfo_(socket, cached.context));
     }
     else {
-        aurora.auth.instance.getSessionData(token, function(data) {
+        aurora.auth.instance.getSessionData(token).then(data => {
             let userT = aurora.db.schema.tables.base.user;
             let groupT = aurora.db.schema.tables.base.group;
             let permT = aurora.db.schema.tables.base.permission;

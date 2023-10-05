@@ -558,7 +558,6 @@ it('security-documents', async () => {
     await expect(anonClient.uploadFile(makePath(userT, client1Id, 'documents'), 'bob4.txt', data)).rejects.toBe(404);
     await expect(mentor1Client.uploadFile(makePath(userT, client2Id, 'documents'), 'bob4.txt', data)).rejects.toBe(404);
     await expect(mentor1Client.uploadFile(makePath(userT, client2Id, 'documents'), 'bob4.txt', data)).rejects.toBe(404);
-    
     const query = new recoil.db.Query();
     
     let documents = (await adminClient.getData(tables.user, query.eq(query.field(tables.user.cols.id), query.val(client1Id)), undefined, true))[0].documents;
@@ -887,7 +886,6 @@ it('security-appointments', async () => {
 it('query-fieldmap', () => {
     const query = new recoil.db.Query();
     // check null
-    console.log( new aurora.db.Schema().makeQueryScope);
     let scope = new aurora.db.Schema().makeLookupScope(recoil.db.ChangeSet.Path.fromString(tables.budget.info.path), {}, {});
 
     expect(query.eq(query.field('id'), query.val(1)).makeLookup(scope)).toEqual([{'id': 1}]);
