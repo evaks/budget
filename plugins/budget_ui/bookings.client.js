@@ -300,12 +300,12 @@ budget.widgets.Bookings = function(scope) {
         columns.addColumn(clientCol);
         columns.add(appointmentsT.cols.firstName, msg.FIRST_NAME);
         columns.add(appointmentsT.cols.lastName, msg.LAST_NAME);
+        columns.addColumn(new recoil.ui.widgets.table.ButtonColumn(SEARCH_COL, 'Search'));
         columns.add(appointmentsT.cols.address, budget.messages.ADDRESS);
         columns.add(appointmentsT.cols.email, 'Client Email');
         columns.add(appointmentsT.cols.phone, mess.PHONE, {displayLength: 7});
         columns.addColumn(new recoil.ui.widgets.table.NumberColumn(LEN_COL, 'Length (Min)', {displayLength: 7, min: 1}));        
         columns.add(appointmentsT.cols.notes, mess.NOTES, {displayLength: 10});
-        columns.addColumn(new recoil.ui.widgets.table.ButtonColumn(SEARCH_COL, 'Search'));
         if (scheduleActionB.get().enabled.val() && unscheduleActionB.get().enabled.val()) {
             columns.add(appointmentsT.cols.scheduled, 'Scheduled');
         }
@@ -538,13 +538,17 @@ budget.widgets.Bookings = function(scope) {
                     let lastName = (searchRow.get(clientT.cols.lastName) || '').trim();
                     if (lastName.length + firstName.length > 0) {
                         let curQuery = query.eq(query.val(firstName + ' ' + lastName), query.concat([clientT.cols.firstName, query.val(' '), clientT.cols.lastName]));
+                        let firstQ = query.startsWith(clientT.cols.firstName, firstName);
+                        let lastQ = query.startsWith(clientT.cols.lastName, lastName);
                         if (lastName.length == 0) {
-                            curQuery = query.or(
-                                curQuery, query.eq(query.val(firstName), clientT.cols.firstName));
+                            curQuery = query.or(curQuery, firstQ);
                         }
-                        if (firstName.length == 0) {
-                            curQuery = query.or(
-                                curQuery, query.eq(query.val(lastName), clientT.cols.lastName));
+                        else if (firstName.length == 0) {
+                            
+                            curQuery = query.or(curQuery, lastQ);
+                        }
+                        else {
+                            curQuery = query.or(curQuery, query.and(firstQ, lastQ));
                         }
 
 
