@@ -6080,3 +6080,31 @@ div.budget-info, td.budget-info {
 div.cited-check .goog-checkbox {
 		margin-bottom: 5px;
 }
+
+.incomplete-warning {
+    position: fixed;
+    bottom: 0;
+    right: 1px;
+    background: pink;
+    border: 1px solid red;
+    border-top: none;
+    border-radius: 4px;
+}
+
+.incomplete-warning h1 {
+    font-size: 12pt;
+    margin: 0;
+    border: 3px #800707 outset;
+    padding: 3px 30px 3px 3px;
+    background: #f26c83;
+    color: #313030;
+    border-radius: 4px;
+    line-height: 18px;
+}
+
+.incomplete-warning ul {
+    margin: 4px
+    max-height: 10vh;
+    overflow: auto;
+}
+

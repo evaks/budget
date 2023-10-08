@@ -131,7 +131,54 @@ budget.widgets.ClientView = function(scope) {
 
     }, userTblB);
 
+    let needed = new Map([
+        [userT.cols.address, 'Address'],
+        [userT.cols.phone, 'Phone'],
+        [userT.cols.gender, 'Gender'],
+        [userT.cols.incomeSource, 'Income Source'],
+        [userT.cols.housing, 'Housing'],
+        [userT.cols.maritalStatus, 'Marital Status'],
+        [userT.cols.referralFrom, 'Refferer'],
+        [userT.cols.ethnicity, 'Ethnicity'],
+        [userT.cols.countryOfBirth, 'Country Of Birth'],
+        [userT.cols.reason, 'Reason for Comming'],
+        [userT.cols.agreementSigned, 'Budgeting Agreement'],
+        [userT.cols.goals, {name: 'Goal', check: v => v.goal.trim() != ''}],
+        
+    ]);
+    let missingB = frp.liftB(tbl => {
+        let missing = [];
+        
+        tbl.forEach(row => {
+            for (let [col, checker] of needed) {
 
+                let val = row.get(col);
+                if (val == null ||
+                    (typeof val == 'string' && val.trim() == '') ||
+                    (typeof val == 'boolean' && !val)
+                   ) {
+                    missing.push(checker.name ? checker.name : checker);
+                    
+                }
+                else if (Array.isArray(val)) {
+                    let foundValid = false;
+                    for (let v of val) {
+                        if (checker.check(v)) {
+                            foundValid = true;
+                            break;
+                        }
+                    }
+                    if (!foundValid) {
+                        missing.push(checker.name);
+                    }
+                }
+                    
+            }
+        });
+        return missing;
+        
+    }, userTblB);
+    
     let usernameLabel = new recoil.ui.widgets.LabelWidget(scope);
 
     usernameLabel.attachStruct({name: nameB, classes: ['slide-menu-name-container'], formatter: function(v) {
@@ -203,6 +250,48 @@ budget.widgets.ClientView = function(scope) {
         }, collapsedB)
     );
 
+    let closeIncompleteWarning = cd('span', {class:'modal-dialog-title-close', role:'button'});
+    let hideWarningsB = frp.createB(false);
+    
+    goog.events.listen(
+        closeIncompleteWarning, goog.events.EventType.CLICK,
+        frp.accessTransFunc(() => {
+            hideWarningsB.set(true);
+        }, hideWarningsB)
+    );
+
+    
+    let showWarningsB = frp.liftB((hide, missing, context) => {
+        return aurora.permissions.has('mentor')(context) && !hide && missing.length  > 0;
+    }, hideWarningsB, missingB, secContextB);
+
+
+    
+    this.incompleteWarningList_ = cd(
+        'ul', {});
+
+    let incompleteHelper = new recoil.ui.WidgetHelper(
+        scope, this.incompleteWarningList_, this,
+        () => {
+            let list = this.incompleteWarningList_;
+            goog.dom.removeChildren(list);
+            if (missingB.good()) {
+                let missing = missingB.get();
+                for (let n of missing) {
+                    list.appendChild(cd('li', {}, n));
+                }
+            }
+                    
+        });
+    incompleteHelper.attach(missingB);
+    this.incompleteWarning_ = cd(
+        'div', {class: 'incomplete-warning'},
+        cd('h1', {}, 'You Have Missing Fields', closeIncompleteWarning),
+        this.incompleteWarningList_);
+
+    html.show(this.incompleteWarning_, showWarningsB);
+    container.appendChild(this.incompleteWarning_);
+    
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(container);
 
 };
