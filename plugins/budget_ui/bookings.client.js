@@ -963,11 +963,12 @@ budget.widgets.Bookings.generateUniqueNameMap = function(mentors) {
     };
     genNames(getName);
     for (let id in todo) {
+        let row = todo[id];
         let i = 1;
-        let name = getName(id) + '(' + i + ')';
+        let name = getName(row) + '(' + i + ')';
         while (seen[name]) {
             i++;
-            name = getName(id) + '(' + i + ')';
+            name = getName(row) + '(' + i + ')';
         }
         seen[name] = 1;
         accepted[id] = name;
