@@ -551,7 +551,7 @@ aurora.db.Schema.prototype.isKeyedList = function(path) {
     var parts = path.parts();
     var def = this.getContainerDef(path);
     var params = path.lastKeys();
-    return def && def.info.keys && def.info.keys.length > params.length;
+    return def && def.info && !def.info.object && def.info.keys && def.info.keys.length > params.length;
 };
 
 /**

@@ -124,6 +124,7 @@ let typeFactories = {
     'owned-object': {jsType: 'list', getInfo: function(info) {
         return {
             'object': true,
+            'isObject': true,
             'childKey': info.params[0],
         };
     }, sqlType: null},
@@ -238,6 +239,7 @@ let reserved = {
 
 let refTypes = {
     'owned-list' : 1,
+    'owned-object': 1,
     'leaf-list' : 1,
     'ref': 1
 };
@@ -672,6 +674,15 @@ let doGenerate = function(def, ns, client, custRequires, types, actions, out, ta
 
             fs.appendFileSync(out, '    pk: ' + prefix + '.' + tName + '.cols.' + jsEscape(pk) + ',\n');
             fs.appendFileSync(out, '    keys: [' + stringify(pk) + '],\n');
+            
+            if (stack.length > 1 && parentCol && fullTableName === 'document_tree.doc') {
+                let typeInfo = getColType(parentCol, types);
+
+                if (typeInfo && (typeInfo.type == 'owned-object' || typeInfo.type == 'object')) {
+                    fs.appendFileSync(out, '    object: true,\n');
+                }
+            }
+            
             if (!auto) {
                 fs.appendFileSync(out, '    autoPk: false,\n');
             }
@@ -1081,6 +1092,7 @@ function generateDbInit(def, ns, types, out) {
     let provides = [prefix + '.updateDb'];
     let inserts = {};
     let upgrades = {};
+    let prepares = {};
     let passwords = makePasswords(def, types);
     let tableMap = {};
 
@@ -1115,7 +1127,78 @@ function generateDbInit(def, ns, types, out) {
     fs.appendFileSync(out, '    const async = require(\'async\');\n');
     fs.appendFileSync(out, '    async.series([\n');
 
-    let firstTable = true;
+    function doInOrder(tableMap, callback) {
+        let tables = Object.keys(tableMap);
+        tables.sort(depComparator);
+        tables.forEach(function(table) {
+            callback(table, tableMap[table]);
+        });
+    }
+
+    traverse(def, {
+        startTable: function(name, data, stack, tName, parentCol) {
+            let tableName = data.tableName;
+            tableMap[tableName] = data;
+            
+            if (data.upgrade) {
+                upgrades[tableName] = (upgrades[tableName] || []).concat(data.upgrade);
+            }
+            if (data.prepare) {
+                prepares[tableName] = (prepares[tableName] || []).concat(data.prepare);
+            }
+        }
+    });
+    let firstFunc = true;
+    const writeUpgradeScriptFunc = (table, info, depth, pre, stage) => {
+        let padding = '    '.repeat(depth * 4 + 2);
+        if (!firstFunc) {
+            fs.appendFileSync(out, ',\n');
+        }
+        firstFunc = false;
+        fs.appendFileSync(out, padding + '(callback) => {');
+        fs.appendFileSync(out, '\n' + padding + '    let existingVersion = existingTableVersions[' + stringify(table) + '] || 0;');
+        if (pre) {
+            fs.appendFileSync(out, '\n' + padding + '    let existed = existingTableVersions[' + stringify(table) + ']  != undefined;');
+        }
+        else {
+            fs.appendFileSync(out, '\n' + padding + '    let existed = tableResults[' + stringify(table) + '].existed;');
+        }
+            
+        fs.appendFileSync(out, '\n' + padding + '    if (!existed || existingVersion >= ' + info.version + ') {console.log("exit");callback(null); return;}');
+        fs.appendFileSync(out, '\n' + padding + '    log.info(' + stringify(stage + ' ' + table) + ');');
+
+        let scripts = typeof info.script == 'string' ? [info.script] : info.script;
+        
+        fs.appendFileSync(out, '\n' + padding + '    (async () => {\n');
+        for (let i = 0; i < scripts.length; i++) {
+            let script = scripts[i];
+            fs.appendFileSync(out, '\n' + padding + '        log.info(' + stringify(script) + ');');
+            fs.appendFileSync(out, '\n' + padding + '        await pool.queryAsync(' + stringify(script) + ');');
+        }
+        fs.appendFileSync(out, '\n' + padding + '     })()');
+        fs.appendFileSync(out, '\n' + padding + '         .then(v => {callback(null);})');
+        fs.appendFileSync(out, '\n' + padding + '         .catch(e => {');
+        fs.appendFileSync(out, '\n' + padding + '             log.error(e);');        
+        fs.appendFileSync(out, '\n' + padding + '             callback(e);');        
+        fs.appendFileSync(out, '\n' + padding + '         });');        
+        
+        fs.appendFileSync(out, '\n' + padding + '}');
+    }; 
+        
+    const doPrepares = (table, prepareInfo, depth) => {
+        let padding = '    '.repeat(depth * 4 + 2);
+        prepareInfo.sort((x,y) => x.version - y.version);
+        prepareInfo.forEach(info => {
+            writeUpgradeScriptFunc(table, info, depth, true, 'prepare table');
+        });
+    };
+
+    
+    doInOrder(prepares, function (table, upgradeInfo) {
+        doPrepares(table, upgradeInfo, 0);
+    });
+    
+    
     let first = true;
     let foreignKeys = makeForeignKeys(def, types);
     let tableInfo = {passwords: {}};
@@ -1127,16 +1210,13 @@ function generateDbInit(def, ns, types, out) {
             if (data.initial) {
                 inserts[tableName] = (inserts[tableName] || []).concat(data.initial);
             }
-            if (data.upgrade) {
-                upgrades[tableName] = (upgrades[tableName] || []).concat(data.upgrade);
-            }
-            if (!firstTable) {
+            if (!firstFunc) {
                 fs.appendFileSync(out, ',\n');
             }
             tableInfo = {passwords: {}};
             fs.appendFileSync(out, '        function (callback) {\n');
-            fs.appendFileSync(out, '                 log.info(\'Creating table\', ' + stringify(tableName) + ');\n');
-            fs.appendFileSync(out, '                 tableVersions[' + stringify(tableName) + '] = ' + (data.version || 0) + ';\n');
+            fs.appendFileSync(out, '            log.info(\'Creating table\', ' + stringify(tableName) + ');\n');
+            fs.appendFileSync(out, '            tableVersions[' + stringify(tableName) + '] = ' + (data.version || 0) + ';\n');
             fs.appendFileSync(out, '            let fields = {\n');
             if (parentCol) {
                 let parentType = getColType(parentCol, types);
@@ -1146,7 +1226,7 @@ function generateDbInit(def, ns, types, out) {
             else {
                 first = true;
             }
-            firstTable = false;
+            firstFunc = false;
         },
         startCol: function(name, data) {
             let typeInfo = getColType(data, types);
@@ -1220,26 +1300,14 @@ function generateDbInit(def, ns, types, out) {
         let padding = '    '.repeat(depth * 3 + 2);
 
         upgradeInfo.sort((x,y) => x.version - y.version);
-
         upgradeInfo.forEach(info => {
-            fs.appendFileSync(out, ',\n' + padding + 'function(callback) {');
-            fs.appendFileSync(out, '\n' + padding + '   // upgrade table ' + table);
-            fs.appendFileSync(out, '\n' + padding + '   let existingVersion = existingTableVersions[' + stringify(table) + '] || 0;');
-            fs.appendFileSync(out, '\n' + padding + '   let existed = tableResults[' + stringify(table) + '].existed;');
-            
-            fs.appendFileSync(out, '\n' + padding + '   if (!existed || existingVersion >= ' + info.version + ') {callback(null); return;}');
-
-            fs.appendFileSync(out, '\n' + padding + '   pool.query(' + stringify(info.script) + ', callback);');
-            
-            
-            
-            fs.appendFileSync(out, '\n' + padding + '}');
+            writeUpgradeScriptFunc(table, info, depth, false, 'upgrade table');
         });
         
     };
     
     function doInserts(start, table, tInserts, parent, depth) {
-        let padding = '     '.repeat(depth * 3);
+        let padding = '     '.repeat(depth * 4);
         let colMap = {};
         let parentKey = null;
 
@@ -1436,13 +1504,6 @@ function generateDbInit(def, ns, types, out) {
         return x.localeCompare(y);
     }
 
-    function doInOrder(tableMap, callback) {
-        let tables = Object.keys(tableMap);
-        tables.sort(depComparator);
-        tables.forEach(function(table) {
-           callback(table, tableMap[table]);
-        });
-    }
 
     doInOrder(upgrades, function (table, upgradeInfo) {
         doUpgrades(table, upgradeInfo, 0);
@@ -1491,6 +1552,9 @@ function mergeTable(oldTable, newTable) {
     }
     if (newTable.upgrade) {
         oldTable.upgrade = (oldTable.upgrade || []).concat(newTable.upgrade);
+    }
+    if (newTable.prepare) {
+        oldTable.prepare = (oldTable.prepare || []).concat(newTable.prepare);
     }
         
     if (newTable.accessFilter) {

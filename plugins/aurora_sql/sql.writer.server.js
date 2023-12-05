@@ -829,7 +829,7 @@ aurora.db.sql.ChangeWriter.prototype.applyTransactionChanges_ = function(changeL
                 me.async_.eachSeries(addsToCheck, function(info, eachCallback) {
                     let secContextClone = goog.object.clone(secContext);
                     secContextClone['@insert-id'] = info.id;
-
+                    
                     let securityFilter = info.tbl.info.accessFilter(secContextClone);
 
                     reader.readObjectByKey(
@@ -837,6 +837,7 @@ aurora.db.sql.ChangeWriter.prototype.applyTransactionChanges_ = function(changeL
                         securityFilter,
                         function(err) {
                             if (err) {
+                                console.log('err', err);
                                 info.entry.result.error = 'Access Denied';
                                 me.log_.warn('Add Access Denied', info.tbl.info.table, info.id);
                                 eachCallback('Access Denied');
@@ -982,12 +983,11 @@ aurora.db.sql.ChangeWriter.prototype.addDelete_ = function(objectPathMap, change
     if (!object || !table) {
         return;
     }
-
     let entry = objectPathMap.safeFind(
         {key: {
             path: path,
             type: CType.DEL,
-        }, value: null, id: path.last().keys[0], result: result, hasRefs: path.size() > 1 ? [path.parent()] : []}
+        }, value: null, id: path.last().keys()[0], result: result, hasRefs: path.size() > 1 ? [path.parent()] : []}
     );
 
     result.children = [];
@@ -1004,7 +1004,6 @@ aurora.db.sql.ChangeWriter.prototype.addDelete_ = function(objectPathMap, change
             }
         }
         else if (meta.isList) {
-
             if (val instanceof Array) {
                 let childPath = path.appendName(field);
                 let childTable = this.schema_.getTableByName(childPath);
@@ -1020,7 +1019,7 @@ aurora.db.sql.ChangeWriter.prototype.addDelete_ = function(objectPathMap, change
             }
 
         }
-        else if (meta.isObject) {
+        else if (meta.isObject && val != null) {
             let childPath = path.appendName(field);
             let childTable = this.schema_.getTableByName(childPath);
             let child = val;

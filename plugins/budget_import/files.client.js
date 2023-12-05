@@ -271,7 +271,7 @@ budget.widgets.import.FileWidget.findImportFileMatches = function(types, file) {
         }
         catch (e) {
             // matchers may throw that just means they don't match
-            console.log('match failed', e.message);
+            console.error('match failed', e.message);
         }
     }
     return res;
@@ -491,7 +491,7 @@ budget.widgets.import.FileWidget.validate = function(parsed) {
  *           skipFunc:((function(number, !Array<string>,!Array<string>):boolean)|undefined),
  *           matchFunc:((function(!Array<!Array<string>>,!Array<string>):boolean)|undefined),
  *           parseAmount:((function(string,!Array<string>):number)|undefined),
- *           reformat:((function(string,string,!Array<string>):string)|undefined),
+ *           reformat:((function(string,string,!Array<string>, function(string)):string)|undefined),
  *           parseDate:((function(string):number)|undefined)}} opts
  * @return {function(string, string, ?):boolean} name, content, data
  */
@@ -513,6 +513,7 @@ budget.widgets.import.FileWidget.makeMatcher = function(
     let minRowSize = [dateCol, partCol, refCol, amountCol].reduce((a, v) => Math.max(headers.indexOf(v), a), 0) + 1;
 
     let parse = function(content, name) {
+        const account = budget.widgets.import.FileWidget.extractAccount(name);
         let lines = budget.widgets.import.FileWidget.parseCSV(content, opts.handleCommas != undefined ? {col: opts.handleCommas, count: headers.length} : undefined);
         let pos = skip(lines);
         let amountIndex = headers.indexOf(amountCol);
@@ -521,6 +522,15 @@ budget.widgets.import.FileWidget.makeMatcher = function(
         let dateIndex = headers.indexOf(dateCol);
         let parseAmount = opts.parseAmount || function(v) {
             return Math.round(parseFloat(v) * 100) / 100;
+        };
+        let getTransfer = (v, get) => {
+            if (typeof (opts.transfer) == 'function') {
+                return opts.transfer(v, name, get);
+            }
+            if (typeof opts.transfer == 'string') {
+                return v[headers.indexOf(opts.transfer)];
+            }
+            return undefined;
         };
         let parseDate = opts.parseDate || function(v) {
             return moment(v, 'D/M/YYYY').toDate().getTime();
@@ -534,25 +544,35 @@ budget.widgets.import.FileWidget.makeMatcher = function(
         } else if (needsHeaders) {
             return null;
         }
+        
         let res = [];
         let range = opts.getRange ? opts.getRange(lines, name) : {start: null, stop: null};
         let start = range.start;
         let stop = range.stop;
         for (let i = pos; i < lines.length; i++) {
             let line = lines[i];
-            let date = parseDate(reformat(line[dateIndex], dateCol, line));
+            let get = v => line[headers.indexOf(v)];
+            let date = parseDate(reformat(line[dateIndex], dateCol, line, get));
+            let transfer = getTransfer(line, get);
             start = start === null ? date : Math.min(start, date);
             stop = stop === null ? date : Math.max(stop, date);
+            let memo = reformat(line[refIndex], refCol, line, get) || '';
+            let description = reformat(line[partIndex], partCol, line, get);
+            
             res.push({
                 date: date,
-                description: reformat(line[partIndex], partCol, line),
-                memo: reformat(line[refIndex], refCol, line) || '',
-                amount: parseAmount(reformat(line[amountIndex], amountCol, line), line)
+                description,
+                memo,
+                amount: parseAmount(reformat(line[amountIndex], amountCol, line, get), line),
+                transfer,
+                src: account||name,
             });
         }
 
         return {start: start, stop: stop, rows: res};
     };
+
+
     let matcher = function(name, content, data) {
         if (/\.csv$/i.test(name)) {
             let lines = data.csv || budget.widgets.import.FileWidget.parseCSV(content);
@@ -622,7 +642,7 @@ budget.widgets.import.FileWidget.QIF.parse = function(content, name) {
         'N': {field: null}, // check num
         'P': {field: 'description', parse: function(v) {return v;}},
         '/': {field: null}, // account information balance date
-        'L': {field: null}, // category
+        'L': {field: 'category', parse: v => v}, // category
         'A': {field: null}, // address of payee
         'S': {field: null}, // split category
         'E': {field: null}, // split memo
@@ -636,10 +656,8 @@ budget.widgets.import.FileWidget.QIF.parse = function(content, name) {
         'X': {field: null}, // invoices
     };
 
-
-
-
-
+    const account = budget.widgets.import.FileWidget.extractAccount(name);
+    const ACCOUNT_NUM = budget.widgets.import.FileWidget.ACCOUNT_NUM;
     if (!/^!Type:/.test(cLines[0])) {
         return null;
     }
@@ -662,6 +680,20 @@ budget.widgets.import.FileWidget.QIF.parse = function(content, name) {
                 if (curRecord.description === undefined && curRecord.memo !== '') {
                     curRecord.description = curRecord.memo;
                 }
+                if (curRecord.category) {
+                    if (curRecord.description == undefined) {
+                        curRecord.description = curRecord.category;
+                    }
+                    if (curRecord.description) {
+                        if (curRecord.category.toLowerCase() == 'transfer' && account ) {
+                            if (ACCOUNT_NUM.test(curRecord.description)) {
+                                curRecord.transfer = [account, curRecord.description];
+                            }
+                            
+                        }
+                    }
+                }
+                curRecord.src = account || name;
                 result.push(curRecord);
             }
             curRecord = {memo: ''};
@@ -772,6 +804,27 @@ budget.widgets.import.FileWidget.ASB_CSV = budget.widgets.import.FileWidget.make
         }
     });
 
+/**
+ * @const
+ */
+budget.widgets.import.FileWidget.ACCOUNT_NUM = /^[0-9]{2}-[0-9]{4}-[0-9]{7}-[0-9]{2,3}$/;
+
+/**
+ * @param {string} name
+ * @return {string|null}
+ */
+budget.widgets.import.FileWidget.extractAccount = function (name) {
+    const ACCOUNT_NUM_PART = /[0-9]{2}-[0-9]{4}-[0-9]{7}-[0-9]{2,3}/;
+
+    let account = name.match(ACCOUNT_NUM_PART);
+    if (account && account.length == 1) {
+        return account[0];
+    }
+    else {
+        return null;
+    }
+};
+
 
 /**
  * @param {string} name
@@ -784,6 +837,41 @@ budget.widgets.import.FileWidget.ANZ_CSV = budget.widgets.import.FileWidget.make
     ['Type', 'Details', 'Particulars', 'Code', 'Reference', 'Amount', 'Date', 'ForeignCurrencyAmount', 'ConversionCharge'],
     'Date', 'Particulars', 'Reference', 'Amount', {
         needsHeader: false,
+        transfer: (line, fileName,  get) => {
+            if (get('Type') == 'Transfer') {
+                const account = budget.widgets.import.FileWidget.extractAccount(fileName);
+                const details = get('Details');
+                const ACCOUNT_NUM = budget.widgets.import.FileWidget.ACCOUNT_NUM;
+
+                if (account && ACCOUNT_NUM.test(details)) {
+                    return [account, details];
+                }
+                return true;
+            }
+            return false;
+        },
+        reformat: (value, field, line, get) => {
+            let ref = get('Reference');
+            let code = get('Code');
+
+            if (field == 'Reference') {
+                if (get('Type') == 'Transfer' && code == 'Transfer') {
+                    return value;
+                }
+                if (code != '' && /^[0-9]+$/.test(value)) {
+                    return code;
+                }
+            }
+            if (field == 'Particulars') {
+                if (get('Type') == 'Transfer' && code == 'Transfer') {
+                    return get('Details');
+                }                
+                if (value == '') {
+                    return code;
+                }
+            }
+            return value;
+        },
         matchFunc: function(lines, header) {
             if (lines.length < 1) {
                 return false;

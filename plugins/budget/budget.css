@@ -540,6 +540,11 @@ button.goog-button {
     line-height: 15pt;
 }
 
+.budget-admin-lock {
+    align-items: end;
+    display: flex;
+    flex-direction: column;
+}
 .budget-budget-template .field-name {
     vertical-align: top;
 }
@@ -1123,7 +1128,24 @@ div.budget-div:hover div {
     padding: 10px;
 }
 
+.budget-doc-tree-row {
+
+}
 
 .budget-contact td.label {
     color: var(--def-font-color);
+}
+
+
+.budget-doc-tree-row {
+    white-space: nowrap;
+    height: 36px;
+}
+
+.budget-doc-tree-container {
+    padding: 0 10px 0 0;
+    width: 20px;
+}
+
+.budget-doc-tree-item {
 }

@@ -31,7 +31,14 @@
 						{"id":3, "name": "Missed"},
 						{"id":4, "name": "Reserved"}
 
+				]},
+				"DocType": {"type": "enum", "enum": [
+						{"id":0, "name": "Heading"},
+						{"id":1, "name": "Document"},
+						{"id":2, "name": "Link"}
+
 				]}
+        
 		},
 	  "views": [
 	      {
@@ -127,16 +134,59 @@
 	          ]
 	      },
         { 
-            "name": "documents",
+            "name": "document_tree",
 						"accessFilter": [{"" : "all"}],
 						"access": "aurora.db.access.basic([{'site-management': 'crud'}, {'':'r'}])",
 						"columns": [
 								{"name": "id", "type": "id"},
 								{"name": "order", "type": "order"},
-                {"name": "displayName", "default": "Unknown Name","type": "string(100)", "nullable": false, "trim": true},
-			          {"name": "file", "type": "file"}
+                {"name": "type", "type": "DocType"},
+                {"name": "parent", "type": "ref(document_tree)", "nullable": true},
+                {"name": "text", "default": "","type": "string(1000)", "nullable": false, "trim": true},
+		            {
+                    "name": "doc", "type": "owned-object(treeid)", "nullable": true,
+                    "table": {
+                        "name": "documents",
+                        "version": 1,
+			                  "prepare" : [
+				                    {
+                                
+                                "version": 1,
+                                "script" : [
+                                    "create table __upgrade_doc_0_1 (did bigint, o int)",
+                                    "insert into __upgrade_doc_0_1 (did, o) select id, `order` from documents"
+                                ],
+                                "cleanup" : [
+                                    "drop table __upgrade_doc_0_1"
+                                ]
+                                
+                            }
+                        ],
+                        
+			                  "upgrade" : [
+				                    {
+                                "version": 1, "script" : [
+                                    "insert into document_tree (`order`, type, parent, text) select 1,  1, id, displayname from documents",
+                                    "update document_tree set `order` = (select o from __upgrade_doc_0_1 where did = parent)",
+                                    "update documents d set treeid = (select dt.id from document_tree dt where parent = d.id)",
+                                    "update document_tree set parent = NULL"
+                                    
+                                ]
+                                
+                            }
+			                      
+			                  ],
+                        
+						            "columns": [
+								            {"name": "id", "type": "id"},
+                            {"name": "displayName", "default": "Unknown Name","type": "string(100)", "nullable": false, "trim": true},
+			                      {"name": "file", "type": "file"}
+						            ]
+                    }
+                }
 						]
         },
+
 
 	      {
 	          "name" : "appointments",

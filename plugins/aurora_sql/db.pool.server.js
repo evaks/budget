@@ -94,6 +94,13 @@ aurora.db.Pool.mkSeqFunc = function(func, var_args) {
 aurora.db.Pool.prototype.query = function(query, params, opt_callback) {};
 
 /**
+ * @param {string} query
+ * @param {!Object<string,?>=} opt_params 
+ * @return {Promise<{results:(Array|aurora.db.type.InsertDef),fields:?}>} 
+ */
+aurora.db.Pool.prototype.queryAsync = function(query, opt_params) {};
+
+/**
  * used for getting querys that have large result sets that shouldn't be stored in memory
  * @param {string} query
  * @param {!Object<string,?>} params (error, results, fields)

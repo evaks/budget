@@ -129,6 +129,14 @@ label.budget-import.custom-file-upload {
 	       
 }
 
+td.budget-import-link {
+    padding-right: 10px;
+}
+
+td.budget-import-src {
+    max-width: 10px;
+}
+
 td.budget-import-link span.goog-checkbox:hover {
     color: grey;
 }

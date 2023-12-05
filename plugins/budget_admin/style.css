@@ -1,0 +1,28 @@
+.budget-documents .budget-doc-tree-root .fas  {
+    color:green;
+    font-size: 18px;
+}
+
+.budget-documents .budget-doc-tree-root button i.fas {
+    color: white;
+}
+
+.budget-documents .doc-upload {
+    vertical-align: top;
+}
+
+.budget-documents .doc-upload label {
+    height: 17px;
+}
+.budget-documents .doc-upload i {
+    font-size: 14px;
+    height: 14px;
+    line-height: 10px;
+    color: white;
+    padding-bottom: 2px;
+    vertical-align: middle;
+}
+
+.budget-doc-tree-hide-root {
+    display: none;
+}

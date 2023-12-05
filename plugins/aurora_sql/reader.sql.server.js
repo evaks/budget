@@ -713,7 +713,8 @@ aurora.db.sql.Reader.prototype.mkSelectSql_ = function(scope, colMap, cur, colum
                         let filePath = path.concat('$storage');
                         let fileTid = tableIdMap.get(filePath);
                         scope.addPathNamedTable(filePath, me.getColumns_(fileT), fileTid);
-                        tables.push({table: fileT.info.table, tid: fileTid, inner: true, joins: [query.eq(query.field(col), query.field(filePath.concat(['id'])))]});
+
+                        tables.push({table: fileT.info.table, tid: fileTid, inner:false, joins: [query.eq(query.field(col), query.field(filePath.concat(['id'])))]});
 
                         for (let name in fileT.meta) {
                             let meta = fileT.meta[name];
@@ -1061,8 +1062,9 @@ aurora.db.sql.Reader.prototype.readObjects = function(context, table, filter, se
                     if (isCount) {
                         callback(null, data[0]['count']);
                         return;
-                    } if (data && data.length > 0) {
-                        
+                    }
+
+                    if (data && data.length > 0) {
                         if (genid) {
                             data.map(entry => {
                                 let mapped = colMap[table.info.pk.getId()];

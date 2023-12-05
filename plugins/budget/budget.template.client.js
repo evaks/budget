@@ -27,15 +27,27 @@ budget.widgets.BudgetTemplate = function(scope) {
 
     let html = new recoil.ui.HtmlHelper(scope);
     let srcB = scope.getDb().get(templateT.key);
-
+    let lockB = frp.createB(true);
+    let lockButton = new recoil.ui.widgets.ButtonWidget(scope);
+    let unlockText = cd('i', {class:'fas fa-lock'});
+    let lockText = cd('i', {class:'fas fa-lock-open'});
+    
+    lockButton.attachStruct({
+        action: frp.createCallback(() => lockB.set(!lockB.get()), lockB),
+        text: frp.liftB(v => v ?unlockText :  lockText, lockB)
+    });
+    
     let makePart = function(type) {
         let div = cd('div');
         let incomeWidget = new recoil.ui.widgets.table.TableWidget(scope);
         let filteredB = recoil.structs.table.Filter.createColFilterB(srcB, templateT.cols.type, function(v) {return v === type;});
         var columns = new recoil.ui.widgets.TableMetaData();
         columns.add(templateT.cols.description, '');
-        let tableB = frp.liftBI(function(tbl) {
+        let tableB = frp.liftBI(function(tbl, lock) {
             let res = tbl.unfreeze();
+            if (lock) {
+                res.addMeta({editable: false});
+            }
             res.addMeta({headerRowDecorator: null});
             res.addColumnMeta(templateT.cols.description, {displayLength: 20});
             return columns.applyMeta(res);
@@ -50,7 +62,7 @@ budget.widgets.BudgetTemplate = function(scope) {
                 res.addRow(mrow);
             });
             filteredB.set(res.freeze());
-        }, filteredB);
+        }, filteredB, lockB);
         incomeWidget.attachStruct(aurora.ui.ErrorWidget.createTable(scope, aurora.widgets.TableWidget.createMovableSizable(tableB)));
         incomeWidget.getComponent().render(div);
         return {
@@ -62,7 +74,10 @@ budget.widgets.BudgetTemplate = function(scope) {
     let debts = makePart(EntryType.debt);
     let income = makePart(EntryType.income);
 
-    let container = cd(
+    let lockDiv = cd('div', 'budget-admin-lock');
+    lockButton.getComponent().render(lockDiv);
+    
+    let container = cd('div', {}, lockDiv, cd(
         'div', {class: 'budget-budget-template'},
         cd('div', {class: 'budget-budget-template-column'},
            cd('div', {class: 'group-header'}, 'Income'),
@@ -73,7 +88,7 @@ budget.widgets.BudgetTemplate = function(scope) {
         cd('div', {class: 'budget-budget-template-column'},
            cd('div', {class: 'group-header'}, 'Debts Payable'),
            cd('td', {class: 'field-name'}, debts.div))
-    );
+    ));
 
     this.component_ = recoil.ui.ComponentWidgetHelper.elementToNoFocusControl(container);
 };

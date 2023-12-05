@@ -47,6 +47,16 @@ budget.widgets.BudgetImportCategory.linkCellDecorator_ = function() {
 };
 
 /**
+ * @private
+ * @return {!recoil.ui.RenderedDecorator}
+ */
+budget.widgets.BudgetImportCategory.srcCellDecorator_ = function() {
+    return new recoil.ui.RenderedDecorator(
+        budget.widgets.BudgetImportCategory.linkCellDecorator_,
+        goog.dom.createDom('td', {class: 'budget-import-src'}));
+};
+
+/**
  * a map particulars->ref->array of ids
  * @typedef {Object<string,Object<string,!Array<string>>>}
  */
@@ -193,7 +203,8 @@ budget.widgets.BudgetImportCategory.createDefaultMappings = function(rows, store
     let entryT = aurora.db.schema.tables.base.budget.entries;
     let EntryType = aurora.db.schema.getEnum(entryT.cols.type);
     let COLS = budget.widgets.BudgetImportCategory.COLS;
-    var tbl = new recoil.structs.table.MutableTable([COLS.ID], [COLS.DATE, COLS.PARTICULARS, COLS.REF, COLS.CATEGORY, COLS.AMOUNT, COLS.SPLIT, COLS.TYPE, COLS.ORIG_TYPE, COLS.ORIG_CATEGORY, COLS.LINK]);
+    var tbl = new recoil.structs.table.MutableTable([COLS.ID], [
+        COLS.DATE, COLS.PARTICULARS, COLS.REF, COLS.CATEGORY, COLS.AMOUNT, COLS.SPLIT, COLS.TYPE, COLS.ORIG_TYPE, COLS.ORIG_CATEGORY, COLS.LINK, COLS.SRC]);
     let storedT = aurora.db.schema.tables.base.budget_mappings;
     let TYPES = aurora.db.schema.getEnum(storedT.entries.cols.importType);
 
@@ -201,12 +212,20 @@ budget.widgets.BudgetImportCategory.createDefaultMappings = function(rows, store
     tbl.setColumnMeta(COLS.DATE, {type: 'date', editable: false});
     tbl.setColumnMeta(COLS.PARTICULARS, {type: 'string', editable: false});
     tbl.setColumnMeta(COLS.REF, {type: 'string', editable: false});
+    tbl.setColumnMeta(COLS.SRC, {type: 'string', editable: false, cellDecorator: budget.widgets.BudgetImportCategory.srcCellDecorator_});
     tbl.setColumnMeta(COLS.AMOUNT, {type: 'number', editable: false, displayLength: -1, min: -100000, max: 100000, step: 0.01});
     tbl.setColumnMeta(COLS.TYPE, aurora.db.schema.getMeta(COLS.TYPE));
     tbl.setColumnMeta(COLS.LINK, {type: 'boolean', cellDecorator: budget.widgets.BudgetImportCategory.linkCellDecorator_});
     let linkMap = {};
     let linkIdMap = {};
     let amountMap = {};
+    let transferMap = {};
+    rows.forEach(function(item, i) {
+        if (item.transfer instanceof Array && item.transfer.length == 2) {
+            recoil.util.map.safeRecGet(transferMap, [item.date, item.transfer[0], item.transfer[1], item.amount], {count: 0}).count++;
+        }
+        
+    });
     rows.sort(function(x, y) { return x.date - y.date;});
     rows.forEach(function(item, i) {
         let row = new recoil.structs.table.MutableTableRow(i);
@@ -216,28 +235,58 @@ budget.widgets.BudgetImportCategory.createDefaultMappings = function(rows, store
         row.set(COLS.PARTICULARS, item.description);
         row.set(COLS.REF, item.memo);
         let isIncome = item.amount > 0;
+        let transfer = item.transfer;
         let lookupOrder = isIncome ? [EntryType.income, EntryType.household, EntryType.debt, null] : [EntryType.household, EntryType.debt, EntryType.income, null];
+        let lookup;
+        let isTransfer = false;
+        if (transfer) {
 
-        let lookup = recoil.util.map.safeRecGet(storedMappings, [item.description, item.memo]);
-        if (lookup) {
-            for (let type in lookup) {
-                row.set(COLS.CATEGORY, lookup[type].description);
-                row.set(COLS.TYPE, lookup[type].importType);
-                break;
+            if (item.transfer instanceof Array && item.transfer.length == 2) {
+                // this is for transfers that aren't simple booleans but arrays of account to account
+                // this should be much more accurate
+                let other = recoil.util.map.safeRecGet(transferMap, [item.date, item.transfer[1], item.transfer[0], -1 * item.amount]);
+
+                if (other && other.count > 0) {
+                    other.count--;
+                    row.set(COLS.CATEGORY, '');
+                    row.set(COLS.TYPE, TYPES.transfer);
+                    isTransfer = true;
+                
+                }
+                else if (transfer == true) {
+                    row.set(COLS.CATEGORY, '');
+                    row.set(COLS.TYPE, TYPES.transfer);
+                    isTransfer = true;
+                }
             }
-
         }
-        else {
-            row.set(COLS.CATEGORY, '');
-            row.set(COLS.TYPE, isIncome ? TYPES.income : TYPES.payment);
+        
+        if (!isTransfer) {
+            lookup = recoil.util.map.safeRecGet(storedMappings, [item.description, item.memo]);
+            if (lookup) {
+                for (let type in lookup) {
+                    row.set(COLS.CATEGORY, lookup[type].description);
+                    row.set(COLS.TYPE, lookup[type].importType);
+                    break;
+                }
+                
+            }
+            else {
+                row.set(COLS.CATEGORY, '');
+                row.set(COLS.TYPE, isIncome ? TYPES.income : TYPES.payment);
+            }
         }
         row.set(COLS.LINK, true);
         row.set(COLS.ORIG_TYPE, row.get(COLS.TYPE));
         row.set(COLS.ORIG_CATEGORY, '');
         row.set(COLS.AMOUNT, item.amount);
         row.set(COLS.SPLIT, false);
-        recoil.util.map.safeRecGet(linkMap, [item.description, item.memo], []).push(i);
-        recoil.util.map.safeRecGet(amountMap, [item.description, item.amount], []).push(i);
+        row.set(COLS.SRC, item.src);
+        
+        if (!transfer) {
+            recoil.util.map.safeRecGet(linkMap, [item.description, item.memo], []).push(i);
+            recoil.util.map.safeRecGet(amountMap, [item.description, item.amount], []).push(i);
+        }
         tbl.addRow(row);
 
         // add extra split rows
@@ -367,6 +416,7 @@ budget.widgets.BudgetImportCategory.prototype.attach = function(mappingsSourceB,
         columns.addColumn(categoryCol);
         columns.add(COLS.SPLIT, '');
         columns.add(COLS.LINK, '');
+        columns.add(COLS.SRC, 'Src');
         let payments = [];
         let income = [];
         budget.forEach(function(budgetRow) {
@@ -1312,7 +1362,9 @@ budget.widgets.BudgetImportCategory.COLS = {
     ORIG_TYPE: new recoil.structs.table.ColumnKey('orig-type'),
     CATEGORY: new recoil.structs.table.ColumnKey('category'),
     ORIG_CATEGORY: new recoil.structs.table.ColumnKey('orig-category'),
-    LINK: new recoil.structs.table.ColumnKey('link')
+    LINK: new recoil.structs.table.ColumnKey('link'),
+    SRC: new recoil.structs.table.ColumnKey('src'),
+    
 };
 
 
