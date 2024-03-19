@@ -798,10 +798,10 @@ budget.widgets.Budget.prototype.attach = function(idB) {
                     row.set(entryT.cols.id, new aurora.db.PrimaryKey(pos));
                     row.set(entryT.cols.description, desc);
                     if (last) {
-                        row.set(CALC, val / 100);
+                        row.set(CALC, isNaN(val) ? 'N/A' : val / 100);
                     }
                     else {
-                        row.set(entryT.cols.value, '' + val / 100);
+                        row.set(entryT.cols.value, isNaN(val) ? 'N/A' : '' + val / 100);
                     }
                     if (total) {
                         row.addCellMeta(CALC, {cellDecorator: totalCellDecorator});
