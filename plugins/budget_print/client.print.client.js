@@ -335,20 +335,32 @@ budget.print.ClientPrinter.prototype.makeUserDetails_ = function(user, budgets, 
 /**
  * @param {!Array} rows
  * @param {!Array<{when:number, len: number}>} timeSpentList
+ * @param {Object<string,number>} appLen
  */
-budget.print.ClientPrinter.prototype.addTimeSpent_ = function(rows, timeSpentList) {
+budget.print.ClientPrinter.prototype.addTimeSpent_ = function(rows, timeSpentList, appLen) {
     const fieldName = function(name) {
         return {text: name.toString(), bold: true};
     };
     let timeSpent = 0;
     let timeSpentMap = {};
-    
+
     for (let i = 0; i < timeSpentList.length; i++) {
         timeSpent += (timeSpentList[i].len);
         let day = timeSpentList[i].when;
         
         let mins = (timeSpentMap[day] || 0) + timeSpentList[i].len;
         timeSpentMap[day] = mins;
+    }
+    
+    for (let k in appLen) {
+        if (!timeSpentMap[k]) {
+            timeSpent += appLen[k];
+            timeSpentMap[k] = appLen[k];
+        }
+        else if (timeSpentMap[k] < appLen[k]) {
+            timeSpent += appLen[k] - timeSpentMap[k];
+            timeSpentMap[k] = appLen[k];
+        }
     }
 
     let normList = [];
@@ -434,18 +446,25 @@ budget.print.ClientPrinter.prototype.makeGoals_ = function(user, appointments) {
     let now = new Date().getTime();
     let times = [];
     let finStart = budget.print.ClientPrinter.finYearStart().getTime();
+    
     appointments.forEach(function(row) {
         let when = row.get(me.appointmentsT.cols.start);
         if (when < now && finStart <= when) {
-            times.push(when);
+            let stop = row.get(me.appointmentsT.cols.stop);
+            // len is in minutes
+            times.push({when, len: Math.round((stop - when) / 60000) });
         }
     });
     let seen = {};
-    times.sort((x, y) => x - y).forEach(function(when) {
-        let dt = moment(when).format('D/MM/YY');
+    let apptLen = {};
+    times.sort((x, y) => x.when - y.when).forEach(function(info) {
+        let dt = moment(info.when).format('D/MM/YY');
         if (!seen[dt]) {
             seenDates.push(dt);
         }
+        let day = recoil.ui.widgets.DateWidget2.convertDateToLocal(new Date(info.when));
+        apptLen[day] = (apptLen[day] || 0) + info.len;
+        
         seen[dt] = true;
     });
 
@@ -463,7 +482,7 @@ budget.print.ClientPrinter.prototype.makeGoals_ = function(user, appointments) {
     for (let i = dateMax; i < seenDates.length; i+= dateMax) {
         rows.push(['',seenDates.slice(i, i + dateMax).join(',')]);
     }
-    this.addTimeSpent_(rows, timeSpentList);
+    this.addTimeSpent_(rows, timeSpentList, apptLen);
 
     
     rows = rows.concat([
@@ -602,7 +621,8 @@ budget.print.ClientPrinter.prototype.print = function(user, appointments, budget
     let me = this;
 
     let print = function (doc) {
-        budget.print.ClientPrinter.print('client', user, doc);
+        const cls = budget.print.BudgetPrinter;
+        budget.print.ClientPrinter.print('client_' + cls.sanatizeFileName(cls.makeName(user)), user, doc);
     };
     // since there no function to tell me how big its going to be just do a binary search to
     // find the scale factor
