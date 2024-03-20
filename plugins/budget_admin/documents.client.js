@@ -29,7 +29,7 @@ budget.widgets.DocumentTreeNode = function(scope, nodeB, tableB, root) {
     this.scope_ = scope;
     this.description_ = goog.dom.createDom('span', {class: 'entity'});
     this.delete_ = goog.dom.createDom('div', {class: 'goog-inline-block'});
-    this.icon_ = goog.dom.createDom('i', {class: 'fas fa-folder'});
+    this.icon_ = goog.dom.createDom('i', {class: 'fas fa-folder doc-dragable', draggable: 'true'});
     this.componentDiv_ = goog.dom.createDom(
         'div', {class: 'treeView_descriptionRow'},
         goog.dom.createDom(
@@ -38,6 +38,35 @@ budget.widgets.DocumentTreeNode = function(scope, nodeB, tableB, root) {
 
     const isDataNode = (el) => {
           return el && el.getAttribute && el.getAttribute('data-id') != undefined;
+    };
+
+    const getDataNode = (root, node) => {
+        while (node && node != root) {
+            if (isDataNode(node)) {
+                return node;
+            }
+            node = node.parentNode;
+        }
+
+        return null;
+    };
+    const isFirstLevel = (node) => {
+        if (!isDataNode(node)) {
+            return false;
+        }
+        let id = node.getAttribute('data-id');
+
+        return frp.accessTrans(() => {
+            let res = false;
+            let tbl = tableB.get();
+            tbl.forEach(row => {
+                
+                if (row.get(treeT.cols.id).db == id) {
+                    res = !row.get(treeT.cols.parent);
+                }
+            });
+            return res;
+        }, tableB);
     };
 
     const getNodes =  (root, nodes) => {
@@ -92,7 +121,7 @@ budget.widgets.DocumentTreeNode = function(scope, nodeB, tableB, root) {
     };
     const findNode = (el, x, y) => {
 
-        
+
         while (el && el.getAttribute && el != root) {
             if (isDataNode(el)) {
                 return {element: el, sameLevel: false};
@@ -119,10 +148,46 @@ budget.widgets.DocumentTreeNode = function(scope, nodeB, tableB, root) {
                 return {element:before.node, sameLevel: !after || !isParent(before.node.getAttribute('data-id'), after.node.getAttribute('data-id'))};
             }
         }
+       
+        //maybe outside of root see if its above or below the root node
+        let nodes = getNodes(root, []);
+        let first = null;
+        let last = null;
+        for (let i = 0; i < nodes.length; i++) {
+            let node = nodes[i];
+            let bounds = node.getBoundingClientRect();
             
+            if (!isFirstLevel(node)) {
+                continue;
+            }
+            if (bounds.y > y && (first == null || first.y > bounds.y)) {
+                first = {y: bounds.y, x: bounds.x, node};
+            }
+            if (bounds.y < y && (last == null || last.y < bounds.y)) {
+                last = {y: bounds.y, x: bounds.x, node};
+            }
+        }
+        if (first) {
+            return {element: first.node, sameLevel: true};
+        }
+        else if (last) {
+            return {element: last.node, sameLevel: true};
+        }
+
         return null;        
     };
 
+    const isAncestor = (map, parent, child) => {
+
+        while (child != null) {
+            if (child == parent) {
+                return true;
+            }
+            child = map.get(child);
+        }
+        return false;
+    };
+            
     const moveNode = (tableB, item, dest, after, sameLevel) => {
         if (item == dest) {
             // nothing to move destination is the same as source
@@ -135,7 +200,12 @@ budget.widgets.DocumentTreeNode = function(scope, nodeB, tableB, root) {
             let tbl = tableB.get();
             let dstRow = null;
             let srcRow = null;
+            let parentMap = new Map();
             tbl.forEachModify(row => {
+                if (row.get(treeT.cols.parent)) {
+                    parentMap.set(row.get(treeT.cols.id).db, row.get(treeT.cols.parent).db);
+                }
+                
                 if (row.get(treeT.cols.id).db == item) {
                     srcRow = row;
                 }
@@ -145,15 +215,19 @@ budget.widgets.DocumentTreeNode = function(scope, nodeB, tableB, root) {
                 
             });
 
-            
             if (!sameLevel && dstRow.get(treeT.cols.type) === typeE.heading) {
+                if (isAncestor(parentMap, item, dstRow.get(treeT.cols.id).db)) {
+                    return; // can't make a child of oneself
+                }
                 srcRow.set(treeT.cols.parent, dstRow.get(treeT.cols.id));
             }
             else {
+                if ( dstRow.get(treeT.cols.parent) && isAncestor(parentMap, item, dstRow.get(treeT.cols.parent).db)) {
+                    return; // can't make a child of oneself
+                }
                 srcRow.set(treeT.cols.parent, dstRow.get(treeT.cols.parent));
             }
-            
-            
+
             inTreeOrder(tbl).forEach(row => {
 
                 let id = row.get(treeT.cols.id).db;
@@ -182,38 +256,35 @@ budget.widgets.DocumentTreeNode = function(scope, nodeB, tableB, root) {
             tableB.set(res.freeze());
         }, tableB);
     };
-    goog.events.listen(this.icon_, goog.events.EventType.MOUSEDOWN, e => {
-        if (e.target && e.target.tagName !== 'INPUT') {
-            this.componentDiv_.setAttribute('draggable', 'true');
-        }
-    });
-    goog.events.listen(this.icon_, goog.events.EventType.MOUSEUP, e => {
-        if (e.target && e.target.tagName !== 'INPUT') {
-            this.componentDiv_.setAttribute('draggable', 'false');
-        }
-    });
     goog.events.listen(this.componentDiv_, [goog.events.EventType.CLICK, goog.events.EventType.DBLCLICK], e => {
-        if (e.target && e.target.tagName === 'INPUT') {
+        let bounds = this.description_.getBoundingClientRect();
+        if (e.clientX >= bounds.x) {
             
             e.stopPropagation();
         }
     });
 
-    goog.events.listen(this.icon_, goog.events.EventType.DRAGSTART, v => console.log('ds'));
-    goog.events.listen(this.icon_, goog.events.EventType.DRAGEND, v => console.log('ds'));
-    goog.events.listen(this.componentDiv_, goog.events.EventType.DRAGEND, e => {
-        this.componentDiv_.setAttribute('draggable', 'false');
-        let from = e.target.getAttribute('data-id');
+    const dragEnd =  (target, e) => {
+        let from = target.getAttribute('data-id');
         let to = findNode(document.elementFromPoint(e.clientX, e.clientY), e.clientX, e.clientY);
-
         if (to && from != null) {
             let bounds = to.element.getBoundingClientRect();
             let after = to.sameLevel || e.clientY > bounds.y + bounds.height / 2;
 
             moveNode(tableB, BigInt(from), BigInt(to.element.getAttribute('data-id')), after, to.sameLevel);
-                     
+        }
+    };
+
+    // need this otherwize won't let us drag
+    goog.events.listen(this.icon_, goog.events.EventType.DRAGSTART, v => console.log('ds'));
+    goog.events.listen(this.componentDiv_, goog.events.EventType.DRAGSTART, e => {console.log("comp drag start");});
+    goog.events.listen(this.componentDiv_, goog.events.EventType.DRAGEND, e => {
+        let target = getDataNode(root, e.target);
+        if (target) {
+            dragEnd(target, e);
         }
     });
+
     
     this.disabledDiv_ = goog.dom.createDom('span', {class: 'alarmTree_disabled'}, 'disabled');
     this.timestampDiv_ = goog.dom.createDom('span', {class: 'alarmTree_timestamp'});
@@ -372,8 +443,13 @@ budget.widgets.admin.Documents = function(scope) {
     };
     config.showRoot = false;
     config.oneClickExpand = true;
-
-    
+    config.clickCallback = (node, e) => {
+        return goog.dom.classlist.contains(e.target, "budget-doc-tree-row");
+    };
+    const safeId = row => {
+        let id = row.get(treeT.cols.id);
+        return id.db == null ? id.mem : id.db;
+    };
     treeView.attach({
         state: frp.liftBI((tree) => {
             let rootInfo = {id: -1, row: null, children: []};
@@ -384,13 +460,13 @@ budget.widgets.admin.Documents = function(scope) {
             let seen = new Set();
             
             tree.forEach(function(row) {
-                let id = row.get(treeT.cols.id).db;
+                let id = safeId(row);
                 idMap.set(id, {id, row, children: []});
             });
 
             // add the children to the parents
             tree.forEach(function(row) {
-                let id = row.get(treeT.cols.id).db;
+                let id = safeId(row);
                 let parent = row.get(treeT.cols.parent);
 
                 (idMap.get(parent ? parent.db : null) || rootInfo).children.push(idMap.get(id));
