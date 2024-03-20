@@ -572,6 +572,7 @@ aurora.db.Coms = function(authenticator) {
                             };
                             let args = [];
 
+                            console.log("parsing inputs");
                             for (let i = 0; i < expectedInputs.length; i++) {
 
                                 try {
@@ -603,10 +604,11 @@ aurora.db.Coms = function(authenticator) {
                             }
                             let allArgs = [me, secContext, reader].concat(args);
                             if (action.async) {
+
                                 allArgs.push(e);
                                 action.func.apply(e, allArgs)
                                     .then((outputs) => responseHandler(null, outputs))
-                                    .catch((err) => responseHandler(err, []));
+                                    .catch((err) => responseHandler(aurora.db.Coms.fixError(err), []));
                                 
                             }
                             else {

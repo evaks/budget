@@ -26,3 +26,12 @@
 .budget-doc-tree-hide-root {
     display: none;
 }
+
+.doc-dragable {
+    cursor: grabbing;
+}
+
+
+.budget-documents .budget-doc-tree-root .fas.doc-dragable:hover {
+    color: #1dae1d;
+}

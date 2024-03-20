@@ -48,6 +48,7 @@ budget.widgets.Bookings = function(scope) {
     let msg = budget.messages;
     var clientCK = new recoil.structs.table.ColumnKey('link');
     let clientCol = new aurora.columns.Link(clientCK, msg.USERNAME);
+    let mentorLinkActionB = scope.getDb().get(aurora.db.schema.actions.base.schedule.mentorLink.key);
 
     let mentorsB = scope.getDb().get(mentorT.key);
     let securityContextB = aurora.permissions.getContext(scope);
@@ -271,7 +272,6 @@ budget.widgets.Bookings = function(scope) {
         START_COL,
         appointmentsT.cols.firstName,
         appointmentsT.cols.lastName,
-        SEARCH_COL
     ];
 
     let readOnly2 = [
@@ -406,6 +406,10 @@ budget.widgets.Bookings = function(scope) {
                         row.addCellMeta(col, {editable: false, enabled: recoil.ui.BoolWithExplanation.FALSE});
                         
                     });
+
+                    if (!sec || virtualKey.mentorid != sec.userid) {
+                        row.addCellMeta(SEARCH_COL, {editable: false, enabled: recoil.ui.BoolWithExplanation.FALSE});
+                    }
                 }
                 table.addRow(row);
             }
@@ -458,7 +462,10 @@ budget.widgets.Bookings = function(scope) {
                         if (!sec || mentorid != sec.userid) {
                             readOnly2.forEach(function (col) {
                                 row.addCellMeta(col, {editable: false, enabled: recoil.ui.BoolWithExplanation.FALSE});
-                            }); 
+                            });
+                            row.addCellMeta(SEARCH_COL, {editable: false, enabled: recoil.ui.BoolWithExplanation.FALSE});
+                    
+
                         }
 
                     }
@@ -593,6 +600,7 @@ budget.widgets.Bookings = function(scope) {
                         return columns.applyMeta(res);
                     }, sourceB);
                 };
+                let secContext = securityContextB.get();
                 let dialog = new aurora.widgets.SearchDialog(scope, clientT, 10, bodyFactory, headerFactory, frp.createCallback(function(selRow) {
                     let res = me.appointmentsB_.get().createEmpty();
                     let found = false;
@@ -612,25 +620,41 @@ budget.widgets.Bookings = function(scope) {
                     };
                     me.appointmentsB_.get().forEach(function(row, curPk) {
                         if (recoil.util.isEqual(curPk, pks)) {
-                            found = true;
+                            found = row.unfreeze();
                             addNewRow(row.unfreeze());
                         }
                         else {
                             res.addRow(row);
                         }
                     });
+                    if (editable(secContext)) {
+                        if (!found) {
+                            tbl.forEach(function(row, curPk) {
+                                if (recoil.util.isEqual(curPk, pks)) {
+                                    let newRow = row.unfreeze();
+                                    newRow.set(aKeys.mentorid, new aurora.db.PrimaryKey(row.get(aKeys.mentorid)));
+                                    newRow.set(aKeys.scheduled, null);
+                                    addNewRow(newRow);
+                                }
+                            });
+                        }
 
-                    if (!found) {
-                        tbl.forEach(function(row, curPk) {
-                            if (recoil.util.isEqual(curPk, pks)) {
-                                let newRow = row.unfreeze();
-                                newRow.set(aKeys.mentorid, new aurora.db.PrimaryKey(row.get(aKeys.mentorid)));
-                                newRow.set(aKeys.scheduled, null);
-                                addNewRow(newRow);
-                            }
-                        });
+                        me.appointmentsB_.set(res.freeze());
                     }
-                    me.appointmentsB_.set(res.freeze());
+                    else {
+                        
+                        
+                        scope.performAction(mentorLinkActionB, {
+                            appointmentid: found ? found.get(aKeys.id).db : 0,
+                            clientid: selRow.get(clientT.cols.id).db,
+                            start: row.get(aKeys.start),
+                            stop: row.get(aKeys.stop)
+                            
+                        }).then(() => {
+                            console.log("done");
+                        }).catch(err => console.error(err));
+                        console.log("we need an rpc for this since the user has no permissions to add an apppint man", found, selRow);
+                    }
 
 
                 },me.appointmentsB_), 'Select', 'Find Client', undefined, queryB);
@@ -698,7 +722,7 @@ budget.widgets.Bookings = function(scope) {
         });
         startOverridesB.set(startOverrides);
         me.appointmentsB_.set(res.freeze());
-    }, this.siteB_, this.holidaysB_, this.appointmentsB_, this.availableB_, this.curDateB_, mentorConverterB, userMapB, securityContextB, scheduleActionB, unscheduleActionB, startOverridesB));
+    }, this.siteB_, this.holidaysB_, this.appointmentsB_, this.availableB_, this.curDateB_, mentorConverterB, userMapB, securityContextB, scheduleActionB, unscheduleActionB, startOverridesB, mentorLinkActionB));
     this.tableWidget_.attachStruct(tableB);
     this.tableWidget_.getComponent().render(this.containerDiv_);
 

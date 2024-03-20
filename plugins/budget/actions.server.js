@@ -633,9 +633,10 @@ budget.actions.linkAppointment = async function(coms, context, reader, appointme
 
     // if we can't read the users then we don't have permission to link
     let users = await reader.readObjectsAsync(
-        context, userT,
+        aurora.db.Coms.makeReadContext(context), userT,
         query.eq(query.val(userId), userT.cols.id), secFilter);
 
+    
     if (users.length < 1) {
         throw 'Access Denied';
     }
@@ -649,6 +650,53 @@ budget.actions.linkAppointment = async function(coms, context, reader, appointme
     coms.notifyListeners(changes, {}, function() {});
 
 };
+
+/**
+ * @param {!aurora.db.Coms} coms
+ * @param {!aurora.db.access.SecurityContext} context
+ * @param {!aurora.db.Reader} reader
+ * @param {number} appointmentId
+ * @param {number} clientId
+ * @param {number} start
+ * @param {number} stop
+ */
+budget.actions.mentorLinkAppointment = async function(coms, context, reader, appointmentId, clientId, start, stop) {
+    if (appointmentId) {
+        await budget.actions.linkAppointment(coms, context, reader, appointmentId, clientId);
+    }
+    else {
+        let userT = aurora.db.schema.tables.base.user;
+        let apptT = aurora.db.schema.tables.base.appointments;
+        let query = new recoil.db.Query();
+        let readContext = aurora.db.Coms.makeReadContext(context);
+        let secFilter = userT.info.accessFilter(context);
+        let users = await reader.readObjectsAsync(
+            readContext, userT,
+            query.eq(query.val(clientId), userT.cols.id), secFilter);
+        
+        if (users.length < 1) {
+            throw 'Access Denied';
+        }
+        
+        let user = users[0];
+        let data =  {
+            userid: clientId, showed:0, scheduled: true,
+            firstName: user.firstName || '', lastName: user.lastName || '',
+            notes: '',
+            phone: user.phone || '',
+            email: user.email || '',
+            address: user.address || '',
+            creator: context.userid, mentorid: BigInt(context.userid), start, stop
+        };
+        let appointmentId = await reader.insertAsync(context, apptT, data);
+        
+        let changes = budget.actions.createSchedulePaths(appointmentId.insertId).map(
+            path => budget.actions.makeAddChange_(path, data));
+        coms.notifyListeners(changes, {}, function() {});
+        
+    }
+};
+
 /**
  * @param {!aurora.db.Coms} coms
  * @param {!aurora.db.access.SecurityContext} context
@@ -908,12 +956,17 @@ budget.actions.makeAddChange_ = function(path, object) {
     for (let k in meta) {
         let m = meta[k];
         if (object.hasOwnProperty(k) && !m.primary) {
+            let val = object[k];
+            if (typeof val === 'number' && m.type == 'ref') {
+                val = new aurora.db.PrimaryKey(val);
+            }
             deps.push(new recoil.db.ChangeSet.Set(path.appendName(k), null, object[k]));
         }
     }
 
     return new recoil.db.ChangeSet.Add(path, deps);
 };
+
 
 /**
  * @param {!aurora.db.Coms} coms
@@ -1120,7 +1173,6 @@ budget.actions.register = function(coms, context, reader, inputs, callback) {
         }
 
         let makeUser = function(username) {
-            console.log('make user', username);
             object[userT.cols.username.getName()] = username.toLowerCase();
             object[userT.cols.lastaccess.getName()] = new Date().getTime();
             aurora.db.Pool.hashPasswordPromise(password).then(function(pword) {

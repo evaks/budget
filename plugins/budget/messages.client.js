@@ -866,7 +866,7 @@ budget.messages.DATE_ON_WHICH_MENTOR_SAW_CLIENT = recoil.ui.message.getParamMsg(
  * @final
  */
 
-budget.messages.TIME_SPENT_ON_CASE = recoil.ui.message.getParamMsg('Time Spent on case e.g. Phone');
+budget.messages.TIME_SPENT_ON_CASE = recoil.ui.message.getParamMsg('Time Spent on case');
 
 /**
  * @type {!recoil.ui.message.Message}

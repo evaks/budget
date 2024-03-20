@@ -396,7 +396,18 @@
 	          "function": "budget.actions.unscheduleAppointment",
 	          "access": "aurora.db.access.basic([{'site-management': 'r'}, {'mentor': 'r'}, {'client': 'r'}])",
 	          "inputs": [{"name":"appointmentid", "type":"bigint"}]
+	      },
+        {
+	          "path": "/schedule/mentorLink",
+	          "async-function": "budget.actions.mentorLinkAppointment",
+	          "access": "aurora.db.access.basic([{'mentor': 'r'}])",
+	          "inputs": [{"name":"appointmentid", "type":"bigint"},
+                       {"name":"clientid", "type":"bigint"},
+                       {"name":"start", "type":"int"},
+                       {"name":"stop", "type":"int"}                       
+                      ]
 	      }
+
     ]
 	  
 
